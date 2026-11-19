@@ -1,0 +1,274 @@
+// The character sheet at the table: stats with sources, My Turn, checks, features, gear, notes; rests and level up.
+import React, { useState, useMemo } from 'react'
+import { derive, rest } from '../engine/engine.js'
+import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTERY } from '../content/basics.js'
+import { SourcesSheet, Sheet, Stepper, signed } from './common.jsx'
+import { ChoicesStep, Portrait } from './wizard.jsx'
+
+const KIND = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction', free: 'Free / on a hit', info: 'Good to know' }
+const THEMES = ['gold', 'red', 'jade', 'blue', 'violet', 'rose']
+
+export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete }) {
+  const d = useMemo(() => derive(ch), [ch])
+  const [tab, setTab] = useState('turn')
+  const [sources, setSources] = useState(null)
+  const [hpOpen, setHpOpen] = useState(false)
+  const [levelUp, setLevelUp] = useState(false)
+  const [settings, setSettings] = useState(false)
+  const hp = ch.state.hp ?? d.hp.value
+  const setState = (patch) => setCh({ ...ch, state: { ...ch.state, ...patch } })
+  const used = (id) => ch.state.used?.[id] || 0
+  const spend = (id, n = 1) => setState({ used: { ...ch.state.used, [id]: Math.max(0, used(id) + n) } })
+  const show = (title, x) => setSources({ title, total: x.value, sources: x.sources })
+  const theme = ch.theme || { fighter: 'red', rogue: 'violet', monk: 'gold' }[ch.classId] || 'gold'
+
+  return (
+    <div className={`sheet-page theme-${theme}`}>
+      <header className="char-top">
+        <button className="icon-btn" onClick={onBack} aria-label="All characters">‹</button>
+        <Portrait ch={ch} size={44} />
+        <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}</p></div>
+        <button className="icon-btn" onClick={() => setSettings(true)} aria-label="Character settings">⚙</button>
+      </header>
+
+      <section className="vitals">
+        <button className="hp" onClick={() => setHpOpen(true)} aria-label="Hit points">
+          <span className="lbl">HP</span><b className="mono">{hp}<small>/{d.hp.value}</small></b>{ch.state.temp > 0 && <span className="temp">+{ch.state.temp} temp</span>}
+          <span className="hp-bar"><span style={{ width: `${Math.max(0, Math.min(100, (hp / d.hp.value) * 100))}%` }} /></span>
+        </button>
+        <button className="stat" onClick={() => show('Armor Class', d.ac)}><span className="lbl">AC</span><b>{d.ac.value}</b></button>
+        <button className="stat" onClick={() => show('Speed', d.speed)}><span className="lbl">Speed</span><b>{d.speed.value}</b></button>
+        <button className="stat" onClick={() => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode })}><span className="lbl">Init 🎲</span><b>{signed(d.initiative.value)}</b></button>
+        <div className="stat"><span className="lbl">Prof</span><b>{signed(d.prof)}</b></div>
+      </section>
+
+      {d.resources.length > 0 && (
+        <section className="resources">
+          {d.resources.map((r) => (
+            <div key={r.id} className="res">
+              <span className="res-name">{r.name}<small>{r.reset === 'short' ? 'short rest' : 'long rest'}</small></span>
+              <span className="pips">{Array.from({ length: r.max }).map((_, i) => (
+                <button key={i} className={`pip ${i < r.max - used(r.id) ? 'full' : ''}`} aria-label={`${r.name} ${i + 1}`}
+                  onClick={() => setState({ used: { ...ch.state.used, [r.id]: i < r.max - used(r.id) ? r.max - i : r.max - i - 1 } })} />
+              ))}</span>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {d.pending.length > 0 && <button className="banner" onClick={() => setLevelUp('choices')}>⚠ {d.pending.length} choice{d.pending.length > 1 ? 's' : ''} to make ›</button>}
+
+      <nav className="tabs" role="tablist">
+        {[['turn', 'My Turn'], ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
+          <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{l}</button>
+        ))}
+      </nav>
+
+      <div className="seg mode">{[['dis', 'Disadvantage'], ['normal', 'Normal'], ['adv', 'Advantage']].map(([m, l]) => <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}>{l}</button>)}</div>
+
+      {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} used={used} spend={spend} setState={setState} hp={hp} show={show} />}
+      {tab === 'checks' && <ChecksTab d={d} roll={roll} mode={mode} show={show} />}
+      {tab === 'features' && <FeaturesTab d={d} />}
+      {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} />}
+      {tab === 'notes' && <textarea className="input notes" value={ch.notes} placeholder="Backstory, NPCs, loot, plans…" onChange={(e) => setCh({ ...ch, notes: e.target.value })} />}
+
+      <section className="rests">
+        <button className="btn ghost" onClick={() => setCh({ ...ch, state: rest(ch, 'short') })}>☕ Short rest</button>
+        <button className="btn ghost" onClick={() => { if (confirm('Long rest: HP and every resource back to full?')) setCh({ ...ch, state: rest(ch, 'long') }) }}>🌙 Long rest</button>
+        {ch.level < 20 && <button className="btn primary" onClick={() => setLevelUp('up')}>⬆ Level up</button>}
+      </section>
+
+      {sources && <SourcesSheet {...sources} onClose={() => setSources(null)} />}
+      {hpOpen && <HpSheet d={d} ch={ch} hp={hp} setState={setState} onClose={() => setHpOpen(false)} />}
+      {levelUp && <LevelUp ch={ch} setCh={setCh} start={levelUp} roll={roll} onClose={() => setLevelUp(false)} />}
+      {settings && (
+        <Sheet title="Character" onClose={() => setSettings(false)}>
+          <span className="field-label">Color</span>
+          <div className="themes">{THEMES.map((t) => <button key={t} className={`swatch theme-${t} ${theme === t ? 'on' : ''}`} aria-label={t} onClick={() => setCh({ ...ch, theme: t })} />)}</div>
+          <label className="field"><span>Name</span><input className="input" value={ch.name} onChange={(e) => setCh({ ...ch, name: e.target.value.slice(0, 40) })} /></label>
+          <button className="btn danger wide" onClick={() => { if (confirm(`Delete ${ch.name}? Export a backup first if you might want it back.`)) onDelete() }}>Delete character</button>
+        </Sheet>
+      )}
+    </div>
+  )
+}
+
+function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
+  const atk = d.attacks
+  const pinned = new Set(ch.pinned || [])
+  const groups = ['action', 'bonus', 'reaction', 'free', 'info']
+  const canPay = (a) => !a.cost || d.resources.find((r) => r.id === a.cost.resource)?.max - used(a.cost.resource) >= a.cost.amount
+  const doAction = (a) => {
+    if (a.cost) spend(a.cost.resource, a.cost.amount)
+    if (a.refill) setState({ used: { ...ch.state.used, [a.refill]: 0, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}) } })
+    if (a.roll) roll({ kind: 'expr', label: `${a.name}: ${a.roll.label}`, expr: a.roll.expr }).then((e) => { if (a.heal && e) setState({ hp: Math.min(d.hp.value, hp + e.total), ...(a.cost || a.refill ? {} : {}) }) })
+  }
+  return (
+    <section className="turn">
+      <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>
+      {atk.map((a) => (
+        <div key={a.id} className="attack">
+          <div className="grow">
+            <b>{a.name}</b>
+            <span className="muted small">{a.type}{a.range ? `, ${a.range} ft` : ''}{a.props?.length ? `, ${a.props.join(', ')}` : ''}{a.note ? `. ${a.note}` : ''}</span>
+            {a.mastery && <details className="mastery"><summary>Mastery: {a.mastery.name}</summary>{a.mastery.text}</details>}
+          </div>
+          <button className="roll-btn" onClick={() => roll({ kind: 'd20', label: `${a.name} to hit`, bonus: a.toHit, mode, attack: true, critOn: d.crit })}>{signed(a.toHit)}<small>to hit</small></button>
+          <button className="roll-btn" onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage })}>{a.damage}<small>damage</small></button>
+          <button className="roll-btn ghost" onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, crit: true })} aria-label={`${a.name} critical damage`}>×2<small>crit</small></button>
+        </div>
+      ))}
+      {groups.map((g) => {
+        const list = d.actions.filter((a) => a.kind === g && a.id !== 'attack').sort((a, b) => (pinned.has(b.id) ? 1 : 0) - (pinned.has(a.id) ? 1 : 0))
+        if (!list.length) return null
+        return (
+          <div key={g}>
+            <h2 className="sec">{KIND[g]}</h2>
+            {list.map((a) => (
+              <div key={a.id} className={`action ${canPay(a) ? '' : 'spent'}`}>
+                <div className="grow">
+                  <b>{a.name}</b>{a.cost && <span className="cost">{a.cost.amount} {d.resources.find((r) => r.id === a.cost.resource)?.name || a.cost.resource}</span>}
+                  <span className="muted small">{a.summary}{a.save ? ` ${a.save.ability ? `${a.save.ability} save ` : ''}DC ${a.save.dc}.` : ''}</span>
+                </div>
+                {(a.roll || a.cost) && <button className="roll-btn" disabled={!canPay(a)} onClick={() => doAction(a)}>{a.roll ? a.roll.expr : 'Use'}<small>{a.roll ? a.roll.label : 'spend'}</small></button>}
+              </div>
+            ))}
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
+function ChecksTab({ d, roll, mode, show }) {
+  return (
+    <section>
+      <h2 className="sec">Abilities and saves</h2>
+      <div className="abil-cards">
+        {ABILITIES.map((a) => (
+          <div key={a} className="abil-card">
+            <button className="ab-top" onClick={() => show(`${ABILITY_NAMES[a]} score`, { value: d.scores[a].total, sources: d.scores[a].sources })}><small>{a}</small><b>{d.scores[a].total}</b></button>
+            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.mod[a], mode })}>Check {signed(d.mod[a])}</button>
+            <button className={`ab-roll ${d.saves[a].prof ? 'prof' : ''}`} onClick={() => roll({ kind: 'd20', label: `${a} save`, bonus: d.saves[a].value, mode })}>Save {signed(d.saves[a].value)}</button>
+          </div>
+        ))}
+      </div>
+      <h2 className="sec">Skills <span className="muted small">Passive Perception {d.passivePerception}</span></h2>
+      <ul className="skills">
+        {d.skills.map((s) => (
+          <li key={s.id}><button onClick={() => roll({ kind: 'd20', label: s.name, bonus: s.value, mode })}>
+            <span className={`dot ${s.expertise ? 'ex' : s.prof ? 'pr' : ''}`} aria-label={s.expertise ? 'expertise' : s.prof ? 'proficient' : ''} />
+            <span className="grow">{s.name} <small className="muted">{s.ability}</small></span><b className="mono">{signed(s.value)}</b>
+          </button></li>
+        ))}
+      </ul>
+      {(d.senses.length > 0 || d.resistances.length > 0) && <p className="muted small">{d.senses.map((s) => `${s.name} ${s.range} ft`).join(', ')}{d.resistances.length ? `${d.senses.length ? '. ' : ''}Resistant to ${d.resistances.join(', ')}.` : ''}</p>}
+    </section>
+  )
+}
+
+function FeaturesTab({ d }) {
+  const by = (src) => d.features.filter((f) => f.source === src)
+  const block = (title, list) => list.length > 0 && (
+    <><h2 className="sec">{title}</h2>{list.map((f) => <details key={f.key} className="feature"><summary><b>{f.name}</b>{f.level > 1 ? <span className="muted small"> level {f.level}</span> : null}</summary><p>{f.summary}</p></details>)}</>
+  )
+  return (
+    <section>
+      {block(d.cls?.name || 'Class', by('class').filter((f) => !f.id.startsWith('asi')))}
+      {block(d.subclass?.name || 'Subclass', by('subclass'))}
+      {block(d.species?.name || 'Species', by('species'))}
+      {block('Feats', [...by('background'), ...by('feat')])}
+      <p className="muted small legal">Rules summarised from the SRD 5.2 by Wizards of the Coast, CC-BY-4.0. The book wins.</p>
+    </section>
+  )
+}
+
+function GearTab({ d, ch, setCh }) {
+  const eq = ch.equipment
+  const setEq = (patch) => setCh({ ...ch, equipment: { ...eq, ...patch } })
+  const [adding, setAdding] = useState(false)
+  return (
+    <section>
+      <h2 className="sec">Armor</h2>
+      <select className="input" value={eq.armor || ''} onChange={(e) => setEq({ armor: e.target.value || null })} aria-label="Armor">
+        <option value="">No armor</option>
+        {ARMOR.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.type}, AC {a.base})</option>)}
+      </select>
+      <label className="row toggle"><input type="checkbox" checked={!!eq.shield} onChange={(e) => setEq({ shield: e.target.checked })} /><span>Shield (+2 AC)</span></label>
+      {armorById(eq.armor) && d.cls && !d.cls.armor.includes(armorById(eq.armor).type) && <p className="warn-line">Not proficient with {armorById(eq.armor).type} armor: disadvantage on STR and DEX rolls, no spells.</p>}
+      <h2 className="sec">Weapons</h2>
+      <ul className="gear">
+        {(eq.weapons || []).map((id, i) => <li key={`${id}${i}`}><span className="grow">{weaponById(id)?.name}</span><button className="icon-btn" aria-label={`Remove ${weaponById(id)?.name}`} onClick={() => setEq({ weapons: eq.weapons.filter((_, j) => j !== i) })}>✕</button></li>)}
+      </ul>
+      {adding
+        ? <select className="input" autoFocus defaultValue="" onChange={(e) => { if (e.target.value) setEq({ weapons: [...(eq.weapons || []), e.target.value] }); setAdding(false) }} aria-label="Add a weapon"><option value="">Choose a weapon…</option>{WEAPONS.map((wp) => <option key={wp.id} value={wp.id}>{wp.name} ({wp.dmg} {wp.type})</option>)}</select>
+        : <button className="btn ghost" onClick={() => setAdding(true)}>+ Add a weapon</button>}
+      <h2 className="sec">Gold and items</h2>
+      <div className="row"><span className="grow">Gold pieces</span><Stepper value={eq.gp || 0} min={0} label="Gold" onChange={(gp) => setEq({ gp })} /></div>
+      <textarea className="input" value={eq.items || ''} onChange={(e) => setEq({ items: e.target.value })} placeholder="Rope, rations, a mysterious key…" />
+    </section>
+  )
+}
+
+function HpSheet({ d, ch, hp, setState, onClose }) {
+  const [n, setN] = useState('')
+  const v = parseInt(n, 10) || 0
+  const damage = () => { let left = v, temp = ch.state.temp || 0; const fromTemp = Math.min(temp, left); temp -= fromTemp; left -= fromTemp; setState({ temp, hp: Math.max(0, hp - left) }); onClose() }
+  return (
+    <Sheet title={`Hit points: ${hp} / ${d.hp.value}`} onClose={onClose}>
+      <input className="input big" inputMode="numeric" value={n} onChange={(e) => setN(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="Amount" autoFocus aria-label="Amount" />
+      <div className="row">
+        <button className="btn danger grow" disabled={!v} onClick={damage}>Damage</button>
+        <button className="btn ok grow" disabled={!v} onClick={() => { setState({ hp: Math.min(d.hp.value, hp + v) }); onClose() }}>Heal</button>
+        <button className="btn ghost grow" disabled={!v} onClick={() => { setState({ temp: Math.max(ch.state.temp || 0, v) }); onClose() }}>Temp HP</button>
+      </div>
+      {hp === 0 && (
+        <div className="panel"><h2>Death saves</h2>
+          <div className="row"><span className="grow">Successes</span><Stepper value={ch.state.deathSaves?.ok || 0} min={0} max={3} label="Successes" onChange={(ok) => setState({ deathSaves: { ...ch.state.deathSaves, ok } })} /></div>
+          <div className="row"><span className="grow">Failures</span><Stepper value={ch.state.deathSaves?.fail || 0} min={0} max={3} label="Failures" onChange={(fail) => setState({ deathSaves: { ...ch.state.deathSaves, fail } })} /></div>
+        </div>
+      )}
+      <ul className="sources">{d.hp.sources.map((s, i) => <li key={i}><span>{s.label}</span><span className="mono">{s.value}</span></li>)}</ul>
+    </Sheet>
+  )
+}
+
+/** Level up: what you get, hit points (average or a thrown die), then the new choices. */
+function LevelUp({ ch, setCh, start, roll, onClose }) {
+  const [stage, setStage] = useState(start === 'choices' ? 'choices' : 'preview')
+  const [next, setNext] = useState(start === 'choices' ? ch : { ...ch, level: ch.level + 1 })
+  const before = derive(ch), after = derive(next)
+  const gained = after.features.filter((f) => !before.features.some((g) => g.key === f.key))
+  const die = after.hitDie
+  const avg = Math.floor(die / 2) + 1
+  const setHp = (value) => { const n = { ...next, hpRolls: { ...next.hpRolls, [next.level]: value } }; setNext(n); setStage('choices') }
+  const finish = () => {
+    const d2 = derive(next)
+    const gainedHp = d2.hp.value - before.hp.value
+    setCh({ ...next, state: { ...next.state, hp: Math.min(d2.hp.value, (ch.state.hp ?? before.hp.value) + Math.max(0, gainedHp)) } })
+    onClose()
+  }
+  return (
+    <Sheet title={start === 'choices' ? 'Choices to make' : `Level ${ch.level} → ${ch.level + 1}`} onClose={onClose}>
+      {stage === 'preview' && (
+        <>
+          {gained.length ? gained.map((f) => <div key={f.key} className="panel"><b>{f.name}</b><p className="small">{f.summary}</p></div>) : <p className="muted">Better numbers, no new features this level.</p>}
+          {after.prof > before.prof && <p className="ok-line">Proficiency bonus {signed(before.prof)} → {signed(after.prof)}</p>}
+          <h2 className="sec">Hit points</h2>
+          <div className="row">
+            <button className="btn ghost grow" onClick={() => setHp(avg)}>Take {avg} (average)</button>
+            <button className="btn primary grow" onClick={async () => { const e = await roll({ kind: 'expr', label: `Hit die (d${die})`, expr: `1d${die}` }); if (e) setHp(Math.max(1, e.total)) }}>🎲 Roll d{die}</button>
+          </div>
+          <p className="muted small">Plus your CON modifier ({signed(after.mod.CON)}).</p>
+        </>
+      )}
+      {stage === 'choices' && (
+        <>
+          <ChoicesStep ch={next} setCh={setNext} d={after} filter={(c) => !c.done || c.level === next.level} embedded />
+          {!after.choices.length && <p className="muted">Nothing to choose.</p>}
+          <button className="btn primary wide" disabled={after.pending.length > 0} onClick={finish}>{after.pending.length ? `${after.pending.length} choice${after.pending.length > 1 ? 's' : ''} left` : start === 'choices' ? 'Done' : `Become level ${next.level}`}</button>
+        </>
+      )}
+    </Sheet>
+  )
+}
