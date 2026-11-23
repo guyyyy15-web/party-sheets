@@ -15,6 +15,9 @@ Dice from any screen, thrown on the screen with real physics.
 - Sheet: HP with damage / heal / temp, AC and speed with their sources, My Turn by action type, attacks with
   weapon mastery, resources as pips, short and long rests, checks and saves, features, gear, notes, level up
 - Backups: Export all / Import on the home screen. Works offline.
+- At the table: Hit Dice on a short rest (die + CON, at least 1), Heroic Inspiration (Humans get it on a long rest),
+  the 14 conditions and Exhaustion (-2 per level on d20 tests, -5 ft speed, -1 level per long rest), and species
+  abilities as actions (Giant Ancestry, Large Form, Stonecunning, Draconic Flight, Relentless Endurance, lineage spells)
 
 ## Run it
 
@@ -23,6 +26,8 @@ npm install
 npm run build   # src/ → app.js and dice3d.js (committed: GitHub Pages serves the repo as it is)
 npm test        # rules engine (sample characters, every class × species × level), dice, bundles match src/
 npm run smoke   # iPhone browser test: three heroes through the wizard, a turn, level up, rests, backup, offline
+npm run a11y    # accessibility (axe-core) on every screen: no serious issues allowed
+node scripts/live.cjs   # after a release: the same kind of checks on the real site (iPhone 13 and SE)
 ```
 
 ## Layout

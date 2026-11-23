@@ -1,6 +1,7 @@
 // The character sheet at the table: stats with sources, My Turn, checks, features, gear, notes; rests and level up.
 import React, { useState, useMemo } from 'react'
-import { derive, rest } from '../engine/engine.js'
+import { derive, rest, spendHitDie } from '../engine/engine.js'
+import { CONDITIONS, EXHAUSTION, INSPIRATION } from '../content/conditions.js'
 import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTERY } from '../content/basics.js'
 import { SourcesSheet, Sheet, Stepper, signed } from './common.jsx'
 import { ChoicesStep, Portrait } from './wizard.jsx'
@@ -15,6 +16,8 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const [hpOpen, setHpOpen] = useState(false)
   const [levelUp, setLevelUp] = useState(false)
   const [settings, setSettings] = useState(false)
+  const [shortRest, setShortRest] = useState(false)
+  const [condOpen, setCondOpen] = useState(false)
   const hp = ch.state.hp ?? d.hp.value
   const setState = (patch) => setCh({ ...ch, state: { ...ch.state, ...patch } })
   const used = (id) => ch.state.used?.[id] || 0
@@ -23,7 +26,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const theme = ch.theme || { fighter: 'red', rogue: 'violet', monk: 'gold' }[ch.classId] || 'gold'
 
   return (
-    <div className={`sheet-page theme-${theme}`}>
+    <main className={`sheet-page theme-${theme}`}>
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="All characters">‹</button>
         <Portrait ch={ch} size={44} />
@@ -41,6 +44,18 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
         <button className="stat" onClick={() => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode })}><span className="lbl">Init 🎲</span><b>{signed(d.initiative.value)}</b></button>
         <div className="stat"><span className="lbl">Prof</span><b>{signed(d.prof)}</b></div>
       </section>
+
+      <section className="status-row" aria-label="Inspiration and conditions">
+        <button className={`insp ${d.inspiration ? 'on' : ''}`} aria-pressed={d.inspiration} onClick={() => setState({ inspiration: !d.inspiration })} title={INSPIRATION}>
+          <span aria-hidden>{d.inspiration ? '★' : '☆'}</span> Inspiration
+        </button>
+        <button className={`cond-btn ${d.conditions.length || d.exhaustion ? 'on' : ''}`} onClick={() => setCondOpen(true)}>
+          {d.conditions.length || d.exhaustion
+            ? [...d.conditions.map((id) => CONDITIONS.find((c) => c.id === id)?.name), d.exhaustion ? `Exhaustion ${d.exhaustion}` : null].filter(Boolean).join(', ')
+            : 'No conditions'}
+        </button>
+      </section>
+      {d.exhaustion > 0 && <p className="warn-line" role="status">Exhaustion {d.exhaustion}: -{d.d20Pen} on every d20 test and -{d.exhaustion * EXHAUSTION.speedPerLevel} ft speed (already in the numbers below).</p>}
 
       {d.resources.length > 0 && (
         <section className="resources">
@@ -73,12 +88,14 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       {tab === 'notes' && <textarea className="input notes" value={ch.notes} placeholder="Backstory, NPCs, loot, plans…" onChange={(e) => setCh({ ...ch, notes: e.target.value })} />}
 
       <section className="rests">
-        <button className="btn ghost" onClick={() => setCh({ ...ch, state: rest(ch, 'short') })}>☕ Short rest</button>
+        <button className="btn ghost" onClick={() => setShortRest(true)}>☕ Short rest</button>
         <button className="btn ghost" onClick={() => { if (confirm('Long rest: HP and every resource back to full?')) setCh({ ...ch, state: rest(ch, 'long') }) }}>🌙 Long rest</button>
         {ch.level < 20 && <button className="btn primary" onClick={() => setLevelUp('up')}>⬆ Level up</button>}
       </section>
 
       {sources && <SourcesSheet {...sources} onClose={() => setSources(null)} />}
+      {shortRest && <ShortRest ch={ch} setCh={setCh} roll={roll} onClose={() => setShortRest(false)} />}
+      {condOpen && <ConditionsSheet d={d} ch={ch} setState={setState} onClose={() => setCondOpen(false)} />}
       {hpOpen && <HpSheet d={d} ch={ch} hp={hp} setState={setState} onClose={() => setHpOpen(false)} />}
       {levelUp && <LevelUp ch={ch} setCh={setCh} start={levelUp} roll={roll} onClose={() => setLevelUp(false)} />}
       {settings && (
@@ -89,7 +106,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
           <button className="btn danger wide" onClick={() => { if (confirm(`Delete ${ch.name}? Export a backup first if you might want it back.`)) onDelete() }}>Delete character</button>
         </Sheet>
       )}
-    </div>
+    </main>
   )
 }
 
@@ -100,8 +117,9 @@ function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
   const canPay = (a) => !a.cost || d.resources.find((r) => r.id === a.cost.resource)?.max - used(a.cost.resource) >= a.cost.amount
   const doAction = (a) => {
     if (a.cost) spend(a.cost.resource, a.cost.amount)
+    if (a.setHp != null) setState({ hp: a.setHp, used: { ...ch.state.used, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}) } })
     if (a.refill) setState({ used: { ...ch.state.used, [a.refill]: 0, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}) } })
-    if (a.roll) roll({ kind: 'expr', label: `${a.name}: ${a.roll.label}`, expr: a.roll.expr }).then((e) => { if (a.heal && e) setState({ hp: Math.min(d.hp.value, hp + e.total), ...(a.cost || a.refill ? {} : {}) }) })
+    if (a.roll) roll({ kind: 'expr', label: `${a.name}: ${a.roll.label}`, expr: a.roll.expr }).then((e) => { if (a.heal && e) setState({ hp: Math.min(d.hp.value, hp + Math.max(a.min || 0, e.total)), ...(a.cost || a.refill ? {} : {}) }) })
   }
   return (
     <section className="turn">
@@ -130,7 +148,7 @@ function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
                   <b>{a.name}</b>{a.cost && <span className="cost">{a.cost.amount} {d.resources.find((r) => r.id === a.cost.resource)?.name || a.cost.resource}</span>}
                   <span className="muted small">{a.summary}{a.save ? ` ${a.save.ability ? `${a.save.ability} save ` : ''}DC ${a.save.dc}.` : ''}</span>
                 </div>
-                {(a.roll || a.cost) && <button className="roll-btn" disabled={!canPay(a)} onClick={() => doAction(a)}>{a.roll ? a.roll.expr : 'Use'}<small>{a.roll ? a.roll.label : 'spend'}</small></button>}
+                {(a.roll || a.cost) && <button className="roll-btn" disabled={!canPay(a)} onClick={() => doAction(a)} aria-label={`${a.name}: ${a.roll ? `roll ${a.roll.expr}` : 'use'}${a.cost ? `, costs ${a.cost.amount}` : ''}`}>{a.roll ? a.roll.expr : 'Use'}<small>{a.roll ? a.roll.label : 'spend'}</small></button>}
               </div>
             ))}
           </div>
@@ -148,7 +166,7 @@ function ChecksTab({ d, roll, mode, show }) {
         {ABILITIES.map((a) => (
           <div key={a} className="abil-card">
             <button className="ab-top" onClick={() => show(`${ABILITY_NAMES[a]} score`, { value: d.scores[a].total, sources: d.scores[a].sources })}><small>{a}</small><b>{d.scores[a].total}</b></button>
-            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.mod[a], mode })}>Check {signed(d.mod[a])}</button>
+            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.checks[a], mode })}>Check {signed(d.checks[a])}</button>
             <button className={`ab-roll ${d.saves[a].prof ? 'prof' : ''}`} onClick={() => roll({ kind: 'd20', label: `${a} save`, bonus: d.saves[a].value, mode })}>Save {signed(d.saves[a].value)}</button>
           </div>
         ))}
@@ -269,6 +287,64 @@ function LevelUp({ ch, setCh, start, roll, onClose }) {
           <button className="btn primary wide" disabled={after.pending.length > 0} onClick={finish}>{after.pending.length ? `${after.pending.length} choice${after.pending.length > 1 ? 's' : ''} left` : start === 'choices' ? 'Done' : `Become level ${next.level}`}</button>
         </>
       )}
+    </Sheet>
+  )
+}
+
+/** Short rest: spend Hit Dice one at a time (die + CON each), then finish to get short-rest resources back. */
+function ShortRest({ ch, setCh, roll, onClose }) {
+  const [log, setLog] = useState([])
+  const [cur, setCur] = useState(ch)
+  const d = derive(cur)
+  const hd = d.resources.find((r) => r.id === 'hit-dice')
+  const left = hd ? hd.max - hd.used : 0
+  const hp = cur.state.hp ?? d.hp.value
+  const spend = async () => {
+    const e = await roll({ kind: 'expr', label: `Hit Die (d${d.hitDie})`, expr: `1d${d.hitDie}` })
+    if (!e) return
+    const face = e.total
+    const r = spendHitDie(cur, face)
+    if (!r) return
+    const next = { ...cur, state: r.state }
+    setCur(next); setCh(next)
+    setLog((l) => [...l, `d${d.hitDie}: ${face} ${signed(d.mod.CON)} CON = +${r.healed} HP`])
+  }
+  const finish = () => { setCh({ ...cur, state: rest(cur, 'short') }); onClose() }
+  return (
+    <Sheet title="Short rest" onClose={onClose}>
+      <p className="lead small">At least an hour of rest. Spend Hit Dice to heal: each one is the die + your CON modifier ({signed(d.mod.CON)}).</p>
+      <div className="row"><span className="grow">Hit points</span><b className="mono">{hp} / {d.hp.value}</b></div>
+      <div className="row"><span className="grow">Hit Dice left</span><b className="mono">{left} of {hd?.max || 0} (d{d.hitDie})</b></div>
+      <button className="btn primary wide" disabled={!left || hp >= d.hp.value} onClick={spend}>{!left ? 'No Hit Dice left' : hp >= d.hp.value ? 'Already at full HP' : `🎲 Spend a Hit Die (d${d.hitDie})`}</button>
+      {log.length > 0 && <ul className="sources" aria-live="polite">{log.map((l, i) => <li key={i}><span>{l}</span></li>)}</ul>}
+      <button className="btn ok wide" onClick={finish}>Finish short rest</button>
+      <p className="muted small">Finishing gives back what recharges on a short rest{d.resources.filter((r) => r.reset === 'short' || r.short).length ? `: ${d.resources.filter((r) => r.reset === 'short' || r.short).map((r) => r.name).join(', ')}` : ''}. Hit Dice come back on a long rest.</p>
+    </Sheet>
+  )
+}
+
+/** Conditions on or off, and Exhaustion levels. */
+function ConditionsSheet({ d, ch, setState, onClose }) {
+  const on = new Set(d.conditions)
+  const toggle = (id) => setState({ conditions: on.has(id) ? d.conditions.filter((x) => x !== id) : [...d.conditions, id] })
+  return (
+    <Sheet title="Conditions" onClose={onClose}>
+      <div className="row exh">
+        <span className="grow"><b>Exhaustion</b><br /><span className="muted small">{EXHAUSTION.summary}</span></span>
+        <Stepper value={d.exhaustion} min={0} max={EXHAUSTION.max} label="Exhaustion" onChange={(exhaustion) => setState({ exhaustion })} />
+      </div>
+      {d.exhaustion >= EXHAUSTION.max && <p className="warn-line" role="alert">Exhaustion level 6: the character dies.</p>}
+      <ul className="conds">
+        {CONDITIONS.map((c) => (
+          <li key={c.id}>
+            <label className="cond">
+              <input type="checkbox" checked={on.has(c.id)} onChange={() => toggle(c.id)} />
+              <span><b>{c.name}</b><span className="muted small">{c.summary}</span></span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <button className="btn ghost wide" disabled={!d.conditions.length} onClick={() => setState({ conditions: [] })}>Clear all conditions</button>
     </Sheet>
   )
 }

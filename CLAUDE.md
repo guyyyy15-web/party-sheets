@@ -13,4 +13,6 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   older characters too. Backups must keep importing.
 - Dice thrown on screen take their result from the physics (`readTop`), never a separate random number.
 - A new class or rule needs a sample character in `tests/engine.test.mjs` with numbers checked against the SRD.
-- Before pushing: `npm test` and `npm run smoke`, and look at screenshots/ after UI changes.
+- Before pushing: `npm test`, `npm run smoke` and `npm run a11y`, and look at screenshots/ after UI changes. After a
+  release: `node scripts/live.cjs` (the real site, iPhone 13 and SE).
+- Accuracy: rules were audited against the SRD 5.2 PDF on 2026-11-23. When adding content, check the PDF, not memory.

@@ -58,11 +58,14 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
 
 ;(async () => {
   await new Promise((r) => server.listen(8771, r))
-  const URL = 'http://localhost:8771/'
+  const URL = process.env.SITE || 'http://localhost:8771/'
   fs.mkdirSync(shots, { recursive: true })
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
+  // auto-accept the long-rest confirm()
+
   const ctx = await b.newContext({ ...devices['iPhone 13'], acceptDownloads: true })
   const p = await ctx.newPage()
+  p.on('dialog', (d) => d.accept())
   const errs = []
   p.on('pageerror', (e) => errs.push(e.message))
   await p.goto(URL)
@@ -76,7 +79,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.screenshot({ path: `${shots}/01b-hero.png` })
   await p.click('button[aria-label="Cancel"]')
   await buildHero(p, { name: 'Katsebushi', cls: 'Monk', species: 'Human', bg: 'Criminal', method: 'point-buy',
-    picks: { species: ['Perception', 'Savage Attacker'], choices: ['Acrobatics', 'Insight'] } })
+    picks: { species: ['Medium', 'Perception', 'Savage Attacker'], choices: ['Acrobatics', 'Insight', 'Musical Instrument'] } })
   const ac = await p.textContent('.vitals .stat >> nth=0')
   ok(/AC\s*1[45]/.test(ac.replace(/\s+/g, ' ')), `monk sheet shows AC (${ac.replace(/\s+/g, ' ')})`)
   await p.screenshot({ path: `${shots}/05-sheet-monk.png`, fullPage: true })
@@ -94,6 +97,44 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.waitForSelector('.roll-toast')
   ok(/Unarmed Strike to hit/.test(await p.textContent('.roll-toast')), 'to hit rolls from the sheet')
 
+  // 3D throws: the dice of an earlier throw never stay on the table
+  await p.click('.fab')
+  await p.click('button:has-text("Throw on screen")')
+  await p.click('button[aria-label="Add a d6"]'); await p.click('button[aria-label="Add a d6"]'); await p.click('button[aria-label="Add a d6"]')
+  for (let i = 0; i < 3; i++) {
+    if (i) await p.click('.fab')
+    await p.click('button:has-text("Throw d20 + 3d6")')
+    await p.waitForFunction(() => /Tap to close/.test(document.querySelector('.dice3d')?.textContent || ''), null, { timeout: 30000 })
+    const n = await p.evaluate(() => window.KDice3D.onTable())
+    ok(n === 4, `throw ${i + 1}: exactly the 4 dice of this throw are on the table (${n})`)
+    await p.click('.dice3d')
+  }
+  ok(await p.evaluate(() => window.KDice3D.onTable()) === 0, 'closing clears the table')
+  await p.click('.fab'); await p.click('button:has-text("Throw on screen")'); await p.click('button[aria-label="Close"]')
+
+  // Hit Dice on a short rest, inspiration, conditions and exhaustion
+  await p.click('.hp'); await p.fill('input[aria-label="Amount"]', '4'); await p.click('.sheet button:text-is("Damage")')
+  await p.click('button:has-text("Short rest")')
+  const before = await p.textContent('.sheet .row:has-text("Hit points") b')
+  await p.click('button:has-text("Spend a Hit Die")')
+  await p.waitForSelector('.sheet .sources li')
+  const after = await p.textContent('.sheet .row:has-text("Hit points") b')
+  ok(before !== after && /Hit Dice left\s*0 of 1/.test((await p.textContent('.sheet')).replace(/\s+/g, ' ')), `a Hit Die heals (${before} → ${after}) and is spent`)
+  await p.screenshot({ path: `${shots}/05b-short-rest.png` })
+  await p.click('button:has-text("Finish short rest")')
+  await p.click('button:has-text("Inspiration")')
+  ok(await p.isVisible('.insp[aria-pressed="true"]'), 'Heroic Inspiration can be marked')
+  await p.click('.cond-btn')
+  await p.click('label.cond:has-text("Prone")')
+  await p.click('button[aria-label="Exhaustion up"]')
+  await p.screenshot({ path: `${shots}/05c-conditions.png` })
+  await p.click('.sheet-head .icon-btn')
+  ok(/Prone, Exhaustion 1/.test(await p.textContent('.cond-btn')), 'conditions show on the sheet')
+  ok(await p.isVisible('text=Exhaustion 1: -2 on every d20 test'), 'exhaustion explains its penalty')
+  await p.click('button:has-text("Long rest")')
+  ok(/Prone/.test(await p.textContent('.cond-btn')) && !/Exhaustion/.test(await p.textContent('.cond-btn')), 'a long rest removes one exhaustion level (and keeps Prone)')
+  await p.click('.cond-btn'); await p.click('button:has-text("Clear all conditions")'); await p.click('.sheet-head .icon-btn')
+
   // level up to 3: subclass appears as a choice
   for (const lvl of [2, 3]) {
     await p.click('button:has-text("Level up")')
@@ -107,6 +148,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   const pipsAfter = await p.$$eval('.res:has-text("Focus Points") .pip.full', (e) => e.length)
   ok(pipsAfter === 2, `using Flurry spends a Focus Point (${pipsAfter} of 3 left)`)
   await p.click('button:has-text("Short rest")')
+  await p.click('button:has-text("Finish short rest")')
   ok((await p.$$eval('.res:has-text("Focus Points") .pip.full', (e) => e.length)) === 3, 'a short rest brings Focus back')
   await p.click('[role=tab]:has-text("Checks")')
   await p.screenshot({ path: `${shots}/06-checks.png`, fullPage: true })

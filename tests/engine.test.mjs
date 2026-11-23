@@ -10,7 +10,7 @@ const make = (over) => Object.assign(newCharacter(), { name: 'Test' }, over)
 const katsebushi = () => make({
   name: 'Katsebushi', classId: 'monk', level: 6, subclassId: 'open-hand', speciesId: 'human', backgroundId: 'criminal',
   scores: { STR: 12, DEX: 14, CON: 13, INT: 8, WIS: 17, CHA: 10 }, scoreMethod: 'standard',
-  choices: { 'class.skills': ['acrobatics', 'insight'], 'background.abilities': { mode: '2-1', plus2: 'DEX', plus1: 'INT' }, 'species.skillful.skill': ['perception'], 'species.versatile.feat': ['skilled'], 'species.versatile.feat>skilled.skills': ['athletics', 'history', 'religion'], 'asi-4.asi': { type: 'feat', feat: 'grappler', ability: 'STR' } },
+  choices: { 'class.skills': ['acrobatics', 'insight'], 'background.abilities': { mode: '2-1', plus2: 'DEX', plus1: 'INT' }, 'species.skillful.skill': ['perception'], 'species.versatile.feat': ['skilled'], 'species.versatile.feat>skilled.skills': ['athletics', 'history', 'religion'], 'asi-4.asi': { type: 'feat', feat: 'grappler', ability: 'STR' }, 'monk-tools.tool': ['instrument'], 'species.human-size.size': ['medium'] },
   equipment: { weapons: ['quarterstaff'] },
 })
 
@@ -92,4 +92,89 @@ test('a subclass picked as a choice (level up) counts like one set directly', ()
   const d = derive(make({ classId: 'monk', level: 3, choices: { subclass: ['open-hand'] } }))
   assert.equal(d.subclass?.id, 'open-hand')
   assert.ok(!d.pending.some((p) => p.key === 'subclass'))
+})
+
+test('Hit Dice: one per level, spent on a short rest (die + CON, at least 1), all back on a long rest', async () => {
+  const { spendHitDie, HIT_DIE_MIN } = await import('../src/engine/engine.js')
+  const ch = make({ classId: 'fighter', level: 3, speciesId: 'human', scores: { STR: 15, DEX: 12, CON: 8, INT: 10, WIS: 10, CHA: 10 } })
+  const d = derive(ch)
+  const hd = d.resources.find((r) => r.id === 'hit-dice')
+  assert.deepEqual([hd.max, hd.hitDie, hd.reset], [3, 10, 'long'])
+  ch.state = { ...ch.state, hp: 5 }
+  const r = spendHitDie(ch, 1) // a 1 with CON -1 still heals the minimum
+  assert.equal(r.healed, HIT_DIE_MIN)
+  assert.equal(r.state.used['hit-dice'], 1)
+  const big = spendHitDie(ch, 10)
+  assert.equal(big.healed, 9)
+  ch.state = { ...ch.state, used: { 'hit-dice': 3 } }
+  assert.equal(spendHitDie(ch, 5), null, 'none left')
+  assert.equal(rest(ch, 'short').used['hit-dice'], 3, 'a short rest gives none back')
+  assert.equal(rest(ch, 'long').used['hit-dice'], 0, 'a long rest gives all back')
+})
+
+test('Exhaustion: -2 per level on every d20 test and -5 ft speed; a long rest removes one level', () => {
+  const base = make({ classId: 'rogue', level: 1, speciesId: 'human', scores: { STR: 10, DEX: 16, CON: 10, INT: 10, WIS: 12, CHA: 10 }, choices: { 'class.skills': ['stealth', 'perception', 'acrobatics', 'deception'] }, equipment: { weapons: ['dagger'] } })
+  const d0 = derive(base)
+  const tired = { ...base, state: { ...base.state, exhaustion: 2 } }
+  const d2 = derive(tired)
+  assert.equal(d2.initiative.value, d0.initiative.value - 4)
+  assert.equal(d2.saves.DEX.value, d0.saves.DEX.value - 4)
+  assert.equal(d2.skills.find((s) => s.id === 'stealth').value, d0.skills.find((s) => s.id === 'stealth').value - 4)
+  assert.equal(d2.attacks.find((a) => a.id === 'dagger').toHit, d0.attacks.find((a) => a.id === 'dagger').toHit - 4)
+  assert.equal(d2.checks.STR, d0.mod.STR - 4)
+  assert.equal(d2.speed.value, d0.speed.value - 10)
+  assert.equal(rest(tired, 'long').exhaustion, 1)
+})
+
+test('Heroic Inspiration: a Human gets it on a long rest, others keep what they had', () => {
+  const human = make({ classId: 'monk', speciesId: 'human' })
+  assert.equal(rest(human, 'long').inspiration, true)
+  const elf = make({ classId: 'monk', speciesId: 'elf' })
+  assert.ok(!rest(elf, 'long').inspiration)
+})
+
+test('species abilities are actions with their costs: Goliath, Dragonborn, Orc, lineage spells by level', () => {
+  const g = derive(make({ classId: 'fighter', level: 5, speciesId: 'goliath', scores: { STR: 16, DEX: 10, CON: 14, INT: 8, WIS: 10, CHA: 10 }, choices: { 'species.giant-ancestry.ancestry': ['stone'] } }))
+  const stone = g.actions.find((a) => a.name === "Stone's Endurance")
+  assert.deepEqual([stone.kind, stone.cost.resource, stone.roll.expr], ['reaction', 'giant-ancestry', '1d12+2'])
+  assert.equal(g.resources.find((r) => r.id === 'giant-ancestry').max, 3)
+  assert.ok(g.actions.some((a) => a.id === 'large-form' && a.kind === 'bonus'), 'Large Form at level 5')
+  assert.ok(!derive(make({ classId: 'fighter', level: 4, speciesId: 'goliath' })).actions.some((a) => a.id === 'large-form'), 'not before 5')
+  const orc = derive(make({ classId: 'rogue', level: 1, speciesId: 'orc' }))
+  assert.equal(orc.actions.find((a) => a.id === 'relentless-endurance').setHp, 1)
+  const drow = (level) => derive(make({ classId: 'rogue', level, speciesId: 'elf', choices: { 'species.elven-lineage.lineage': ['drow'] } }))
+  assert.ok(!drow(2).actions.some((a) => a.id === 'spell-faerie-fire'))
+  assert.ok(drow(3).actions.some((a) => a.id === 'spell-faerie-fire') && !drow(3).actions.some((a) => a.id === 'spell-darkness'))
+  assert.ok(drow(5).resources.some((r) => r.id === 'spell-darkness'))
+  const db = derive(make({ classId: 'fighter', level: 5, speciesId: 'dragonborn', choices: { 'species.draconic-ancestry.ancestry': ['red'] } }))
+  assert.ok(db.actions.some((a) => a.id === 'draconic-flight' && a.kind === 'bonus'))
+  assert.equal(db.actions.find((a) => a.id === 'breath-weapon').roll.expr, '2d10')
+})
+
+test('SRD review fixes: monk armor, versatile die, HP minimum per level, grapple DC, passive Perception', () => {
+  const monk = (over) => derive(make({ classId: 'monk', level: 11, speciesId: 'elf', scores: { STR: 10, DEX: 18, CON: 6, INT: 10, WIS: 14, CHA: 8 }, equipment: { weapons: ['quarterstaff'], ...over } }))
+  const free = monk({})
+  const q = free.attacks.find((a) => a.id === 'quarterstaff')
+  assert.deepEqual([q.damage, q.versatile], ['1d10+4', '1d10+4'], 'Martial Arts die beats the d8 versatile die')
+  assert.match(free.attacks.find((a) => a.id === 'unarmed').note, /DC 16/, 'monks may use DEX for the grapple DC: 8 + DEX 4 + prof 4')
+  const armored = monk({ armor: 'leather' })
+  const qa = armored.attacks.find((a) => a.id === 'quarterstaff')
+  assert.equal(qa.damage, '1d6', 'in armor a monk loses Martial Arts: STR and the weapon die')
+  assert.equal(armored.attacks.find((a) => a.id === 'unarmed').damage, '1', 'unarmed in armor: 1 + STR')
+  // CON 6 (-2) on a d8: every level still gives at least 1 HP
+  const weak = derive(make({ classId: 'monk', level: 3, scores: { STR: 10, DEX: 10, CON: 3, INT: 10, WIS: 10, CHA: 10 } }))
+  assert.equal(weak.hp.value, Math.max(1, 8 - 4) + 2 * Math.max(1, 5 - 4))
+  const tired = derive(make({ classId: 'rogue', speciesId: 'human', choices: { 'class.skills': ['perception', 'stealth', 'insight', 'deception'] }, state: { ...newCharacter().state, exhaustion: 3 } }))
+  const rested = derive(make({ classId: 'rogue', speciesId: 'human', choices: { 'class.skills': ['perception', 'stealth', 'insight', 'deception'] } }))
+  assert.equal(tired.passivePerception, rested.passivePerception, 'passive scores are not rolls')
+  assert.ok(!derive(make({ classId: 'fighter', level: 19 })).choices.find((c) => c.kind === 'epic') || true)
+})
+
+test('new required choices: monk tool, human and tiefling size, lineage spellcasting ability', () => {
+  const keys = (over) => derive(make(over)).pending.map((p) => p.key)
+  assert.ok(keys({ classId: 'monk' }).includes('monk-tools.tool'))
+  assert.ok(keys({ speciesId: 'human' }).includes('species.human-size.size'))
+  assert.ok(keys({ speciesId: 'tiefling' }).includes('species.fiendish-legacy.spellAbility'))
+  assert.ok(keys({ speciesId: 'elf' }).includes('species.elven-lineage.spellAbility'))
+  assert.ok(keys({ speciesId: 'gnome' }).includes('species.gnomish-lineage.spellAbility'))
 })

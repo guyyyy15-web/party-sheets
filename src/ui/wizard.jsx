@@ -40,7 +40,7 @@ export function Wizard({ ch, setCh, onDone, onCancel, settings, throwOn }) {
     <div className="wizard">
       <header className="wiz-top">
         <button className="icon-btn" onClick={step ? () => go(step - 1) : onCancel} aria-label={step ? 'Back' : 'Cancel'}>‹</button>
-        <div className="wiz-progress" aria-label={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`}>
+        <div className="wiz-progress" role="progressbar" aria-label="Character wizard" aria-valuemin={1} aria-valuemax={STEPS.length} aria-valuenow={step + 1} aria-valuetext={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`}>
           {STEPS.map((s, i) => <span key={s} className={i < step ? 'done' : i === step ? 'on' : ''} />)}
         </div>
         <span className="muted small">{step + 1}/{STEPS.length}</span>

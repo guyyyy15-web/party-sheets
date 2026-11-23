@@ -52,6 +52,7 @@ export function AsiPicker({ value, onChange, scores, epic, level, takenFeats }) 
   const v = value || { type: epic ? 'feat' : 'plus2' }
   const feats = FEATS.filter((f) => (epic ? f.category === 'epic' : ['general', 'origin', 'fighting-style'].includes(f.category) && !(f.category === 'fighting-style')))
     .filter((f) => !takenFeats.includes(f.id) || f.id === v.feat)
+    .filter((f) => !f.prereq?.spellcasting) // no spellcasting classes before phase 2
     .filter((f) => !f.prereq || ((!f.prereq.level || level >= f.prereq.level) && (!f.prereq.scores || Object.entries(f.prereq.scores)[f.prereq.any ? 'some' : 'every'](([a, n]) => scores[a] >= n))))
   const feat = FEATS.find((f) => f.id === v.feat)
   const featAbilities = feat?.ability === 'any' ? ABILITIES : feat?.ability || []

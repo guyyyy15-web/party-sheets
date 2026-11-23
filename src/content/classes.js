@@ -115,7 +115,7 @@ export const ROGUE = {
     id: 'thief', name: 'Thief', summary: 'Burglar, treasure hunter, quick hands.',
     features: [
       { id: 'fast-hands', level: 3, name: 'Fast Hands', summary: 'Cunning Action can also: Sleight of Hand, use Thieves\' Tools, or Use an Object.' },
-      { id: 'second-story-work', level: 3, name: 'Second-Story Work', summary: 'Climb speed equal to your speed. Running jumps go DEX modifier feet further.' },
+      { id: 'second-story-work', level: 3, name: 'Second-Story Work', summary: 'Climb speed equal to your speed. Use DEX instead of STR to work out your jump distance.' },
       { id: 'supreme-sneak', level: 9, name: 'Supreme Sneak', summary: 'New Cunning Strike: Stealth Attack (1d6), staying hidden after the attack.' },
       { id: 'use-magic-device', level: 13, name: 'Use Magic Device', summary: 'Attune to four magic items, use spell scrolls, a chance not to spend item charges.' },
       { id: 'thiefs-reflexes', level: 17, name: "Thief's Reflexes", summary: 'Two turns in the first round of combat: the second at your initiative minus 10.' },
@@ -137,9 +137,11 @@ export const MONK = {
   subclassLevel: 3,
   scales: { martialArts },
   features: [
+    { id: 'monk-tools', level: 1, name: 'Tool Proficiency', summary: "One type of Artisan's Tools or one Musical Instrument.",
+      choices: [{ key: 'tool', label: 'Tool', count: 1, options: () => [{ id: 'artisan', name: "Artisan's Tools (one type)" }, { id: 'instrument', name: 'Musical Instrument (one type)' }] }] },
     { id: 'martial-arts', level: 1, name: 'Martial Arts', summary: 'Unarmed and monk weapons can use DEX and your Martial Arts die. Bonus action: one Unarmed Strike.',
       effects: [
-        { type: 'monk-weapons' },
+        { type: 'monk-weapons', when: unarmored },
         { type: 'action', id: 'ma-bonus', name: 'Bonus Unarmed Strike', kind: 'bonus', summary: 'One Unarmed Strike.', attack: 'unarmed', when: unarmored },
       ] },
     { id: 'unarmored-defense', level: 1, name: 'Unarmored Defense', summary: 'Without armor or a shield, AC = 10 + DEX + WIS.',
@@ -158,7 +160,7 @@ export const MONK = {
         { type: 'resource', id: 'uncanny-metabolism', name: 'Uncanny Metabolism', max: () => 1, reset: 'long' },
         { type: 'action', id: 'uncanny-metabolism', name: 'Uncanny Metabolism', kind: 'free', cost: { resource: 'uncanny-metabolism', amount: 1 }, summary: 'On initiative: Focus back to full.', roll: { label: 'Heal', expr: (c) => `1${martialArts(c.level)}+${c.level}` }, heal: true, refill: 'focus' },
       ] },
-    { id: 'deflect-attacks', level: 3, name: 'Deflect Attacks', summary: 'Reaction: reduce damage from an attack by 1d10 + DEX + monk level. At 0, spend 1 Focus to redirect it.',
+    { id: 'deflect-attacks', level: 3, name: 'Deflect Attacks', summary: 'Reaction: reduce Bludgeoning, Piercing or Slashing damage from an attack by 1d10 + DEX + monk level. At 0, spend 1 Focus to redirect it.',
       effects: [{ type: 'action', id: 'deflect', name: 'Deflect Attacks', kind: 'reaction', summary: 'Reduce the damage. At 0, 1 Focus to redirect.', roll: { label: 'Reduce by', expr: (c) => `1d10+${c.mod.DEX + c.level}` } }] },
     asi(4),
     { id: 'slow-fall', level: 4, name: 'Slow Fall', summary: 'Reaction: reduce falling damage by 5 x monk level.',
@@ -189,7 +191,7 @@ export const MONK = {
       { id: 'wholeness-of-body', level: 6, name: 'Wholeness of Body', summary: 'Bonus action: heal a Martial Arts die + WIS (min 1). WIS modifier uses (min 1) per long rest.',
         effects: [
           { type: 'resource', id: 'wholeness', name: 'Wholeness of Body', max: (c) => Math.max(1, c.mod.WIS), reset: 'long' },
-          { type: 'action', id: 'wholeness', name: 'Wholeness of Body', kind: 'bonus', cost: { resource: 'wholeness', amount: 1 }, summary: 'Heal yourself.', roll: { label: 'Heal', expr: (c) => `1${martialArts(c.level)}+${c.mod.WIS}` }, heal: true },
+          { type: 'action', id: 'wholeness', name: 'Wholeness of Body', kind: 'bonus', cost: { resource: 'wholeness', amount: 1 }, summary: 'Heal yourself (at least 1 HP).', roll: { label: 'Heal', expr: (c) => `1${martialArts(c.level)}${c.mod.WIS >= 0 ? '+' : ''}${c.mod.WIS}` }, heal: true, min: 1 },
         ] },
       { id: 'fleet-step', level: 11, name: 'Fleet Step', summary: 'After any other bonus action, use Step of the Wind right away.' },
       { id: 'quivering-palm', level: 17, name: 'Quivering Palm', summary: '4 Focus on an Unarmed Strike hit: later, end the vibrations for a CON save, 10d12 Force (half on a success).',

@@ -98,7 +98,7 @@ function Home({ chars, onOpen, onNew, onExport, onImport, settings, setSettings 
   const last = getSetting('lastBackupAt', null)
   const real = chars.filter((c) => !c.draft || c.name)
   return (
-    <div className="home">
+    <main className="home">
       <header className="home-top">
         <div className="brand"><span className="logo" aria-hidden>🎲</span><div><h1>Party Sheets</h1><p className="muted small">Character sheets for our table</p></div></div>
         <button className="icon-btn" onClick={() => setTable(true)} aria-label="Table settings">⚙</button>
@@ -146,7 +146,7 @@ function Home({ chars, onOpen, onNew, onExport, onImport, settings, setSettings 
           <p className="muted small">The DM decides. Standard array and point buy are always there.</p>
         </Sheet>
       )}
-    </div>
+    </main>
   )
 }
 
