@@ -58,7 +58,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
 
 ;(async () => {
   await new Promise((r) => server.listen(8771, r))
-  const URL = 'http://localhost:8771/'
+  const URL = process.env.SITE || 'http://localhost:8771/'
   fs.mkdirSync(shots, { recursive: true })
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
   const ctx = await b.newContext({ ...devices['iPhone 13'], acceptDownloads: true })

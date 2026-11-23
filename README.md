@@ -23,6 +23,7 @@ npm install
 npm run build   # src/ → app.js and dice3d.js (committed: GitHub Pages serves the repo as it is)
 npm test        # rules engine (sample characters, every class × species × level), dice, bundles match src/
 npm run smoke   # iPhone browser test: three heroes through the wizard, a turn, level up, rests, backup, offline
+node scripts/live.cjs   # after a release: the same kind of checks on the real site (iPhone 13 and SE)
 ```
 
 ## Layout
