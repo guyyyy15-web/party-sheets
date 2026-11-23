@@ -15,34 +15,45 @@ export function upcastDice(text) {
 }
 
 /**
- * The roll for a spell's damage or healing: { expr, parts, why } or null.
+ * The roll for a spell's damage or healing: { expr, parts, why, type, heal } or null.
+ * Every damage part counts (Flame Strike is fire + radiant). A part's `up` is the dice it gains per slot level
+ * above the spell's level; without one, the main part reads the `higher` text ("+1d6 per slot level above 3").
  * castLevel = the slot it's cast with (ignored for cantrips); mod = the spellcasting modifier.
  */
 export function spellRoll(spell, { level, castLevel, mod, ability }) {
   const eff = spell.damage || spell.heal
   if (!eff?.dice) return null
-  const m = /^(\d+)d(\d+)(?:\s*\+\s*(\d+))?$/.exec(eff.dice.replace(/\s/g, ''))
-  if (!m) return null
-  let n = +m[1]
-  const sides = +m[2], flat = +(m[3] || 0)
-  const why = []
-  if (spell.level === 0 && spell.cantripScaling && !spell.beams) {
-    const k = cantripDice(level)
-    if (k > 1) why.push(`Cantrip at character level ${level}: ${k}× the dice (more at levels 5, 11 and 17).`)
-    n *= k
-  }
-  const up = upcastDice(eff.higher)
+  const groups = [{ dice: eff.dice, type: eff.type, up: eff.up }, ...(spell.heal ? [] : eff.plus || [])]
   const above = spell.level > 0 ? Math.max(0, (castLevel || spell.level) - spell.level) : 0
-  if (up && above) {
-    if (up.sides === sides) n += up.n * above
-    why.push(`Cast with a level ${castLevel} slot: ${eff.higher.replace(/^\+/, '+')} (${above} level${above > 1 ? 's' : ''} above).`)
-  }
-  const extra = up && above && up.sides !== sides ? `+${up.n * above}d${up.sides}` : ''
+  const why = []
+  const dice = []
+  let flat = 0
+  groups.forEach((g, gi) => {
+    const m = /^(\d+)d(\d+)(?:\+(\d+))?$/.exec(String(g.dice).replace(/\s/g, ''))
+    if (!m) return
+    let n = +m[1]
+    const sides = +m[2]
+    flat += +(m[3] || 0)
+    if (spell.level === 0 && spell.cantripScaling && !spell.beams && gi === 0) {
+      const k = cantripDice(level)
+      if (k > 1) why.push(`Cantrip at character level ${level}: ${k}× the dice (more at levels 5, 11 and 17).`)
+      n *= k
+    }
+    const upM = g.up ? /^(\d+)d(\d+)$/.exec(g.up) : null
+    const up = upM ? { n: +upM[1], sides: +upM[2] } : gi === 0 ? upcastDice(eff.higher) : null
+    const add = []
+    if (up && above) { if (up.sides === sides) n += up.n * above; else add.push(`${up.n * above}d${up.sides}`) }
+    dice.push(`${n}d${sides}`, ...add)
+  })
+  if (!dice.length) return null
+  if (above && groups.some((g, gi) => g.up || (gi === 0 && upcastDice(eff.higher)))) why.push(`Cast with a level ${castLevel} slot, ${above} level${above > 1 ? 's' : ''} above: ${eff.higher || 'more dice'}.`)
   const parts = []
   if (flat) parts.push({ label: 'Spell bonus', value: flat, kind: 'bonus' })
   if (eff.mod) parts.push({ label: `${ability} modifier (spellcasting)`, value: mod, kind: 'ability' })
   const bonus = parts.reduce((t, p) => t + p.value, 0)
-  return { expr: `${n}d${sides}${extra}${bonus ? (bonus > 0 ? `+${bonus}` : bonus) : ''}`, parts, why: why.join(' ') || null, type: spell.damage ? eff.type : 'healing', heal: !!spell.heal }
+  const types = spell.heal ? 'healing' : [...new Set(groups.map((g) => g.type).filter(Boolean))].join(' + ')
+  if (groups.length > 1 && !spell.heal) why.push(`Two kinds of damage, rolled together: ${groups.map((g) => `${g.dice} ${g.type}${g.note ? ` (${g.note})` : ''}`).join(' and ')}.`)
+  return { expr: `${dice.join('+')}${bonus ? (bonus > 0 ? `+${bonus}` : bonus) : ''}`, parts, why: why.join(' ') || null, type: types, heal: !!spell.heal }
 }
 
 /**

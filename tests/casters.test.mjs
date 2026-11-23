@@ -64,7 +64,7 @@ test('spells: values checked against the SRD 5.2', () => {
   assert.ok(spellById('detect-magic').ritual && spellById('detect-magic').concentration)
   assert.ok(spellById('find-familiar').ritual && !spellById('find-familiar').concentration)
   assert.deepEqual([spellById('spirit-guardians').save, spellById('spirit-guardians').damage.dice], ['WIS', '3d8'])
-  assert.deepEqual(spellById('flame-strike').damage.plus, [{ dice: '5d6', type: 'radiant' }])
+  assert.deepEqual(spellById('flame-strike').damage.plus, [{ dice: '5d6', type: 'radiant', up: '1d6' }])
   assert.deepEqual([spellById('hunters-mark').damage.dice, spellById('hunters-mark').classes], ['1d6', ['ranger']])
   assert.equal(spellById('divine-smite').damage.dice, '2d8')
   assert.equal(spellById('wish').level, 9)

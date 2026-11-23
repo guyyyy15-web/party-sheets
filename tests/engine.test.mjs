@@ -227,3 +227,17 @@ test('spell slots come back on a long rest; pact slots on a short rest', () => {
   assert.equal(rest(wz, 'short').used['slot-1'], 3)
   assert.equal(rest(wz, 'long').used['slot-1'], 0)
 })
+
+test('spell damage: every damage part, and upcasting however the spell words it (audit fixes)', () => {
+  const r = (id, castLevel) => spellRoll(spellById(id), { level: 9, castLevel, mod: 4, ability: 'WIS' }).expr
+  assert.equal(r('flame-strike', 5), '5d6+5d6')
+  assert.equal(r('flame-strike', 6), '6d6+6d6')
+  assert.equal(r('ice-storm', 5), '3d10+4d6')
+  assert.equal(r('meteor-swarm', 9), '20d6+20d6')
+  assert.equal(r('acid-arrow', 3), '5d4')
+  assert.equal(r('searing-smite', 2), '2d6')
+  assert.equal(r('ice-knife', 2), '1d10+3d6')
+  assert.equal(r('vitriolic-sphere', 5), '12d4')
+  assert.equal(r('fireball', 5), '10d6')
+  assert.equal(r('cure-wounds', 3), '6d8+4')
+})
