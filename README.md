@@ -22,6 +22,17 @@ Dice from any screen, thrown on the screen with real physics.
   the 14 conditions and Exhaustion (-2 per level on d20 tests, -5 ft speed, -1 level per long rest), and species
   abilities as actions (Giant Ancestry, Large Form, Stonecunning, Draconic Flight, Relentless Endurance, lineage spells)
 
+## Groups (phase 2)
+
+- Each playing group gets its own **group**: an invite link for the players and a separate link for its DM.
+  Make one on the home screen (Groups → + New group) and share the links.
+- Players open the invite and bring a character (one group per character). It stays on the phone and works
+  offline; changes reach the group within seconds, and offline changes go up when the phone is back online.
+- The **DM screen** (from the DM link, on a phone or a laptop) shows every character in the group live: HP, AC,
+  initiative, speed, passive Perception, saves, conditions. The DM can mark damage, healing, temp HP, conditions,
+  Exhaustion and Inspiration, but can't change a character's choices or level.
+- Server: a Cloudflare Worker + D1 in `server/` (not encrypted; the links' keys are stored only as hashes).
+
 ## Run it
 
 ```bash

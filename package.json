@@ -6,7 +6,9 @@
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
     "smoke": "node scripts/smoke.cjs",
-    "a11y": "node scripts/a11y.cjs"
+    "a11y": "node scripts/a11y.cjs",
+    "smoke:rooms": "node scripts/rooms.cjs",
+    "test:server": "cd server && npm test"
   },
   "devDependencies": {
     "axe-core": "4.10.2",
