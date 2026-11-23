@@ -18,7 +18,10 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   older characters too. Backups must keep importing.
 - Dice thrown on screen take their result from the physics (`readTop`), never a separate random number.
 - A new class or rule needs a sample character in `tests/engine.test.mjs` with numbers checked against the SRD.
-- Before pushing: `npm test`, `npm run smoke`, `npm run smoke:rooms` and `npm run a11y`, and look at screenshots/ after UI changes. After a
+- Campaign checks: `tests/campaign.test.mjs` levels one character per class 1→20 against an oracle typed from the
+  SRD tables (scores, HP, AC, saves, attacks, slots, resources, rests, fights); `npm run campaign` does a Cleric and a
+  Fighter 1→20 through the real Level up sheet with a fight at 5. Run both after any rules change.
+- Before pushing: `npm test`, `npm run smoke`, `npm run smoke:rooms` and `npm run a11y` (and `npm run campaign` after rules changes), and look at screenshots/ after UI changes. After a
   release: `node scripts/live.cjs` (the real site, iPhone 13 and SE).
 - Spellcasting: class data in `src/content/casters.js`, spells in `src/content/spells.js` (SRD only, own words),
   the math in `src/engine/spells.js` (`spellcastingOf`, `spellRoll`). A character stores `spells: { cantrips, prepared }`

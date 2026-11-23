@@ -319,7 +319,8 @@ export function rest(ch, kind) {
   }
   const state = { ...ch.state, used }
   if (kind === 'long') {
-    Object.assign(state, { hp: d.hp.value, temp: 0, deathSaves: { ok: 0, fail: 0 }, exhaustion: Math.max(0, (ch.state.exhaustion || 0) - 1) })
+    // 8 hours: every concentration spell has ended (a short rest leaves it to the player: Find the Path lasts a day)
+    Object.assign(state, { concentration: null, hp: d.hp.value, temp: 0, deathSaves: { ok: 0, fail: 0 }, exhaustion: Math.max(0, (ch.state.exhaustion || 0) - 1) })
     if (LONG_REST_HIT_DICE !== 'all') used['hit-dice'] = Math.max(0, (ch.state.used?.['hit-dice'] || 0) - Math.max(1, Math.floor(d.level / 2)))
     if (d.features.some((f) => f.id === 'resourceful')) state.inspiration = true // Human: Heroic Inspiration on every long rest
   } else used['hit-dice'] = ch.state.used?.['hit-dice'] || 0 // a short rest gives no Hit Dice back

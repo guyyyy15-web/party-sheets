@@ -8,7 +8,8 @@
     "smoke": "node scripts/smoke.cjs",
     "a11y": "node scripts/a11y.cjs",
     "smoke:rooms": "node scripts/rooms.cjs",
-    "test:server": "cd server && npm test"
+    "test:server": "cd server && npm test",
+    "campaign": "node scripts/campaign.cjs"
   },
   "devDependencies": {
     "@iconify-json/game-icons": "^1.2.4",
