@@ -296,14 +296,15 @@ export function derive(input) {
   for (const e of active) if (e.type === 'note' && e.save) actions.push({ id: `note-${e.from}`, name: e.from, kind: 'info', summary: e.save.label, save: { dc: e.save.dc(ctx) } })
 
   const senses = active.filter((e) => e.type === 'sense').map((e) => ({ name: e.name, range: e.range }))
-  const resistances = [...new Set(active.filter((e) => e.type === 'resist').map((e) => e.damage))]
+  const immunities = [...new Set(active.filter((e) => e.type === 'immune').map((e) => e.damage))]
+  const resistances = [...new Set(active.filter((e) => e.type === 'resist').map((e) => e.damage))].filter((x) => !immunities.includes(x))
   const choices = openChoices(ch, features, ctx)
 
   return {
     name: ch.name, level, cls, species: sp, background: bg, subclass: cls?.subclasses.find((s) => s.id === ch.subclassId) || null,
     scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, spellcasting, resources, attacks, attacksPerAction, actions,
     exhaustion, d20Pen, inspiration: !!ch.state?.inspiration, conditions: ch.state?.conditions || [],
-    senses, resistances, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
+    senses, resistances, immunities, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
     choices, pending: choices.filter((c) => !c.done), armor, shield, crit,
   }
 }

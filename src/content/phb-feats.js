@@ -167,7 +167,7 @@ export const PHB_FEATS = [
   }),
   general({
     id: 'mounted-combatant', name: 'Mounted Combatant', ability: ['STR', 'DEX', 'WIS'],
-    summary: '+1 STR, DEX or WIS. Mounted, advantage on attacks against unmounted creatures within 5 ft of your mount that are no more than one size larger than it. Your mount takes no damage on a successful DEX save for half (half on a fail). You can make an attack that hits your mount hit you instead.',
+    summary: '+1 STR, DEX or WIS. Mounted, advantage on attacks against unmounted creatures within 5 ft of your mount that are at least one size smaller than it. Your mount takes no damage on a successful DEX save for half (half on a fail). You can make an attack that hits your mount hit you instead.',
   }),
   general({
     id: 'observant', name: 'Observant', prereq: { scores: { INT: 13, WIS: 13 }, any: true }, ability: ['INT', 'WIS'],
@@ -180,7 +180,7 @@ export const PHB_FEATS = [
     summary: '+1 STR or DEX. Once per turn, on a hit with piercing damage, reroll one damage die and use the new roll. A critical hit with piercing damage rolls one extra damage die.',
   }),
   general({
-    id: 'poisoner', name: 'Poisoner', prereq: { scores: { DEX: 13, INT: 13 }, any: true }, ability: ['DEX', 'INT'],
+    id: 'poisoner', name: 'Poisoner', prereq: { level: 4 }, ability: ['DEX', 'INT'],
     summary: "+1 DEX or INT. Your poison damage ignores resistance to poison. Proficiency with the Poisoner's Kit: 1 hour and 50 gp of materials make doses equal to your proficiency bonus. Bonus action to coat a weapon or ammunition; on a hit the target makes a CON save or takes 2d8 poison and is Poisoned until the end of your next turn.",
     choices: [{ key: 'ability', label: 'Ability you raised (sets the DC)', count: 1, kind: 'pick', options: () => [{ id: 'DEX', name: 'Dexterity' }, { id: 'INT', name: 'Intelligence' }] }],
     effects: [{ type: 'action', id: 'poisoner-dose', name: 'Apply poison', kind: 'bonus', summary: 'Coat a weapon or ammunition: on a hit, CON save or 2d8 poison damage and Poisoned until the end of your next turn.',

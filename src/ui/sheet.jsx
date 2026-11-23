@@ -211,7 +211,7 @@ function ChecksTab({ d, roll, mode, show }) {
           </button></li>
         ))}
       </ul>
-      {(d.senses.length > 0 || d.resistances.length > 0) && <p className="muted small">{d.senses.map((s) => `${s.name} ${s.range} ft`).join(', ')}{d.resistances.length ? `${d.senses.length ? '. ' : ''}Resistant to ${d.resistances.join(', ')}.` : ''}</p>}
+      {(d.senses.length > 0 || d.resistances.length > 0 || d.immunities.length > 0) && <p className="muted small">{[d.senses.map((s) => `${s.name} ${s.range} ft`).join(', '), d.resistances.length ? `Resistant to ${d.resistances.join(', ')}` : '', d.immunities.length ? `Immune to ${d.immunities.join(', ')}` : ''].filter(Boolean).join('. ')}.</p>}
     </section>
   )
 }

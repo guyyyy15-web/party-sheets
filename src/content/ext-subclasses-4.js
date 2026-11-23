@@ -87,7 +87,7 @@ const STORM = {
       effects: [{ type: 'action', id: 'tempestuous-magic', name: 'Tempestuous Magic', kind: 'bonus', summary: 'Before or after a level 1+ spell: fly 10 ft, no opportunity attacks.' }] },
     { id: 'heart-of-the-storm', level: 6, name: 'Heart of the Storm', summary: 'Resistance to lightning and thunder. When you start casting a level 1+ spell that deals lightning or thunder damage, creatures of your choice you can see within 10 ft take lightning or thunder damage (your choice) equal to half your sorcerer level.',
       effects: [
-        { type: 'resist', damage: 'lightning' }, { type: 'resist', damage: 'thunder' },
+        { type: 'immune', damage: 'lightning' }, { type: 'immune', damage: 'thunder' },
         { type: 'action', id: 'heart-of-the-storm', name: 'Heart of the Storm', kind: 'info', summary: (c) => `With a level 1+ lightning or thunder spell: ${half(c.level)} damage to chosen creatures within 10 ft.` },
       ] },
     { id: 'storm-guide', level: 6, name: 'Storm Guide', summary: 'If it is raining, an action stops the rain in a 20-ft radius around you (bonus action to let it fall again). If it is windy, a bonus action each round sets the wind direction in a 100-ft radius around you until the end of your next turn.' },

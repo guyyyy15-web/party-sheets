@@ -27,7 +27,7 @@ const ARCANE_TRICKSTER = {
   // The engine reads spellcasting from the class only (for now); this is the subclass's own table, ready for it.
   spellcasting: {
     ability: 'INT', kind: 'prepared', list: 'wizard',
-    cantrips: [0, 0, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+    cantrips: [0, 0, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3], // besides Mage Hand (always prepared)
     prepared: [0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 11, 12, 13],
     slots: 'third', table: SLOTS_THIRD, focus: 'Arcane Focus',
   },
@@ -187,7 +187,7 @@ const WILD_MAGIC = {
         { type: 'resource', id: 'tides-of-chaos', name: 'Tides of Chaos', max: () => 1, reset: 'long' },
         { type: 'action', id: 'tides-of-chaos', name: 'Tides of Chaos', kind: 'free', cost: { resource: 'tides-of-chaos', amount: 1 }, summary: 'Advantage on one d20 test.' },
       ] },
-    { id: 'bend-luck', level: 6, name: 'Bend Luck', summary: 'Reaction when a creature you can see rolls a d20 test: spend 1 Sorcery Point and roll 1d4 to add to or subtract from the roll.',
+    { id: 'bend-luck', level: 6, name: 'Bend Luck', summary: 'Reaction when another creature you can see rolls a d20 test: spend 1 Sorcery Point and roll 1d4 to add to or subtract from the roll.',
       effects: [{ type: 'action', id: 'bend-luck', name: 'Bend Luck', kind: 'reaction', cost: { resource: 'sorcery-points', amount: 1 }, summary: "Add or subtract 1d4 from someone's d20 test.", roll: { label: '+ or -', expr: () => '1d4' } }] },
     { id: 'controlled-chaos', level: 14, name: 'Controlled Chaos', summary: 'When you roll on the Wild Magic Surge table, roll twice and use either result.' },
     { id: 'tamed-surge', level: 18, name: 'Tamed Surge', summary: 'Right after casting a Sorcerer spell with a slot, pick any Surge table effect instead of rolling (not the last row). Once per long rest.',

@@ -241,3 +241,12 @@ test('spell damage: every damage part, and upcasting however the spell words it 
   assert.equal(r('fireball', 5), '10d6')
   assert.equal(r('cure-wounds', 3), '6d8+4')
 })
+
+test('audit fixes: Poisoner needs only level 4, Arcane Trickster cantrips, Wind Soul immunity', async () => {
+  const { featById } = await import('../src/content/feats.js')
+  assert.deepEqual(featById('poisoner').prereq, { level: 4 })
+  const at = derive(make({ classId: 'rogue', level: 10, speciesId: 'human', subclassId: 'arcane-trickster', scores: { STR: 8, DEX: 16, CON: 12, INT: 14, WIS: 10, CHA: 10 } })).spellcasting
+  assert.equal(at.cantripsMax, 3); assert.ok(at.always.has('mage-hand'))
+  const st = derive(make({ classId: 'sorcerer', level: 18, speciesId: 'human', subclassId: 'storm-sorcery' }))
+  assert.ok(st.immunities.includes('lightning') && !st.resistances.includes('lightning'))
+})
