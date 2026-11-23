@@ -33,6 +33,12 @@ Dice from any screen, thrown on the screen with real physics.
   damage or healing. Cantrip dice grow at character levels 5, 11 and 17.
 - The SRD has one subclass per class and 18 feats; others are in the Player's Handbook and can't be included.
 
+## Saved on the server
+
+Every character is saved on the server as you play (a status on the sheet: Saved / Saving… / Not saved, with
+**Save now**). With no signal, changes wait on the phone and go up when it's back. Table settings → **Your cloud
+key**: open that link on a new phone to bring all your characters back.
+
 ## Groups (phase 2)
 
 - Each playing group gets its own **group**: an invite link for the players and a separate link for its DM.

@@ -20,7 +20,9 @@ async function scan(p, name) {
 ;(async () => {
   await new Promise((r) => server.listen(8772, r))
   const b = await chromium.launch()
-  const p = await (await b.newContext({ ...devices['iPhone 13'] })).newPage()
+  const ctx = await b.newContext({ ...devices['iPhone 13'] })
+  await ctx.addInitScript(() => localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9'))) // never the production server
+  const p = await ctx.newPage()
   await p.goto('http://localhost:8772/'); await p.waitForSelector('text=No heroes yet'); await scan(p, 'home')
   await p.click('text=+ New character'); await scan(p, 'wizard: hero')
   await p.fill('input[placeholder="e.g. Katsebushi"]', 'A'); await p.click('.wiz-foot button'); await scan(p, 'wizard: class')

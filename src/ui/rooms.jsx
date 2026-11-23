@@ -107,10 +107,18 @@ export function RoomsSection({ chars, renderChar, onDm, onNewInRoom, onBring, jo
 export function forgetGroup(r) { forgetRoom(r.id) }
 
 /** The little cloud next to a shared character's name. */
-export function SyncBadge({ id, roomName }) {
+export function SyncBadge({ id, roomName, onSaveNow }) {
   const [s, setS] = useState(() => syncStatus(id))
+  const [busy, setBusy] = useState(false)
   useEffect(() => onSyncStatus((x) => { if (x === id) setS(syncStatus(id)) }), [id])
-  const st = s?.state || 'ok'
-  const text = st === 'offline' ? 'offline, will sync' : st === 'error' ? 'not syncing' : st === 'sending' ? 'syncing…' : 'synced'
-  return <span className={`sync-badge ${st}`} title={s?.msg || ''}>☁ {roomName} · {text}</span>
+  const st = s?.state || 'pending'
+  const text = { ok: 'Saved', sending: 'Saving…', pending: 'Saving…', offline: 'Not saved: no connection', error: 'Not saved' }[st]
+  const stuck = st === 'offline' || st === 'error' || (st === 'pending' && Date.now() - (s?.at || 0) > 3000)
+  return (
+    <span className={`sync-badge ${st}`} role="status" title={s?.msg || ''}>
+      ☁ {roomName ? `${roomName} · ` : ''}{text}
+      {stuck && onSaveNow && <button className="btn small ghost save-now" disabled={busy} onClick={async () => { setBusy(true); try { await onSaveNow() } finally { setBusy(false) } }}>{busy ? 'Saving…' : 'Save now'}</button>}
+      {st === 'error' && s?.msg && <span className="sync-msg">{s.msg}</span>}
+    </span>
+  )
 }

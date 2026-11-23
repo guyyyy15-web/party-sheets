@@ -2,7 +2,7 @@
 // The server applies the same mergePatch (server/src/index.js), so both sides agree on the result.
 
 /** Fields that stay on this phone and never go to the room. */
-export const LOCAL_ONLY = new Set(['id', 'roomId', 'updatedAt', 'draft', 'wizardStep'])
+export const LOCAL_ONLY = new Set(['id', 'roomId', 'updatedAt', 'draft', 'wizardStep', 'ownerKey'])
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 /** What `next` changed compared with `base` (the last copy both sides agreed on): changed top-level fields, and
@@ -44,6 +44,8 @@ export function rebase(local, base, server) {
 
 /** `#/join/<room>.<key>` or `#/dm/<room>.<key>` → { kind, roomId, key } */
 export function parseLink(hash) {
+  const r = /^#\/restore\/([A-Za-z0-9_-]{24,64})$/.exec(hash || '')
+  if (r) return { kind: 'restore', key: r[1] }
   const m = /^#\/(join|dm)\/([A-Za-z0-9_-]{6,40})\.([A-Za-z0-9_-]{24,64})$/.exec(hash || '')
   return m ? { kind: m[1], roomId: m[2], key: m[3] } : null
 }

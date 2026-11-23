@@ -6,7 +6,7 @@ import { speciesById } from '../content/species.js'
 import { getSetting, setSetting } from './store.js'
 import { apiBase } from './sync.js'
 
-const KINDS = { room_created: 'New groups', character_joined: 'Characters joined', player_write: 'Player changes', dm_action: 'DM actions' }
+const KINDS = { room_created: 'New groups', character_saved: 'New characters', character_joined: 'Joined a group', player_write: 'Player changes', dm_action: 'DM actions' }
 const when = (t) => { if (!t) return '—'; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago` }
 
 async function call(path, { key, method = 'GET', body } = {}) {
@@ -44,11 +44,25 @@ export function AdminView({ onBack }) {
         <>
           <section className="admin-totals" aria-label="Totals">
             <Tile n={t.rooms} label="Groups" sub={`${t.activeRooms7d} active this week`} />
-            <Tile n={t.characters} label="Characters in groups" sub={`${t.activeCharacters7d} changed this week`} />
+            <Tile n={t.characters} label="Characters saved" sub={`${t.activeCharacters7d} changed this week`} />
             <Tile n={t.players} label="Players (phones)" />
             <Tile n={`${Math.round(t.bytes / 1024)} KB`} label="Stored" sub={`up to ${stats.limits.totalRooms} groups`} />
           </section>
           <UsageChart usage={stats.usage} />
+          {stats.solo?.length > 0 && (
+            <>
+              <h2 className="admin-h">Not in a group ({stats.solo.length})</h2>
+              <ul className="admin-chars room">
+                {stats.solo.map((c) => (
+                  <li key={c.id}>
+                    <span className="portrait mini-portrait" aria-hidden>{c.portrait || (c.name || '?').slice(0, 1)}</span>
+                    <span className="grow"><b>{c.name || 'Unnamed (in the wizard)'}</b><span className="muted small">{speciesById(c.speciesId)?.name || ''} {classById(c.classId)?.name || ''} {c.level}</span></span>
+                    <span className="muted small" title={`Player ${c.player}`}>{when(c.updatedAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <h2 className="admin-h">Groups</h2>
           {stats.rooms.length === 0 && <p className="muted">No groups yet.</p>}
           <ul className="admin-rooms">

@@ -395,3 +395,8 @@ h1 { letter-spacing: .01em; }
 .gear-card.untrained { opacity: .75; } .gear-card .warn-line { font-size: 12px; }
 @media (min-width: 600px) { .gear-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 900px) { .gear-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.sync-badge { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.sync-badge .save-now { min-height: 32px; padding: 0 10px; font-size: 13px; }
+.sync-badge .sync-msg { flex-basis: 100%; font-size: 12px; }
+.sync-badge.ok { color: var(--ok); }
+.unsaved { display: grid; gap: 6px; }
