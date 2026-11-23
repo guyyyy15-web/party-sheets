@@ -36,6 +36,11 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - Sync (`src/ui/sync.js`, pure parts in `src/sync-core.js`): one request per sync. Send `diff(local, base)` (PUT,
   merged by field; `state` one level deeper) or fetch the server copy. Every 10 s and 0.8 s after a change; the DM
   screen refreshes every 5 s. The same `mergePatch` runs on both sides.
+- Group settings (`rooms.settings`, DM only): `expansions` = subclasses from the expansion books (`expansion: true`,
+  tagged with their book). A character in no group follows the phone's Table setting.
+- Admin screen (`#/admin`, `src/ui/admin.jsx`, `GET /admin/stats`): the first password set becomes the admin's
+  (`settings.admin_hash`, salted SHA-256), then it's locked. To reset: delete that row in D1 `party-sheets`.
+  Usage counts writes only (`usage` table: groups made, characters joined, player changes, DM actions), never content.
 - Limits: 256 KB per character, 12 per room, 10 new rooms per client per hour, 5000 rooms in total.
 - Tests never call production: `npm run test:server` (API, local wrangler dev) and `npm run smoke:rooms` (two phones
   and a DM through a local Worker, with axe). The app reads the API address from localStorage `ps.api` (tests only).

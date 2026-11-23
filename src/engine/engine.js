@@ -109,7 +109,7 @@ function openChoices(ch, features, ctx) {
   const cls = classById(ch.classId)
   const bg = backgroundById(ch.backgroundId)
   if (cls && ch.level >= cls.subclassLevel && !cls.subclasses.some((s) => s.id === ch.subclassId)) {
-    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary, source: s.source })), picked: [], source: 'class', level: cls.subclassLevel })
+    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary, source: s.source, expansion: !!s.expansion })), picked: [], source: 'class', level: cls.subclassLevel })
   }
   if (cls) {
     const picked = ch.choices['class.skills'] || []

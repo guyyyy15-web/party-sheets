@@ -51,7 +51,7 @@ export async function createRoom(name) {
 export async function joinRoom({ kind, roomId, key }) {
   const j = await api(`/rooms/${roomId}`, { key })
   if (kind === 'dm' && j.role !== 'dm') throw new ApiError(403, 'not a DM link')
-  return keepRoom({ id: roomId, name: j.room.name, ...(kind === 'dm' ? { dmKey: key } : { playerKey: key }) })
+  return keepRoom({ id: roomId, name: j.room.name, settings: j.room.settings || {}, ...(kind === 'dm' ? { dmKey: key } : { playerKey: key }) })
 }
 const page = () => location.href.split('#')[0]
 export const inviteLink = (r) => (r.playerKey ? `${page()}#/join/${r.id}.${r.playerKey}` : null)
@@ -60,10 +60,13 @@ export const dmLink = (r) => (r.dmKey ? `${page()}#/dm/${r.id}.${r.dmKey}` : nul
 /** The room as its members see it: the DM gets every full sheet, a player gets the party list. */
 export async function fetchRoom(r, asDm) {
   const j = await api(`/rooms/${r.id}`, { key: asDm ? r.dmKey : r.playerKey || r.dmKey })
-  if (j.room.name !== r.name) keepRoom({ id: r.id, name: j.room.name })
+  if (j.room.name !== r.name || JSON.stringify(j.room.settings || {}) !== JSON.stringify(r.settings || {})) keepRoom({ id: r.id, name: j.room.name, settings: j.room.settings || {} })
   return j
 }
-export const renameRoom = (r, name) => api(`/rooms/${r.id}`, { method: 'PATCH', key: r.dmKey, body: { name } }).then((j) => keepRoom({ id: r.id, name: j.room.name }))
+/** The DM changes the group's name or settings (e.g. expansions on/off). */
+export const updateRoom = (r, body) => api(`/rooms/${r.id}`, { method: 'PATCH', key: r.dmKey, body }).then((j) => keepRoom({ id: r.id, name: j.room.name, settings: j.room.settings || {} }))
+/** Expansion subclasses: the group's DM decides; a character in no group follows this phone's table setting. */
+export const expansionsAllowed = (ch) => { const r = ch?.roomId && roomById(ch.roomId); return r ? !!r.settings?.expansions : !!getSetting('table', {}).expansions }
 /** DM quick actions: HP, temp HP, conditions, inspiration, exhaustion, death saves. */
 export const dmPatch = (r, charId, state) => api(`/rooms/${r.id}/characters/${charId}`, { method: 'PATCH', key: r.dmKey, body: { state } })
 

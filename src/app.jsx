@@ -3,9 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { newCharacter, derive } from './engine/engine.js'
 import { allCharacters, saveCharacter, deleteCharacter, getSetting, setSetting, backupText, backupName, parseBackupFile, backupRooms, shareFile } from './ui/store.js'
 import { parseLink } from './sync-core.js'
-import { joinRoom, listRooms, roomById, restoreRooms, shareCharacter, unshareCharacter, syncCharacter } from './ui/sync.js'
+import { joinRoom, listRooms, roomById, restoreRooms, shareCharacter, unshareCharacter, syncCharacter, fetchRoom } from './ui/sync.js'
 import { RoomsSection } from './ui/rooms.jsx'
 import { DmView } from './ui/dm.jsx'
+import { AdminView } from './ui/admin.jsx'
 import { DiceTray, performRoll, throwDefault, load3d, RollCard } from './ui/dice.jsx'
 import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
@@ -16,7 +17,7 @@ const standalone = () => window.matchMedia?.('(display-mode: standalone)').match
 
 function App() {
   const [chars, setChars] = useState(null)
-  const [view, setView] = useState({ name: 'home' })
+  const [view, setView] = useState(() => (location.hash === '#/admin' ? { name: 'admin' } : { name: 'home' }))
   const [tray, setTray] = useState(false)
   const [pool, setPool] = useState({ 20: 1 })
   const [poolMod, setPoolMod] = useState(0)
@@ -37,6 +38,7 @@ function App() {
   // an invite or DM link: check it, remember the group, and clear the key from the address bar
   useEffect(() => {
     const open = async () => {
+      if (location.hash === '#/admin') { setView({ name: 'admin' }); return }
       const link = parseLink(location.hash)
       if (!link) return
       history.replaceState(null, '', location.pathname + location.search)
@@ -58,7 +60,13 @@ function App() {
   }, [])
   const schedule = useCallback((id) => { clearTimeout(timers.current[id]); timers.current[id] = setTimeout(() => runSync(id), 800) }, [runSync])
   useEffect(() => {
-    const all = () => { if (!document.hidden) for (const c of charsRef.current || []) if (c.roomId && !c.draft) runSync(c.id) }
+    let tick = 0
+    const all = () => {
+      if (document.hidden) return
+      for (const c of charsRef.current || []) if (c.roomId && !c.draft) runSync(c.id)
+      // the groups' names and settings (the DM may allow expansions), every 30 s
+      if (tick++ % 3 === 0) for (const r of listRooms()) fetchRoom(r, false).catch(() => {})
+    }
     const t = setInterval(all, 10000)
     window.addEventListener('online', all); document.addEventListener('visibilitychange', all)
     all()
@@ -131,6 +139,8 @@ function App() {
     screen = <CharacterSheet ch={current} setCh={update} roll={roll} mode={mode} setMode={setMode} onBack={() => setView({ name: 'home' })}
       group={current.roomId ? { name: room?.name || 'Group', onLeave: () => leave(current) } : null}
       onDelete={async () => { await remove(current); setView({ name: 'home' }) }} />
+  } else if (view.name === 'admin') {
+    screen = <AdminView onBack={() => { history.replaceState(null, '', location.pathname); setView({ name: 'home' }) }} />
   } else if (view.name === 'dm' && roomById(view.roomId)) {
     screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} />
   } else {
@@ -205,6 +215,8 @@ function Home({ chars, onOpen, onNew, onBring, onDm, joined, onExport, onImport,
           <label className="row toggle"><input type="checkbox" checked={settings.allowRoll !== false} onChange={(e) => setSettings({ ...settings, allowRoll: e.target.checked })} /><span>Allow rolling ability scores (4d6) in the wizard</span></label>
           <p className="muted small">The DM decides. Standard array and point buy are always there.</p>
           <label className="row toggle"><input type="checkbox" checked={settings.showMath !== false} onChange={(e) => setSettings({ ...settings, showMath: e.target.checked })} /><span>Show the math on every roll (to learn to play with real dice)</span></label>
+          <label className="row toggle"><input type="checkbox" checked={!!settings.expansions} onChange={(e) => setSettings({ ...settings, expansions: e.target.checked })} /><span>Allow subclasses from the expansion books (for characters not in a group; in a group, its DM decides)</span></label>
+          <button className="btn ghost wide" onClick={() => { setTable(false); location.hash = '#/admin' }}>Owner: admin screen</button>
         </Sheet>
       )}
     </main>

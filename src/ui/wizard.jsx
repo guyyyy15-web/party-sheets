@@ -8,6 +8,7 @@ import { BACKGROUNDS, backgroundById } from '../content/backgrounds.js'
 import { ABILITIES, ABILITY_NAMES, skillName, armorById, weaponById } from '../content/basics.js'
 import { OptionCards, AsiPicker, asiDone, Stepper, signed } from './common.jsx'
 import { shrinkImage } from './store.js'
+import { expansionsAllowed } from './sync.js'
 import { load3d } from './dice.jsx'
 
 const STANDARD = [15, 14, 13, 12, 10, 8]
@@ -313,8 +314,9 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
                 onChange={(v) => { setDrafts({ ...drafts, [c.key]: v }); if (asiDone(v)) set(c.key, v); else if (ch.choices[c.key]) { const next = { ...ch.choices }; delete next[c.key]; setCh({ ...ch, choices: next }) } }} />
             : <>
                 <p className="muted small">{c.count > 1 ? `Choose ${c.count} (${c.picked.length} chosen).` : 'Choose one.'}</p>
+                {c.kind === 'subclass' && c.options.some((o) => o.expansion) && <p className="muted small">{expansionsAllowed(ch) ? 'Includes subclasses from the expansion books (tagged).' : `${c.options.filter((o) => o.expansion).length} more subclasses from the expansion books: ${ch.roomId ? 'the DM can allow them in the group settings' : 'allow them in Table settings'}.`}</p>}
                 <OptionCards columns={c.options.length > 6 ? 2 : 1} count={c.count} picked={c.picked} onChange={(v) => set(c.key, v)}
-                  options={c.options.map((o) => ({ ...o, summary: o.summary || (c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) ? 'Already proficient' : ''), disabled: c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) }))} />
+                  options={c.options.filter((o) => !o.expansion || expansionsAllowed(ch) || c.picked.includes(o.id)).map((o) => ({ ...o, summary: o.summary || (c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) ? 'Already proficient' : ''), disabled: c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) }))} />
               </>}
         </div>
       ))}

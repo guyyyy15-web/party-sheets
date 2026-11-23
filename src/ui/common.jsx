@@ -71,7 +71,8 @@ export function SourcesSheet({ title, total, sources, onClose }) {
 
 /** Pick up to `count` of `options` (cards). */
 /** A small tag for content from the Player's Handbook: players can check it against their book. */
-export const SourceTag = ({ source }) => <span className="src-tag" title={`${source}: written in our own words. Check the numbers in your book.`}>{/PHB/.test(source) ? 'PHB' : source}</span>
+const SHORT = { "Xanathar's Guide to Everything": 'XGtE', "Tasha's Cauldron of Everything": 'TCoE', "Sword Coast Adventurer's Guide": 'SCAG', "Fizban's Treasury of Dragons": 'FTD', "Van Richten's Guide to Ravenloft": 'VRGR', "Explorer's Guide to Wildemount": 'EGtW', "Player's Handbook 2014": 'PHB14', "Dungeon Master's Guide 2014": 'DMG14', 'Heroes of Faerûn': 'HoF' }
+export const SourceTag = ({ source }) => <span className={`src-tag ${/PHB 2024/.test(source) ? '' : 'ext'}`} title={`${source}: written in our own words. Check the numbers in your book.`}>{/PHB 2024/.test(source) ? 'PHB' : SHORT[source] || source.split(/[\s:]/).filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join('').slice(0, 6)}</span>
 
 export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
   const toggle = (id) => {
