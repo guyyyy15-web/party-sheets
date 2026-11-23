@@ -1,0 +1,18 @@
+name = "party-sheets-sync"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+# Logs and errors in the Cloudflare dashboard. Request bodies are never logged.
+[observability]
+enabled = true
+
+[vars]
+# Only the app's own address may call the API from a browser.
+ALLOWED_ORIGINS = "https://guyyyy15-web.github.io"
+ALLOW_LOCALHOST = "0"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "party-sheets"
+database_id = "df7758ea-9a18-45e8-9ee9-69f8e265efa7"
+migrations_dir = "migrations"

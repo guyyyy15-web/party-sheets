@@ -1,0 +1,14 @@
+{
+  "name": "party-sheets-sync",
+  "private": true,
+  "description": "Rooms for Party Sheets: characters shared with a group and its DM (Cloudflare Worker + D1)",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8788",
+    "test": "node --test test/*.test.mjs",
+    "deploy": "wrangler d1 migrations apply party-sheets --remote && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.160.1"
+  }
+}

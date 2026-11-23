@@ -44,7 +44,7 @@ export const setSetting = (k, v) => { try { localStorage.setItem(`ps.${k}`, JSON
 
 // ---------- backups ----------
 export const BACKUP_KIND = 'party-sheets-backup'
-export const backupText = (chars) => JSON.stringify({ kind: BACKUP_KIND, v: 1, exportedAt: new Date().toISOString(), characters: chars }, null, 1)
+export const backupText = (chars, rooms = []) => JSON.stringify({ kind: BACKUP_KIND, v: 1, exportedAt: new Date().toISOString(), characters: chars, rooms }, null, 1)
 export const backupName = () => `party-sheets-${new Date().toISOString().slice(0, 10)}.json`
 
 /** A backup file's text → characters to add (new ids, nothing overwritten). Throws a readable error. */
@@ -58,7 +58,12 @@ export function parseBackupFile(text) {
   if (j?.kind !== BACKUP_KIND || !Array.isArray(j.characters)) throw new Error("This file isn't a Party Sheets backup.")
   const list = j.characters.filter((c) => c && typeof c === 'object' && c.v === 1 && typeof c.name === 'string' && c.scores)
   if (!list.length) throw new Error('No characters in this file.')
-  return list.map((c) => ({ ...c, id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}` }))
+  // an imported character is a new copy: it isn't in any group until brought into one
+  return list.map(({ roomId, ...c }) => ({ ...c, id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}` }))
+}
+/** The groups (with their links) saved in a backup file. */
+export function backupRooms(text) {
+  try { const j = JSON.parse(text); return Array.isArray(j?.rooms) ? j.rooms.filter((r) => r && /^[A-Za-z0-9_-]{6,40}$/.test(r.id) && typeof r.name === 'string' && (r.playerKey || r.dmKey)) : [] } catch { return [] }
 }
 
 /** Shares the file (iPhone share sheet) or downloads it. */

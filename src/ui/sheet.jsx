@@ -5,11 +5,12 @@ import { CONDITIONS, EXHAUSTION, INSPIRATION } from '../content/conditions.js'
 import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTERY } from '../content/basics.js'
 import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend } from './common.jsx'
 import { ChoicesStep, Portrait } from './wizard.jsx'
+import { SyncBadge } from './rooms.jsx'
 
 const KIND = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction', free: 'Free / on a hit', info: 'Good to know' }
 const THEMES = ['gold', 'red', 'jade', 'blue', 'violet', 'rose']
 
-export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete }) {
+export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete, group }) {
   const d = useMemo(() => derive(ch), [ch])
   const [tab, setTab] = useState('turn')
   const [sources, setSources] = useState(null)
@@ -30,7 +31,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="All characters">‹</button>
         <Portrait ch={ch} size={44} />
-        <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}</p></div>
+        <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}</p>{group && <SyncBadge id={ch.id} roomName={group.name} />}</div>
         <button className="icon-btn" onClick={() => setSettings(true)} aria-label="Character settings">⚙</button>
       </header>
 
@@ -118,6 +119,13 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
           <span className="field-label">Color</span>
           <div className="themes">{THEMES.map((t) => <button key={t} className={`swatch theme-${t} ${theme === t ? 'on' : ''}`} aria-label={t} onClick={() => setCh({ ...ch, theme: t })} />)}</div>
           <label className="field"><span>Name</span><input className="input" value={ch.name} onChange={(e) => setCh({ ...ch, name: e.target.value.slice(0, 40) })} /></label>
+          {group && (
+            <div className="panel">
+              <b>Group: {group.name}</b>
+              <p className="muted small">Your DM sees this sheet live and can mark damage, conditions and Inspiration.</p>
+              <button className="btn ghost wide" onClick={() => { if (confirm(`Take ${ch.name} out of ${group.name}? The character stays on this phone.`)) { setSettings(false); group.onLeave() } }}>Leave the group</button>
+            </div>
+          )}
           <button className="btn danger wide" onClick={() => { if (confirm(`Delete ${ch.name}? Export a backup first if you might want it back.`)) onDelete() }}>Delete character</button>
         </Sheet>
       )}
@@ -245,7 +253,7 @@ function GearTab({ d, ch, setCh }) {
   )
 }
 
-function HpSheet({ d, ch, hp, setState, onClose }) {
+export function HpSheet({ d, ch, hp, setState, onClose }) {
   const [n, setN] = useState('')
   const v = parseInt(n, 10) || 0
   const damage = () => { let left = v, temp = ch.state.temp || 0; const fromTemp = Math.min(temp, left); temp -= fromTemp; left -= fromTemp; setState({ temp, hp: Math.max(0, hp - left) }); onClose() }
@@ -341,7 +349,7 @@ function ShortRest({ ch, setCh, roll, onClose }) {
 }
 
 /** Conditions on or off, and Exhaustion levels. */
-function ConditionsSheet({ d, ch, setState, onClose }) {
+export function ConditionsSheet({ d, ch, setState, onClose }) {
   const on = new Set(d.conditions)
   const toggle = (id) => setState({ conditions: on.has(id) ? d.conditions.filter((x) => x !== id) : [...d.conditions, id] })
   return (
