@@ -92,11 +92,12 @@ export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
 }
 
 /** An ASI (or Epic Boon) at a level: +2 / +1 +1 / a feat. value: {type, ability, abilities, feat}. */
-export function AsiPicker({ value, onChange, scores, epic, level, takenFeats, caster }) {
+export function AsiPicker({ value, onChange, scores, epic, level, takenFeats, caster, armor = [] }) {
   const v = value || { type: epic ? 'feat' : 'plus2' }
   const feats = FEATS.filter((f) => (epic ? f.category === 'epic' : ['general', 'origin', 'fighting-style'].includes(f.category) && !(f.category === 'fighting-style')))
-    .filter((f) => !takenFeats.includes(f.id) || f.id === v.feat)
     .filter((f) => !f.prereq?.spellcasting || caster)
+    .filter((f) => !f.prereq?.armor || armor.includes(f.prereq.armor))
+    .filter((f) => !takenFeats.includes(f.id) || f.repeatable || f.id === v.feat)
     .filter((f) => !f.prereq || ((!f.prereq.level || level >= f.prereq.level) && (!f.prereq.scores || Object.entries(f.prereq.scores)[f.prereq.any ? 'some' : 'every'](([a, n]) => scores[a] >= n))))
   const feat = FEATS.find((f) => f.id === v.feat)
   const featAbilities = feat?.ability === 'any' ? ABILITIES : feat?.ability || []

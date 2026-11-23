@@ -1,9 +1,10 @@
 // Feats from the SRD 5.2 (CC-BY-4.0), summarised. A feat is a feature: effects + choices.
 import { SKILLS } from './basics.js'
+import { PHB_FEATS } from './phb-feats.js'
 
 const skillOptions = () => SKILLS.map((s) => ({ id: s.id, name: s.name }))
 
-export const FEATS = [
+const SRD_FEATS = [
   // Origin feats
   {
     id: 'alert', name: 'Alert', category: 'origin',
@@ -59,4 +60,6 @@ export const FEATS = [
   { id: 'boon-night-spirit', name: 'Boon of the Night Spirit', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). Bonus action in dim light or darkness: become Invisible until you take an action, bonus action or reaction. Resist all damage but psychic and radiant while in dim light or darkness.' },
   { id: 'boon-truesight', name: 'Boon of Truesight', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). Truesight 60 ft.' },
 ]
+/** SRD feats, then the 2024 Player's Handbook ones (mechanics in our own words). */
+export const FEATS = [...SRD_FEATS, ...PHB_FEATS]
 export const featById = (id) => FEATS.find((f) => f.id === id) || null
