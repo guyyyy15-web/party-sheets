@@ -395,3 +395,7 @@ h1 { letter-spacing: .01em; }
 .gear-card.untrained { opacity: .75; } .gear-card .warn-line { font-size: 12px; }
 @media (min-width: 600px) { .gear-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 900px) { .gear-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* two-column choice cards: the icon sits above the name, so long names (Heavy Crossbow) never widen the page */
+.cards.cols-2 .card.has-icon { display: flex; flex-direction: column; }
+.cards.cols-2 .card.has-icon > .opt-icon { width: 28px; height: 28px; margin: 0 0 2px; }
+.opt-name, .opt-sum, .gear-card b { overflow-wrap: anywhere; min-width: 0; }

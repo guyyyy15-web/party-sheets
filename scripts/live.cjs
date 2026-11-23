@@ -1,7 +1,7 @@
 // Checks on the REAL site after a release (iPhone 13 and SE): 4d6 thrown on screen, a level 5 start, HP, a 3D throw, tabs.
 // Run: node scripts/live.cjs  (nothing is stored on a server: characters stay in the test browser)
 const { chromium, devices } = require('playwright')
-const URL = 'https://guyyyy15-web.github.io/party-sheets/'
+const URL = process.env.SITE || 'https://guyyyy15-web.github.io/party-sheets/'
 let fails = 0
 const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails++ }
 ;(async () => {
@@ -38,6 +38,7 @@ const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails+
     // level 5 fighter: skills, style, mastery x4 (level 4), ASI at 4, subclass at 3
     for (const t of ['Perception', 'Survival', 'Defense', 'Greatsword', 'Longsword', 'Longbow', 'Javelin', 'Champion']) await p.click(`.panel.choice .card:has-text("${t}")`)
     await p.click('.panel.choice .abil-grid .chip >> nth=0')
+    ok(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `${devName}: the choices page fits the width (icons, long names)`)
     ok(await p.isEnabled('.wiz-foot button'), `${devName}: level 5 start: subclass, 4 masteries and the level 4 ASI are asked for`)
     await p.click('.wiz-foot button'); await p.click('.card.opt >> nth=0'); await p.click('.wiz-foot button')
     await p.click('button:has-text("Start playing")')
