@@ -276,6 +276,7 @@ export function showResult({ title = '', total = '', detail = '', tone = GOLD, s
       const li = document.createElement('li'); Object.assign(li.style, { display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '2px 0' })
       const t = document.createElement('span'); t.textContent = st.text; t.style.color = '#cfc6b6'
       const v = document.createElement('b'); v.textContent = st.value; v.style.fontFamily = 'monospace'
+      v.style.color = { dice: '#f3ead6', ability: '#86bdf2', prof: '#f0c463', expertise: '#c3a6f7', bonus: '#93d98d', level: '#f0a36a', penalty: '#f38f84' }[st.kind] || '#ece5d6'
       li.append(t, v); ol.append(li)
     }
     stage.banner.append(ol)
