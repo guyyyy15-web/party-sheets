@@ -148,3 +148,24 @@ test('every character is saved on the server: outside a group, joining one, leav
   assert.equal((await call('/me/characters/char_solo1', { method: 'DELETE', owner: me })).status, 200)
   assert.equal((await call('/me/characters', { owner: me })).body.characters.length, 0)
 })
+
+test('accounts: an encrypted vault per sign-in method, unique usernames, only the owner writes', async () => {
+  const me = key(), other = key()
+  const vid = 'a'.repeat(64), vid2 = 'b'.repeat(64), uname = 'c'.repeat(64)
+  assert.equal((await call(`/vault/${vid}`)).status, 404)
+  assert.equal((await call(`/usernames/${uname}`)).body.taken, false)
+  assert.equal((await call(`/vault/${vid}`, { method: 'PUT', owner: me, body: { data: 'sealed-1', username: uname } })).status, 201)
+  assert.equal((await call(`/vault/${vid}`)).body.data, 'sealed-1')
+  assert.equal((await call(`/usernames/${uname}`)).body.taken, true)
+  assert.equal((await call(`/usernames/${uname}`, { owner: me })).body.taken, false, 'my own name is not "taken" for me')
+  // someone else can't overwrite it or take the name
+  assert.equal((await call(`/vault/${vid}`, { method: 'PUT', owner: other, body: { data: 'evil' } })).status, 403)
+  assert.equal((await call(`/vault/${vid2}`, { method: 'PUT', owner: other, body: { data: 'x', username: uname } })).status, 409)
+  // the owner updates it (a new group), and deletes it
+  assert.equal((await call(`/vault/${vid}`, { method: 'PUT', owner: me, body: { data: 'sealed-2' } })).status, 200)
+  assert.equal((await call(`/vault/${vid}`)).body.data, 'sealed-2')
+  assert.equal((await call(`/vault/${vid}`, { method: 'DELETE', owner: other })).status, 403)
+  assert.equal((await call(`/vault/${vid}`, { method: 'DELETE', owner: me })).status, 200)
+  assert.equal((await call(`/vault/${vid}`)).status, 404)
+  assert.equal((await call(`/usernames/${uname}`)).body.taken, false, 'the name is free again')
+})

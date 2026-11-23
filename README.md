@@ -39,6 +39,12 @@ Every character is saved on the server as you play (a status on the sheet: Saved
 **Save now**). With no signal, changes wait on the phone and go up when it's back. Table settings → **Your cloud
 key**: open that link on a new phone to bring all your characters back.
 
+## Accounts
+
+**Sign in** (top of the home screen) with Face ID or a username and password: your characters and groups come
+back on any phone or computer, and you land straight on your character. Your password never leaves the device: it
+unlocks an encrypted copy the server can't read.
+
 ## Groups (phase 2)
 
 - Each playing group gets its own **group**: an invite link for the players and a separate link for its DM.

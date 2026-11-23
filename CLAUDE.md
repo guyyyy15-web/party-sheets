@@ -39,6 +39,13 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   The cloud key link `#/restore/<ownerKey>` (Table settings) brings every character back on a new phone; a restored
   character keeps its key in `ch.ownerKey` (local only). Deleting a character deletes it on the server; leaving a
   group (or the admin deleting the group) keeps it saved, with no group. Limit: 50 characters per owner.
+- **Accounts** (`src/ui/account.js`, like Chatzer's saved duckling): a vault = { owner key, username, groups with
+  their keys, the sign-in methods }, AES-GCM encrypted on the phone. Its id + key come from Face ID (passkey, WebAuthn
+  PRF, salt `party-sheets-vault-v1`, rpId = location.hostname) or username + password (PBKDF2 600k on the phone).
+  Server: `vaults` (ciphertext + owner_hash) and `usernames` (hash → vault) for unique names; it never sees the
+  password or the contents. Signing in sets the owner key, restores the groups and `/me/characters`, and opens the
+  latest character. The vault is re-saved when the groups change (`ps-rooms` event). Sign out clears this phone only.
+  Passkeys are tied to the host `guyyyy15-web.github.io` (moving domains needs Related Origin Requests).
 - Links: `#/join/<room>.<playerKey>` and `#/dm/<room>.<dmKey>`; the app clears them from the address bar.
   One room per character (`ch.roomId`, local only). Players see the party list; the DM sees every full sheet.
 - DM quick actions (PATCH) may change only `hp`, `temp`, `conditions`, `inspiration`, `exhaustion`, `deathSaves`.

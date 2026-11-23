@@ -9,6 +9,9 @@ export const LIMITS = {
   charactersPerRoom: 12,
   charactersPerOwner: 50,
   newCharactersPerClientPerHour: 30,
+  vaultBytes: 16 * 1024,
+  vaultsPerOwner: 4,
+  vaultReadsPerClientPerHour: 30,
   roomsPerClientPerHour: 10,
   writesPerClientPerMinute: 120,
   totalRooms: 5000,
@@ -160,6 +163,54 @@ async function route(req, env) {
     return json({ room: { id: room.id, name, settings } })
   }
 
+  // ── accounts (vaults): encrypted on the phone; the id is derived from a passkey or username + password
+  const vm = /^\/vault\/([a-f0-9]{64})$/.exec(p)
+  if (vm) {
+    const vid = vm[1]
+    if (m === 'GET') {
+      // signing in: a wrong password or an unknown passkey simply finds nothing
+      await limit(env, req, 'vault-read', LIMITS.vaultReadsPerClientPerHour, 3600e3)
+      const row = await env.DB.prepare('SELECT data, updated_at FROM vaults WHERE id = ?').bind(vid).first()
+      if (!row) fail(404, 'no such account')
+      return json({ data: row.data, updatedAt: row.updated_at })
+    }
+    const owner = await ownerHash(req)
+    const row = await env.DB.prepare('SELECT owner_hash FROM vaults WHERE id = ?').bind(vid).first()
+    if (row && !same(owner, row.owner_hash)) fail(403, 'not yours')
+    if (m === 'PUT') {
+      await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
+      const body = await readJson(req, LIMITS.vaultBytes + 512)
+      if (typeof body?.data !== 'string' || !body.data || body.data.length > LIMITS.vaultBytes) fail(400, 'bad vault')
+      const uname = body.username
+      if (uname != null) {
+        if (!/^[a-f0-9]{64}$/.test(uname)) fail(400, 'bad username')
+        const taken = await env.DB.prepare('SELECT vault_id, owner_hash FROM usernames WHERE hash = ?').bind(uname).first()
+        if (taken && taken.vault_id !== vid && !same(taken.owner_hash, owner)) fail(409, 'username taken')
+      }
+      const now = Date.now()
+      await env.DB.batch([
+        env.DB.prepare('INSERT INTO vaults (id, owner_hash, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at').bind(vid, owner, body.data, now),
+        ...(uname ? [env.DB.prepare('INSERT INTO usernames (hash, vault_id, owner_hash, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (hash) DO UPDATE SET vault_id = excluded.vault_id').bind(uname, vid, owner, now)] : []),
+        // a few per player (a passkey, a password, a spare): the oldest beyond that go
+        env.DB.prepare('DELETE FROM vaults WHERE owner_hash = ? AND id NOT IN (SELECT id FROM vaults WHERE owner_hash = ? ORDER BY updated_at DESC LIMIT ?)').bind(owner, owner, LIMITS.vaultsPerOwner),
+      ])
+      if (!row) await count(env, 'account_saved')
+      return json({ ok: true }, row ? 200 : 201)
+    }
+    if (m === 'DELETE') {
+      if (row) await env.DB.batch([env.DB.prepare('DELETE FROM vaults WHERE id = ?').bind(vid), env.DB.prepare('DELETE FROM usernames WHERE vault_id = ?').bind(vid)])
+      return json({ ok: true })
+    }
+  }
+  const un = /^\/usernames\/([a-f0-9]{64})$/.exec(p)
+  if (un && m === 'GET') {
+    // signing up: is this name free? (only its hash travels)
+    await limit(env, req, 'vault-read', LIMITS.vaultReadsPerClientPerHour * 2, 3600e3)
+    const row = await env.DB.prepare('SELECT owner_hash FROM usernames WHERE hash = ?').bind(un[1]).first()
+    const mine = row && req.headers.get('X-Owner') && same(await ownerHash(req), row.owner_hash)
+    return json({ taken: !!row && !mine })
+  }
+
   // ── my characters: every character is saved on the server, in a group or not. The owner key (X-Owner) is the
   //    only credential; a phone's "cloud key" link carries it to restore the characters on another phone.
   if (p === '/me/characters' && m === 'GET') {
@@ -307,7 +358,7 @@ async function adminStats(env) {
       json_extract(data, '$.subclassId') AS subclassId, json_extract(data, '$.speciesId') AS speciesId, json_extract(data, '$.level') AS level,
       json_extract(data, '$.state.hp') AS hp, json_extract(data, '$.portrait.kind') AS pk, json_extract(data, '$.portrait.src') AS ps, length(data) AS bytes FROM characters`).all(),
     env.DB.prepare('SELECT day, kind, count FROM usage WHERE day >= ? ORDER BY day').bind(new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)).all(),
-    env.DB.prepare('SELECT (SELECT COUNT(*) FROM rooms) AS rooms, (SELECT COUNT(*) FROM characters) AS characters, (SELECT COUNT(DISTINCT owner_hash) FROM characters) AS players, (SELECT COALESCE(SUM(length(data)), 0) FROM characters) AS bytes').first(),
+    env.DB.prepare('SELECT (SELECT COUNT(DISTINCT owner_hash) FROM vaults) AS accounts, (SELECT COUNT(*) FROM rooms) AS rooms, (SELECT COUNT(*) FROM characters) AS characters, (SELECT COUNT(DISTINCT owner_hash) FROM characters) AS players, (SELECT COALESCE(SUM(length(data)), 0) FROM characters) AS bytes').first(),
   ])
   const byRoom = new Map()
   const lastActive = new Map()
