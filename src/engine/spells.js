@@ -61,17 +61,19 @@ export function spellRoll(spell, { level, castLevel, mod, ability }) {
  * features: the collected features (with .key); ctx: the engine's context; penSource: Exhaustion parts.
  */
 export function spellcastingOf({ ch, cls, features, ctx, level, mod, prof, d20Pen, penSource }) {
-  const sc = cls?.spellcasting
+  const sub = cls?.subclasses?.find((s) => s.id === ch.subclassId)
+  const sc = cls?.spellcasting || (sub?.spellcasting && level >= (cls.subclassLevel || 3) ? sub.spellcasting : null)
   if (!sc) return null
   const ab = sc.ability, m = mod[ab], i = Math.min(20, Math.max(1, level)) - 1
-  const abilityPart = { label: `${ab} modifier (${cls.name} spellcasting)`, value: m, kind: 'ability' }
+  const abilityPart = { label: `${ab} modifier (${cls.spellcasting ? cls.name : sub.name} spellcasting)`, value: m, kind: 'ability' }
   const profPart = { label: 'Proficiency bonus', value: prof, kind: 'prof' }
   const dc = { value: 8 + m + prof, parts: [{ label: 'Base', value: 8, kind: 'base' }, abilityPart, profPart] }
   const attack = { value: m + prof - d20Pen, parts: [abilityPart, profPart, ...penSource] }
 
-  const maxLevel = maxSpellLevel(sc.slots, level)
+  const table = sc.table ? sc.table.map((row) => [...row, ...Array(9 - row.length).fill(0)]) : null // a subclass's own slot table, by class level
+  const maxLevel = table ? table[i].reduce((m, n, k) => (n > 0 ? k + 1 : m), 0) : maxSpellLevel(sc.slots, level)
   const used = (id) => ch.state?.used?.[id] || 0
-  const slots = sc.slots === 'pact' ? [] : (sc.slots === 'half' ? SLOTS_HALF : SLOTS_FULL)[i].map((max, k) => ({ level: k + 1, max, used: Math.min(max, used(`slot-${k + 1}`)), id: `slot-${k + 1}` })).filter((s) => s.max > 0)
+  const slots = sc.slots === 'pact' ? [] : (table || (sc.slots === 'half' ? SLOTS_HALF : SLOTS_FULL))[i].map((max, k) => ({ level: k + 1, max, used: Math.min(max, used(`slot-${k + 1}`)), id: `slot-${k + 1}` })).filter((s) => s.max > 0)
   const pact = sc.slots === 'pact' ? { count: PACT_SLOTS[i][0], level: PACT_SLOTS[i][1], used: Math.min(PACT_SLOTS[i][0], used('pact-slots')), id: 'pact-slots' } : null
 
   // always prepared: from features, from a chosen option (a druid's land), and spells picked in feature choices

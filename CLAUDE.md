@@ -7,8 +7,9 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   The build sets `VERSION` in `sw.js` from the files' content. New files the page needs go in `FILES` in `sw.js`.
 - Rules are data in `src/content/`, applied by `src/engine/engine.js` (pure, no DOM). A character stores only its
   choices and state; never store a derived number. Every derived number keeps its `sources`.
-- Content: only the SRD 5.2 (CC-BY-4.0), written in our own words. Never paste Player's Handbook text. Table
-  content from the book goes in by the players themselves ("My content", phase 3).
+- Content: the SRD 5.2 (CC-BY-4.0) plus, by Guy's decision (2026-11-23, a private app for his groups), the 2024
+  Player's Handbook subclasses and feats as **mechanics in our own words** (`source: 'PHB 2024'`, shown with a PHB
+  tag). Never paste book text or flavor text; summaries say what it does, with the numbers.
 - Saves: IndexedDB `party-sheets` (localStorage fallback). The character shape has `v: 1`; a change to it must read
   older characters too. Backups must keep importing.
 - Dice thrown on screen take their result from the physics (`readTop`), never a separate random number.

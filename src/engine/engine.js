@@ -109,7 +109,7 @@ function openChoices(ch, features, ctx) {
   const cls = classById(ch.classId)
   const bg = backgroundById(ch.backgroundId)
   if (cls && ch.level >= cls.subclassLevel && !cls.subclasses.some((s) => s.id === ch.subclassId)) {
-    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary })), picked: [], source: 'class', level: cls.subclassLevel })
+    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary, source: s.source })), picked: [], source: 'class', level: cls.subclassLevel })
   }
   if (cls) {
     const picked = ch.choices['class.skills'] || []
@@ -210,6 +210,7 @@ export function derive(input) {
     for (let l = 2; l <= level; l++) rest += Math.max(1, (ch.hpRolls?.[l] ?? Math.floor(hitDie / 2) + 1) + mod.CON)
     if (level > 1) hp.sources.push({ label: `Levels 2-${level}: d${hitDie} ${signed(mod.CON)} CON each`, value: rest, kind: 'base' })
     for (const b of bonus('hpMax')) hp.sources.push(b)
+    for (const e of active) if (e.type === 'hp') hp.sources.push({ label: e.label || e.from, value: e.value(ctx), kind: 'bonus' })
     hp.value = Math.max(1, hp.sources.reduce((t, s) => t + s.value, 0))
   }
 

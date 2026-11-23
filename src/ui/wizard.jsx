@@ -309,7 +309,7 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
         <div key={c.key} className={`panel choice ${c.done ? 'done' : ''}`}>
           <h2>{c.featureName && c.featureName !== c.label ? `${c.featureName}: ` : ''}{c.label}{c.level > 1 ? <span className="muted small"> · level {c.level}</span> : null}</h2>
           {c.kind === 'asi' || c.kind === 'epic'
-            ? <AsiPicker value={drafts[c.key] || ch.choices[c.key]} epic={c.kind === 'epic'} level={ch.level} takenFeats={takenFeats} scores={Object.fromEntries(Object.entries(d.scores).map(([a, s]) => [a, s.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))]))}
+            ? <AsiPicker value={drafts[c.key] || ch.choices[c.key]} epic={c.kind === 'epic'} level={ch.level} takenFeats={takenFeats} caster={!!d.spellcasting} scores={Object.fromEntries(Object.entries(d.scores).map(([a, s]) => [a, s.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))]))}
                 onChange={(v) => { setDrafts({ ...drafts, [c.key]: v }); if (asiDone(v)) set(c.key, v); else if (ch.choices[c.key]) { const next = { ...ch.choices }; delete next[c.key]; setCh({ ...ch, choices: next }) } }} />
             : <>
                 <p className="muted small">{c.count > 1 ? `Choose ${c.count} (${c.picked.length} chosen).` : 'Choose one.'}</p>

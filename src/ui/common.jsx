@@ -70,6 +70,9 @@ export function SourcesSheet({ title, total, sources, onClose }) {
 }
 
 /** Pick up to `count` of `options` (cards). */
+/** A small tag for content from the Player's Handbook: players can check it against their book. */
+export const SourceTag = ({ source }) => <span className="src-tag" title={`${source}: written in our own words. Check the numbers in your book.`}>{/PHB/.test(source) ? 'PHB' : source}</span>
+
 export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
   const toggle = (id) => {
     if (picked.includes(id)) return onChange(picked.filter((x) => x !== id))
@@ -80,7 +83,7 @@ export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
     <div className={`cards cols-${columns}`}>
       {options.map((o) => (
         <button key={o.id} className={`card opt ${picked.includes(o.id) ? 'on' : ''}`} aria-pressed={picked.includes(o.id)} onClick={() => toggle(o.id)} disabled={o.disabled}>
-          <span className="opt-name">{o.name}{picked.includes(o.id) && <span className="tick">✓</span>}</span>
+          <span className="opt-name">{o.name}{o.source && <SourceTag source={o.source} />}{picked.includes(o.id) && <span className="tick">✓</span>}</span>
           {o.summary && <span className="opt-sum">{o.summary}</span>}
         </button>
       ))}
@@ -89,11 +92,11 @@ export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
 }
 
 /** An ASI (or Epic Boon) at a level: +2 / +1 +1 / a feat. value: {type, ability, abilities, feat}. */
-export function AsiPicker({ value, onChange, scores, epic, level, takenFeats }) {
+export function AsiPicker({ value, onChange, scores, epic, level, takenFeats, caster }) {
   const v = value || { type: epic ? 'feat' : 'plus2' }
   const feats = FEATS.filter((f) => (epic ? f.category === 'epic' : ['general', 'origin', 'fighting-style'].includes(f.category) && !(f.category === 'fighting-style')))
     .filter((f) => !takenFeats.includes(f.id) || f.id === v.feat)
-    .filter((f) => !f.prereq?.spellcasting) // no spellcasting classes before phase 2
+    .filter((f) => !f.prereq?.spellcasting || caster)
     .filter((f) => !f.prereq || ((!f.prereq.level || level >= f.prereq.level) && (!f.prereq.scores || Object.entries(f.prereq.scores)[f.prereq.any ? 'some' : 'every'](([a, n]) => scores[a] >= n))))
   const feat = FEATS.find((f) => f.id === v.feat)
   const featAbilities = feat?.ability === 'any' ? ABILITIES : feat?.ability || []
