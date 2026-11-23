@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { createRoot } from 'react-dom/client'
 import { newCharacter, derive } from './engine/engine.js'
 import { allCharacters, saveCharacter, deleteCharacter, getSetting, setSetting, backupText, backupName, parseBackupFile, shareFile } from './ui/store.js'
-import { DiceTray, performRoll, throwDefault, load3d } from './ui/dice.jsx'
+import { DiceTray, performRoll, throwDefault, load3d, RollCard } from './ui/dice.jsx'
 import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
 import { Sheet } from './ui/common.jsx'
@@ -21,8 +21,7 @@ function App() {
   const [throwOn, setThrowOnState] = useState(() => getSetting('throwOnScreen', throwDefault()))
   const [settings, setSettingsState] = useState(() => getSetting('table', { allowRoll: true }))
   const [toast, setToast] = useState(null)
-  const [shown, setShown] = useState(null) // the last instant roll, on screen for 5 s
-  const shownTimer = useRef(0)
+  const [shown, setShown] = useState(null) // the last instant roll, with its math, until closed or the next roll
   const busy = useRef(false)
 
   useEffect(() => { allCharacters().then(setChars); navigator.storage?.persist?.().catch(() => {}) }, [])
@@ -39,9 +38,10 @@ function App() {
     if (busy.current) return null
     busy.current = true
     try {
-      const e = await performRoll(req, throwOn)
+      const showMath = settings.showMath !== false
+      const e = await performRoll({ ...req, showMath }, throwOn)
       setLog((l) => [e, ...l].slice(0, 20))
-      if (!throwOn) { setShown(e); clearTimeout(shownTimer.current); shownTimer.current = setTimeout(() => setShown(null), 5000) }
+      if (!throwOn) setShown(showMath ? e : { ...e, steps: null, rules: null })
       return e
     } finally { busy.current = false }
   }
@@ -85,7 +85,7 @@ function App() {
       {view.name !== 'wizard' && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice">🎲</button>}
       {tray && <DiceTray pool={pool} setPool={setPool} mod={poolMod} setMod={setPoolMod} throwOn={throwOn} setThrowOn={setThrowOn} last={log[0]}
         onClose={() => setTray(false)} onThrow={() => { setTray(false); roll({ kind: 'pool', pool, mod: poolMod }) }} />}
-      {shown && <div className="toast roll-toast" role="status"><small>{shown.label}</small><b>{shown.total}</b><small>{shown.text}{shown.flag ? ` · ${shown.flag}` : ''}</small></div>}
+      {shown && <RollCard e={shown} onClose={() => setShown(null)} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
   )
@@ -144,6 +144,7 @@ function Home({ chars, onOpen, onNew, onExport, onImport, settings, setSettings 
         <Sheet title="Table settings" onClose={() => setTable(false)}>
           <label className="row toggle"><input type="checkbox" checked={settings.allowRoll !== false} onChange={(e) => setSettings({ ...settings, allowRoll: e.target.checked })} /><span>Allow rolling ability scores (4d6) in the wizard</span></label>
           <p className="muted small">The DM decides. Standard array and point buy are always there.</p>
+          <label className="row toggle"><input type="checkbox" checked={settings.showMath !== false} onChange={(e) => setSettings({ ...settings, showMath: e.target.checked })} /><span>Show the math on every roll (to learn to play with real dice)</span></label>
         </Sheet>
       )}
     </main>

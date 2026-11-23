@@ -108,7 +108,7 @@ function makeStage() {
   el.appendChild(renderer.domElement)
   const banner = document.createElement('div')
   Object.assign(banner.style, {
-    position: 'absolute', left: '50%', bottom: 'calc(40px + env(safe-area-inset-bottom))', transform: 'translateX(-50%)', minWidth: '200px',
+    position: 'absolute', left: '50%', bottom: 'calc(40px + env(safe-area-inset-bottom))', transform: 'translateX(-50%)', minWidth: '200px', width: 'min(92vw, 420px)', maxHeight: '55vh', overflowY: 'auto',
     maxWidth: 'calc(100% - 32px)', textAlign: 'center', padding: '10px 18px', borderRadius: '14px', background: '#17151a', border: `1px solid ${GOLD}`,
     color: '#e9e2d0', fontFamily: "'Shippori Mincho', Georgia, serif", opacity: '0', transition: 'opacity .25s', pointerEvents: 'none',
   })
@@ -261,13 +261,30 @@ export function throwDice(specs, { reducedMotion = false } = {}) {
 }
 
 /** The total on top of the dice: title, big number, a short line. */
-export function showResult({ title = '', total = '', detail = '', tone = GOLD }) {
+export function showResult({ title = '', total = '', detail = '', tone = GOLD, steps = null, rules = null }) {
   if (!stage) return
   stage.banner.innerHTML = ''
   const a = document.createElement('div'); a.textContent = title; Object.assign(a.style, { fontSize: '12px', color: '#9c9284', fontFamily: 'sans-serif' })
   const b = document.createElement('div'); b.textContent = total; Object.assign(b.style, { fontSize: '40px', lineHeight: '1.1', color: tone })
   const c = document.createElement('div'); c.textContent = detail; Object.assign(c.style, { fontSize: '11px', color: '#9c9284', fontFamily: 'monospace' })
   stage.banner.append(a, b, c)
+  // the math, step by step (built with textContent only: no HTML from data)
+  if (steps?.length) {
+    const ol = document.createElement('ol'); ol.className = 'math3d'; ol.setAttribute('aria-label', 'How it was calculated')
+    Object.assign(ol.style, { listStyle: 'none', margin: '8px 0 0', padding: '6px 0 0', borderTop: '1px solid rgba(255,255,255,.15)', textAlign: 'left', fontFamily: 'sans-serif', fontSize: '12px' })
+    for (const st of [...steps, { text: 'Total', value: String(total) }]) {
+      const li = document.createElement('li'); Object.assign(li.style, { display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '2px 0' })
+      const t = document.createElement('span'); t.textContent = st.text; t.style.color = '#cfc6b6'
+      const v = document.createElement('b'); v.textContent = st.value; v.style.fontFamily = 'monospace'
+      li.append(t, v); ol.append(li)
+    }
+    stage.banner.append(ol)
+  }
+  for (const r of rules || []) {
+    const p = document.createElement('p'); p.textContent = r
+    Object.assign(p.style, { margin: '6px 0 0', fontSize: '11.5px', color: '#9c9284', fontFamily: 'sans-serif', textAlign: 'left', lineHeight: '1.35' })
+    stage.banner.append(p)
+  }
   stage.banner.style.opacity = '1'
 }
 

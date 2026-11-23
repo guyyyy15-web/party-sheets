@@ -15,6 +15,9 @@ Dice from any screen, thrown on the screen with real physics.
 - Sheet: HP with damage / heal / temp, AC and speed with their sources, My Turn by action type, attacks with
   weapon mastery, resources as pips, short and long rests, checks and saves, features, gear, notes, level up
 - Backups: Export all / Import on the home screen. Works offline.
+- **Show the math** on every roll (on by default, in Table settings): the dice and their faces, each modifier with
+  where it comes from (score → modifier, proficiency, Expertise, Exhaustion), the total, and the rule in one line,
+  so players learn to do it with real dice. Advantage, disadvantage and critical hits explain themselves.
 - At the table: Hit Dice on a short rest (die + CON, at least 1), Heroic Inspiration (Humans get it on a long rest),
   the 14 conditions and Exhaustion (-2 per level on d20 tests, -5 ft speed, -1 level per long rest), and species
   abilities as actions (Giant Ancestry, Large Form, Stonecunning, Draconic Flight, Relentless Endurance, lineage spells)

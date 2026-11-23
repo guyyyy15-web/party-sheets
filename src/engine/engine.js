@@ -212,14 +212,20 @@ export function derive(input) {
     hp.value = Math.max(1, hp.sources.reduce((t, s) => t + s.value, 0))
   }
 
-  const initiative = { value: mod.DEX, sources: [{ label: 'DEX', value: mod.DEX }, ...bonus('initiative'), ...penSource] }
+  const initiative = { value: mod.DEX, sources: [{ label: `DEX modifier (score ${scores.DEX.total})`, value: mod.DEX }, ...bonus('initiative'), ...penSource] }
   initiative.value = initiative.sources.reduce((t, s) => t + s.value, 0)
 
-  const saves = Object.fromEntries(ABILITIES.map((a) => [a, { prof: saveProf.has(a), value: mod[a] + (saveProf.has(a) ? prof : 0) - d20Pen }]))
+  // "where each number comes from", in words a player can redo at the table
+  const abilityPart = (a) => ({ label: `${a} modifier (score ${scores[a].total})`, value: mod[a] })
+  const profPart = (why) => ({ label: `Proficiency bonus (${why})`, value: prof })
+  const saves = Object.fromEntries(ABILITIES.map((a) => [a, { prof: saveProf.has(a), value: mod[a] + (saveProf.has(a) ? prof : 0) - d20Pen,
+    parts: [abilityPart(a), ...(saveProf.has(a) ? [profPart(`proficient in ${a} saves`)] : []), ...penSource] }]))
   const checks = Object.fromEntries(ABILITIES.map((a) => [a, mod[a] - d20Pen]))
+  const checkParts = Object.fromEntries(ABILITIES.map((a) => [a, [abilityPart(a), ...penSource]]))
   const skills = SKILLS.map((s) => {
     const p = skillProf.has(s.id), ex = expertise.has(s.id) && p
-    return { ...s, prof: p, expertise: ex, value: mod[s.ability] + (ex ? 2 * prof : p ? prof : 0) - d20Pen, sources: skillProf.get(s.id) || [] }
+    const parts = [abilityPart(s.ability), ...(ex ? [{ label: `Expertise: proficiency bonus x2 (${s.name})`, value: 2 * prof }] : p ? [profPart(`proficient in ${s.name}`)] : []), ...penSource]
+    return { ...s, prof: p, expertise: ex, value: mod[s.ability] + (ex ? 2 * prof : p ? prof : 0) - d20Pen, sources: skillProf.get(s.id) || [], parts }
   })
   // passive scores aren't rolls, so Exhaustion (which reduces d20 rolls) leaves them alone
   const passivePerception = 10 + skills.find((s) => s.id === 'perception').value + d20Pen
@@ -258,18 +264,22 @@ export function derive(input) {
     const ability = useDex && (isRanged(wp) || mod.DEX >= mod.STR) ? 'DEX' : 'STR'
     let die = wp.dmg
     if (isMonkWeapon && maDie && dieSize(maDie) > dieSize(wp.dmg) && !wp.dmg.startsWith('2')) die = `1${maDie}`
-    const toHitParts = [{ label: ability, value: mod[ability] }]
-    if (proficientWith(wp)) toHitParts.push({ label: 'Proficiency', value: prof })
+    const why = isMonkWeapon && ability === 'DEX' ? 'Martial Arts lets a monk use DEX' : ability === 'DEX' ? (isRanged(wp) ? 'ranged weapons use DEX' : 'Finesse: the better of STR and DEX') : 'melee weapons use STR'
+    const toHitParts = [{ label: `${ability} modifier (score ${scores[ability].total}; ${why})`, value: mod[ability] }]
+    if (proficientWith(wp)) toHitParts.push(profPart(`proficient with ${wp.name}s`))
     if (isRanged(wp)) toHitParts.push(...bonus('attack.ranged'))
     toHitParts.push(...penSource)
     const toHit = toHitParts.reduce((t, s) => t + s.value, 0)
     let vDie = wp.versatile
     if (vDie && isMonkWeapon && maDie && dieSize(maDie) > dieSize(vDie)) vDie = `1${maDie}`
-    attacks.push({ id: wp.id, name: wp.name, toHit, toHitSources: toHitParts, damage: `${die}${mod[ability] ? signed(mod[ability]) : ''}`, type: wp.type, props: wp.props, range: wp.range, versatile: vDie && `${vDie}${signed(mod[ability])}`, mastery: masteries.has(wp.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
+    const damageParts = mod[ability] ? [{ label: `${ability} modifier (the same one as the attack)`, value: mod[ability] }] : []
+    attacks.push({ id: wp.id, name: wp.name, toHit, toHitSources: toHitParts, damageParts, damageDie: die, dieWhy: die !== wp.dmg ? `your Martial Arts die (${die.slice(1)}) instead of the ${wp.name}'s ${wp.dmg}` : `the ${wp.name}'s damage die`, damage: `${die}${mod[ability] ? signed(mod[ability]) : ''}`, type: wp.type, props: wp.props, range: wp.range, versatile: vDie && `${vDie}${signed(mod[ability])}`, mastery: masteries.has(wp.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
   }
   const unarmedAbility = monkWeapons && mod.DEX > mod.STR ? 'DEX' : 'STR'
   attacks.push({
-    id: 'unarmed', name: 'Unarmed Strike', toHit: mod[unarmedAbility] + prof - d20Pen, toHitSources: [{ label: unarmedAbility, value: mod[unarmedAbility] }, { label: 'Proficiency', value: prof }, ...penSource],
+    id: 'unarmed', name: 'Unarmed Strike', toHit: mod[unarmedAbility] + prof - d20Pen, toHitSources: [{ label: `${unarmedAbility} modifier (score ${scores[unarmedAbility].total}${unarmedAbility === 'DEX' ? '; Martial Arts lets a monk use DEX' : ''})`, value: mod[unarmedAbility] }, profPart('everyone is proficient with Unarmed Strikes'), ...penSource],
+    damageParts: monkWeapons && maDie ? [{ label: `${unarmedAbility} modifier`, value: mod[unarmedAbility] }] : [{ label: 'Unarmed Strike: 1', value: 1 }, { label: `STR modifier (score ${scores.STR.total})`, value: mod.STR }],
+    damageDie: monkWeapons && maDie ? `1${maDie}` : null, dieWhy: monkWeapons && maDie ? `your Martial Arts die (${maDie})` : null,
     damage: monkWeapons && maDie ? `1${maDie}${signed(mod[unarmedAbility])}` : `${Math.max(0, 1 + mod.STR)}`, type: 'bludgeoning', props: [], crit,
     note: `Or Grapple / Shove (DC ${8 + (monkWeapons ? Math.max(mod.STR, mod.DEX) : mod.STR) + prof})`,
   })
@@ -278,7 +288,7 @@ export function derive(input) {
   // actions for "My Turn"
   const actions = [{ id: 'attack', name: 'Attack', kind: 'action', summary: `${attacksPerAction} attack${attacksPerAction > 1 ? 's' : ''} with a weapon or Unarmed Strike.` }]
   for (const e of active) if (e.type === 'action' && !actions.some((a) => a.id === e.id)) {
-    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), cost: e.cost, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx) }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: e.setHp, attack: e.attack, count: e.count && e.count(ctx), from: e.from })
+    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), cost: e.cost, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx), parts: e.roll.parts ? e.roll.parts(ctx) : null, why: e.roll.why || null }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: e.setHp, attack: e.attack, count: e.count && e.count(ctx), from: e.from })
   }
   for (const e of active) if (e.type === 'note' && e.save) actions.push({ id: `note-${e.from}`, name: e.from, kind: 'info', summary: e.save.label, save: { dc: e.save.dc(ctx) } })
 
@@ -288,7 +298,7 @@ export function derive(input) {
 
   return {
     name: ch.name, level, cls, species: sp, background: bg, subclass: cls?.subclasses.find((s) => s.id === ch.subclassId) || null,
-    scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, skills, passivePerception, resources, attacks, attacksPerAction, actions,
+    scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, resources, attacks, attacksPerAction, actions,
     exhaustion, d20Pen, inspiration: !!ch.state?.inspiration, conditions: ch.state?.conditions || [],
     senses, resistances, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
     choices, pending: choices.filter((c) => !c.done), armor, shield, crit,
