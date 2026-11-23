@@ -28,7 +28,7 @@ export const FEATS = [
   // General feats (level 4+)
   {
     id: 'grappler', name: 'Grappler', category: 'general', prereq: { level: 4, scores: { STR: 13, DEX: 13 }, any: true },
-    summary: '+1 STR or DEX. When you hit with an Unarmed Strike on your turn you can both damage and grapple. Advantage on attacks against a creature you grapple. Moving a grappled creature costs no extra movement.',
+    summary: '+1 STR or DEX. Once per turn, when you hit with an Unarmed Strike as part of the Attack action, you can both damage and grapple. Advantage on attacks against a creature you grapple. Moving a grappled creature your size or smaller costs no extra movement.',
     ability: ['STR', 'DEX'],
   },
   // Fighting style feats
@@ -51,12 +51,12 @@ export const FEATS = [
     summary: 'When you make the extra attack from wielding two Light weapons, add your ability modifier to its damage.',
   },
   // Epic boons (level 19)
-  { id: 'boon-combat-prowess', name: 'Boon of Combat Prowess', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). Once per turn, turn a missed attack into a hit.' },
+  { id: 'boon-combat-prowess', name: 'Boon of Combat Prowess', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). When you miss with an attack roll, you can hit instead. Then not again until the start of your next turn.' },
   { id: 'boon-dimensional-travel', name: 'Boon of Dimensional Travel', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). After the Attack or Magic action, teleport up to 30 ft.' },
-  { id: 'boon-fate', name: 'Boon of Fate', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). Once per short rest, add or subtract 2d4 from a d20 test you can see.' },
+  { id: 'boon-fate', name: 'Boon of Fate', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). When you or a creature within 60 ft succeeds or fails a d20 test, roll 2d4 and add or subtract it. Back when you roll initiative or finish a short or long rest.' },
   { id: 'boon-irresistible-offense', name: 'Boon of Irresistible Offense', category: 'epic', ability: ['STR', 'DEX'], summary: '+1 STR or DEX (max 30). Your attacks ignore resistance to B/P/S, and a natural 20 adds damage equal to that score.' },
-  { id: 'boon-spell-recall', name: 'Boon of Spell Recall', category: 'epic', ability: ['INT', 'WIS', 'CHA'], summary: '+1 INT, WIS or CHA (max 30). Once per long rest, cast a level 1-4 spell without a slot.' },
-  { id: 'boon-night-spirit', name: 'Boon of the Night Spirit', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). Become invisible in dim light or darkness, and resist all damage but psychic and radiant there.' },
+  { id: 'boon-spell-recall', name: 'Boon of Spell Recall', category: 'epic', ability: ['INT', 'WIS', 'CHA'], prereq: { spellcasting: true }, summary: '+1 INT, WIS or CHA (max 30). When you cast a spell with a level 1-4 slot, roll 1d4: if it equals the slot level, the slot is not spent. Needs the Spellcasting feature.' },
+  { id: 'boon-night-spirit', name: 'Boon of the Night Spirit', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). Bonus action in dim light or darkness: become Invisible until you take an action, bonus action or reaction. Resist all damage but psychic and radiant while in dim light or darkness.' },
   { id: 'boon-truesight', name: 'Boon of Truesight', category: 'epic', ability: 'any', summary: '+1 to one ability (max 30). Truesight 60 ft.' },
 ]
 export const featById = (id) => FEATS.find((f) => f.id === id) || null

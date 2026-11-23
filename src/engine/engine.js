@@ -5,6 +5,11 @@ import { classById } from '../content/classes.js'
 import { speciesById } from '../content/species.js'
 import { backgroundById } from '../content/backgrounds.js'
 import { featById, FEATS } from '../content/feats.js'
+import { EXHAUSTION } from '../content/conditions.js'
+
+// Short rest healing per Hit Die spent: the die + CON, at least this much. Long rest: all spent Hit Dice come back.
+export const HIT_DIE_MIN = 1
+export const LONG_REST_HIT_DICE = 'all'
 
 export const abilityMod = (score) => Math.floor((score - 10) / 2)
 export const profBonus = (level) => 2 + Math.floor((level - 1) / 4)
@@ -139,6 +144,9 @@ export function derive(input) {
   const prof = profBonus(level)
   const armor = armorById(ch.equipment?.armor)
   const shield = !!ch.equipment?.shield
+  const exhaustion = Math.max(0, Math.min(EXHAUSTION.max, ch.state?.exhaustion || 0))
+  const d20Pen = exhaustion * EXHAUSTION.d20PerLevel // every d20 test: attacks, saves, checks, initiative
+  const penSource = d20Pen ? [{ label: `Exhaustion level ${exhaustion}`, value: -d20Pen }] : []
 
   // proficiencies
   const skillProf = new Map() // id → [sources]
@@ -189,35 +197,43 @@ export function derive(input) {
   const speed = { value: baseSpeed, sources: [{ label: `${sp?.name || 'Base'} speed`, value: baseSpeed }] }
   for (const b of bonus('speed')) { speed.value += b.value; speed.sources.push(b) }
   if (armor?.str && ctx.score.STR < armor.str) { speed.value -= 10; speed.sources.push({ label: `${armor.name} needs STR ${armor.str}`, value: -10 }) }
+  if (exhaustion) { const v = -EXHAUSTION.speedPerLevel * exhaustion; speed.value = Math.max(0, speed.value + v); speed.sources.push({ label: `Exhaustion level ${exhaustion}`, value: v }) }
 
   // HP: max die at level 1, then the rolled or average value per level, + CON each level
   const hitDie = cls?.hitDie || 8
   const hp = { value: 0, sources: [] }
   if (cls) {
-    hp.sources.push({ label: `Level 1: d${hitDie} max`, value: hitDie })
-    let rolled = 0
-    for (let l = 2; l <= level; l++) rolled += ch.hpRolls?.[l] ?? Math.floor(hitDie / 2) + 1
-    if (level > 1) hp.sources.push({ label: `Levels 2-${level}: d${hitDie} each`, value: rolled })
-    hp.sources.push({ label: `CON ${signed(mod.CON)} x ${level}`, value: mod.CON * level })
+    // each level: the die (max at level 1, then rolled or average) + CON, at least 1 per level
+    hp.sources.push({ label: `Level 1: d${hitDie} max ${signed(mod.CON)} CON`, value: Math.max(1, hitDie + mod.CON) })
+    let rest = 0
+    for (let l = 2; l <= level; l++) rest += Math.max(1, (ch.hpRolls?.[l] ?? Math.floor(hitDie / 2) + 1) + mod.CON)
+    if (level > 1) hp.sources.push({ label: `Levels 2-${level}: d${hitDie} ${signed(mod.CON)} CON each`, value: rest })
     for (const b of bonus('hpMax')) hp.sources.push(b)
     hp.value = Math.max(1, hp.sources.reduce((t, s) => t + s.value, 0))
   }
 
-  const initiative = { value: mod.DEX, sources: [{ label: 'DEX', value: mod.DEX }, ...bonus('initiative')] }
+  const initiative = { value: mod.DEX, sources: [{ label: 'DEX', value: mod.DEX }, ...bonus('initiative'), ...penSource] }
   initiative.value = initiative.sources.reduce((t, s) => t + s.value, 0)
 
-  const saves = Object.fromEntries(ABILITIES.map((a) => [a, { prof: saveProf.has(a), value: mod[a] + (saveProf.has(a) ? prof : 0) }]))
+  const saves = Object.fromEntries(ABILITIES.map((a) => [a, { prof: saveProf.has(a), value: mod[a] + (saveProf.has(a) ? prof : 0) - d20Pen }]))
+  const checks = Object.fromEntries(ABILITIES.map((a) => [a, mod[a] - d20Pen]))
   const skills = SKILLS.map((s) => {
     const p = skillProf.has(s.id), ex = expertise.has(s.id) && p
-    return { ...s, prof: p, expertise: ex, value: mod[s.ability] + (ex ? 2 * prof : p ? prof : 0), sources: skillProf.get(s.id) || [] }
+    return { ...s, prof: p, expertise: ex, value: mod[s.ability] + (ex ? 2 * prof : p ? prof : 0) - d20Pen, sources: skillProf.get(s.id) || [] }
   })
-  const passivePerception = 10 + skills.find((s) => s.id === 'perception').value
+  // passive scores aren't rolls, so Exhaustion (which reduces d20 rolls) leaves them alone
+  const passivePerception = 10 + skills.find((s) => s.id === 'perception').value + d20Pen
 
   // resources (with what is used right now)
   const resources = []
   for (const e of active) if (e.type === 'resource' && !resources.some((r) => r.id === e.id)) {
     const max = e.max(ctx)
     if (max > 0) resources.push({ id: e.id, name: e.name, max, reset: e.reset, short: e.short, used: Math.min(max, ch.state?.used?.[e.id] || 0) })
+  }
+
+  if (cls) {
+    const hitDie = cls.hitDie
+    resources.push({ id: 'hit-dice', name: `Hit Dice (d${hitDie})`, max: level, reset: 'long', hitDie, used: Math.min(level, ch.state?.used?.['hit-dice'] || 0), hitDice: true })
   }
 
   // attacks: weapons + unarmed strike
@@ -245,21 +261,24 @@ export function derive(input) {
     const toHitParts = [{ label: ability, value: mod[ability] }]
     if (proficientWith(wp)) toHitParts.push({ label: 'Proficiency', value: prof })
     if (isRanged(wp)) toHitParts.push(...bonus('attack.ranged'))
+    toHitParts.push(...penSource)
     const toHit = toHitParts.reduce((t, s) => t + s.value, 0)
-    attacks.push({ id: wp.id, name: wp.name, toHit, toHitSources: toHitParts, damage: `${die}${mod[ability] ? signed(mod[ability]) : ''}`, type: wp.type, props: wp.props, range: wp.range, versatile: wp.versatile && `${wp.versatile}${signed(mod[ability])}`, mastery: masteries.has(wp.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
+    let vDie = wp.versatile
+    if (vDie && isMonkWeapon && maDie && dieSize(maDie) > dieSize(vDie)) vDie = `1${maDie}`
+    attacks.push({ id: wp.id, name: wp.name, toHit, toHitSources: toHitParts, damage: `${die}${mod[ability] ? signed(mod[ability]) : ''}`, type: wp.type, props: wp.props, range: wp.range, versatile: vDie && `${vDie}${signed(mod[ability])}`, mastery: masteries.has(wp.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
   }
   const unarmedAbility = monkWeapons && mod.DEX > mod.STR ? 'DEX' : 'STR'
   attacks.push({
-    id: 'unarmed', name: 'Unarmed Strike', toHit: mod[unarmedAbility] + prof, toHitSources: [{ label: unarmedAbility, value: mod[unarmedAbility] }, { label: 'Proficiency', value: prof }],
+    id: 'unarmed', name: 'Unarmed Strike', toHit: mod[unarmedAbility] + prof - d20Pen, toHitSources: [{ label: unarmedAbility, value: mod[unarmedAbility] }, { label: 'Proficiency', value: prof }, ...penSource],
     damage: monkWeapons && maDie ? `1${maDie}${signed(mod[unarmedAbility])}` : `${Math.max(0, 1 + mod.STR)}`, type: 'bludgeoning', props: [], crit,
-    note: monkWeapons ? null : 'Or Grapple / Shove (DC ' + (8 + mod.STR + prof) + ')',
+    note: `Or Grapple / Shove (DC ${8 + (monkWeapons ? Math.max(mod.STR, mod.DEX) : mod.STR) + prof})`,
   })
   const attacksPerAction = Math.max(1, ...active.filter((e) => e.type === 'attacks').map((e) => e.value(ctx)))
 
   // actions for "My Turn"
   const actions = [{ id: 'attack', name: 'Attack', kind: 'action', summary: `${attacksPerAction} attack${attacksPerAction > 1 ? 's' : ''} with a weapon or Unarmed Strike.` }]
   for (const e of active) if (e.type === 'action' && !actions.some((a) => a.id === e.id)) {
-    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), cost: e.cost, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx) }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, refill: e.refill, attack: e.attack, count: e.count && e.count(ctx), from: e.from })
+    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), cost: e.cost, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx) }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: e.setHp, attack: e.attack, count: e.count && e.count(ctx), from: e.from })
   }
   for (const e of active) if (e.type === 'note' && e.save) actions.push({ id: `note-${e.from}`, name: e.from, kind: 'info', summary: e.save.label, save: { dc: e.save.dc(ctx) } })
 
@@ -269,7 +288,8 @@ export function derive(input) {
 
   return {
     name: ch.name, level, cls, species: sp, background: bg, subclass: cls?.subclasses.find((s) => s.id === ch.subclassId) || null,
-    scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, skills, passivePerception, resources, attacks, attacksPerAction, actions,
+    scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, skills, passivePerception, resources, attacks, attacksPerAction, actions,
+    exhaustion, d20Pen, inspiration: !!ch.state?.inspiration, conditions: ch.state?.conditions || [],
     senses, resistances, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
     choices, pending: choices.filter((c) => !c.done), armor, shield, crit,
   }
@@ -284,8 +304,22 @@ export function rest(ch, kind) {
     else if (r.short && kind === 'short') used[r.id] = Math.max(0, (used[r.id] || 0) - r.short)
   }
   const state = { ...ch.state, used }
-  if (kind === 'long') Object.assign(state, { hp: d.hp.value, temp: 0, deathSaves: { ok: 0, fail: 0 } })
+  if (kind === 'long') {
+    Object.assign(state, { hp: d.hp.value, temp: 0, deathSaves: { ok: 0, fail: 0 }, exhaustion: Math.max(0, (ch.state.exhaustion || 0) - 1) })
+    if (LONG_REST_HIT_DICE !== 'all') used['hit-dice'] = Math.max(0, (ch.state.used?.['hit-dice'] || 0) - Math.max(1, Math.floor(d.level / 2)))
+    if (d.features.some((f) => f.id === 'resourceful')) state.inspiration = true // Human: Heroic Inspiration on every long rest
+  } else used['hit-dice'] = ch.state.used?.['hit-dice'] || 0 // a short rest gives no Hit Dice back
   return state
+}
+
+/** Spend one Hit Die on a short rest: `roll` is the die's face. Returns { state, healed } or null when none are left. */
+export function spendHitDie(ch, roll) {
+  const d = derive(ch)
+  const hd = d.resources.find((r) => r.id === 'hit-dice')
+  if (!hd || hd.used >= hd.max) return null
+  const healed = Math.max(HIT_DIE_MIN, roll + d.mod.CON)
+  const hp = Math.min(d.hp.value, (ch.state.hp ?? d.hp.value) + healed)
+  return { healed, state: { ...ch.state, hp, used: { ...ch.state.used, 'hit-dice': hd.used + 1 } } }
 }
 
 /** Things the wizard needs to check before "Finish". */

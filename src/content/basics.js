@@ -50,7 +50,7 @@ export const MASTERY = {
   push: 'On a hit, push a Large or smaller target up to 10 ft straight away from you.',
   sap: 'On a hit, the target has disadvantage on its next attack roll before your next turn.',
   slow: 'On a hit that deals damage, the target\'s speed drops by 10 ft until your next turn.',
-  topple: 'On a hit, the target makes a CON save (DC 8 + your attack modifier + proficiency) or falls Prone.',
+  topple: 'On a hit, the target makes a CON save (DC 8 + the ability modifier of the attack + your proficiency bonus) or falls Prone.',
   vex: 'On a hit that deals damage, you have advantage on your next attack against that target before the end of your next turn.',
 }
 
@@ -77,7 +77,7 @@ export const WEAPONS = [
   w('greataxe', 'Greataxe', 'martial-melee', '1d12', 'slashing', ['heavy', 'two-handed'], 'cleave'),
   w('greatsword', 'Greatsword', 'martial-melee', '2d6', 'slashing', ['heavy', 'two-handed'], 'graze'),
   w('halberd', 'Halberd', 'martial-melee', '1d10', 'slashing', ['heavy', 'reach', 'two-handed'], 'cleave'),
-  w('lance', 'Lance', 'martial-melee', '1d10', 'piercing', ['heavy', 'reach'], 'topple'),
+  w('lance', 'Lance', 'martial-melee', '1d10', 'piercing', ['heavy', 'reach', 'two-handed (unless mounted)'], 'topple'),
   w('longsword', 'Longsword', 'martial-melee', '1d8', 'slashing', ['versatile'], 'sap', { versatile: '1d10' }),
   w('maul', 'Maul', 'martial-melee', '2d6', 'bludgeoning', ['heavy', 'two-handed'], 'topple'),
   w('morningstar', 'Morningstar', 'martial-melee', '1d8', 'piercing', [], 'sap'),
@@ -93,6 +93,8 @@ export const WEAPONS = [
   w('hand-crossbow', 'Hand Crossbow', 'martial-ranged', '1d6', 'piercing', ['ammunition', 'light', 'loading'], 'vex', { range: '30/120' }),
   w('heavy-crossbow', 'Heavy Crossbow', 'martial-ranged', '1d10', 'piercing', ['ammunition', 'heavy', 'loading', 'two-handed'], 'push', { range: '100/400' }),
   w('longbow', 'Longbow', 'martial-ranged', '1d8', 'piercing', ['ammunition', 'heavy', 'two-handed'], 'slow', { range: '150/600' }),
+  w('musket', 'Musket', 'martial-ranged', '1d12', 'piercing', ['ammunition', 'loading', 'two-handed'], 'slow', { range: '40/120' }),
+  w('pistol', 'Pistol', 'martial-ranged', '1d10', 'piercing', ['ammunition', 'loading'], 'vex', { range: '30/90' }),
 ]
 export const weaponById = (id) => WEAPONS.find((x) => x.id === id) || null
 export const isRanged = (wp) => wp.cat.endsWith('ranged')
