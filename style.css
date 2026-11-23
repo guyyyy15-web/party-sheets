@@ -443,3 +443,14 @@ body { line-height: 1.5; }
 .pick .sp-icon { width: 24px; height: 24px; }
 .cond .cond-icon { width: 24px; height: 24px; }
 .gear-card { padding: 12px 8px; gap: 4px; }
+/* level summary + next level */
+.lvl-lines { list-style: none; padding: 0; margin: 4px 0 10px; }
+.lvl-lines li { display: flex; align-items: baseline; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.lvl-lines .grow { font-weight: 600; } .lvl-note { display: block; font-weight: 400; margin-top: 2px; }
+.lvl-val { white-space: nowrap; font-size: 15px; } .lvl-val b { font-size: 18px; } .lvl-before { opacity: .65; }
+.lvl-val.k-base b { color: var(--text); } .lvl-val.k-prof b { color: var(--k-prof, #d9b56a); } .lvl-val.k-ability b { color: var(--k-ability, #9fb6e8); } .lvl-val.k-bonus b { color: var(--k-bonus, #8fc79a); } .lvl-val.k-dice b { color: var(--k-dice, #e9a46b); }
+.lvl-h { font-size: 17px; margin: 14px 0 6px; font-family: var(--display); }
+.lvl-feature { margin: 8px 0; } .lvl-feature p { margin: 4px 0 8px; } .lvl-feature .btn { margin-top: 2px; }
+.lvl-choose { margin: 12px 0; }
+.next-level { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 12px; padding: 10px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--panel); color: var(--text); text-align: left; font-size: 14.5px; }
+.next-level .lbl { color: var(--accent); white-space: nowrap; }

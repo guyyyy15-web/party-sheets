@@ -162,6 +162,8 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
     await p.click('button:has-text("(average)")')
     if (lvl === 3) await p.click('.panel.choice .card:has-text("Open Hand")')
     await p.click(`button:has-text("Become level ${lvl}")`)
+    await p.waitForSelector('.lvl-summary')
+    await p.click('.sheet button:text-is("Done")')
   }
   ok(await p.isVisible('text=Warrior of the Open Hand'), 'level 3: the subclass is chosen in the level-up')
   ok(await p.isVisible('.res:has-text("Focus Points")'), 'Focus Points appear at level 2')

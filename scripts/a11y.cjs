@@ -48,6 +48,12 @@ async function scan(p, name) {
   await p.click('.char-card:has-text("Vex")'); await p.click('[role=tab]:has-text("Spells")'); await p.click('.spell-name:has-text("Fireball")'); await scan(p, 'sheet: Spells')
   await p.click('button:has-text("Choose spells")'); await scan(p, 'spell picker'); await p.click('.sheet button:text-is("Done")')
   await p.click('.spell:has-text("Fireball") button:text-is("Cast")'); await scan(p, 'cast a spell')
+  await p.click('.sheet button[aria-label="Close"]')
+  // the rogue built in the wizard above (every choice made): the next-level preview, then the summary after levelling
+  await p.click('button[aria-label="All characters"]'); await p.click('.char-card:has-text("Rogue")')
+  await p.click('.next-level'); await scan(p, 'next level preview')
+  await p.click('.sheet button:has-text("Level up now")'); await p.click('.sheet button:has-text("(average)")')
+  await p.click('.sheet button:has-text("Become level")'); await p.waitForSelector('.lvl-summary'); await scan(p, 'level up summary')
   await b.close(); server.close()
   console.log(bad ? `\n${bad} serious issue(s)` : '\nno serious accessibility issues')
   process.exit(bad ? 1 : 0)

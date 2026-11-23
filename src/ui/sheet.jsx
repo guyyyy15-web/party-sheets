@@ -7,6 +7,8 @@ import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend, themeOf, 
 import { ChoicesStep, Portrait } from './wizard.jsx'
 import { SyncBadge } from './rooms.jsx'
 import { SpellsTab } from './spells.jsx'
+import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
+import { levelDiff } from '../engine/levelup.js'
 
 const KIND = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction', free: 'Free / on a hit', info: 'Good to know' }
 const THEMES = ['gold', 'red', 'jade', 'blue', 'violet', 'rose']
@@ -17,6 +19,8 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const [sources, setSources] = useState(null)
   const [hpOpen, setHpOpen] = useState(false)
   const [levelUp, setLevelUp] = useState(false)
+  const [peek, setPeek] = useState(null) // { diff, preview }: the next level, or what the last one gave
+  const recent = ch.state.leveledAt && Date.now() - ch.state.leveledAt < 864e5 && ch.level > 1
   const [settings, setSettings] = useState(false)
   const [shortRest, setShortRest] = useState(false)
   const [condOpen, setCondOpen] = useState(false)
@@ -34,7 +38,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="All characters">‹</button>
         <Portrait ch={ch} size={44} />
-        <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}</p><SyncBadge id={ch.id} roomName={group?.name} onSaveNow={onSaveNow} /></div>
+        <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}{recent && <> · <button className="linkish" onClick={() => setPeek({ diff: lastLevelDiff(ch), preview: false })}>What's new</button></>}</p><SyncBadge id={ch.id} roomName={group?.name} onSaveNow={onSaveNow} /></div>
         <button className="icon-btn" onClick={() => setSettings(true)} aria-label="Character settings">⚙</button>
       </header>
 
@@ -88,6 +92,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       {d.spellcasting?.concentration && <button className="banner conc-banner" onClick={() => setTab('spells')}>◎ Concentrating: {d.spellcasting.concentration.name} ›</button>}
       {d.pending.length > 0 && <button className="banner" onClick={() => setLevelUp('choices')}>⚠ {d.pending.length} choice{d.pending.length > 1 ? 's' : ''} to make ›</button>}
 
+      {ch.level < 20 && <NextLevelLine ch={ch} onOpen={(diff) => setPeek({ diff, preview: true })} />}
       <section className="rests">
         <button className="btn ghost" onClick={() => setShortRest(true)}>☕ Short rest</button>
         <button className="btn ghost" onClick={() => { if (confirm('Long rest: HP and every resource back to full?')) setCh({ ...ch, state: rest(ch, 'long') }) }}>🌙 Long rest</button>
@@ -119,6 +124,12 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       {condOpen && <ConditionsSheet d={d} ch={ch} setState={setState} onClose={() => setCondOpen(false)} />}
       {hpOpen && <HpSheet d={d} ch={ch} hp={hp} setState={setState} onClose={() => setHpOpen(false)} />}
       {levelUp && <LevelUp ch={ch} setCh={setCh} start={levelUp} roll={roll} onClose={() => setLevelUp(false)} />}
+      {peek && (
+        <Sheet title={peek.preview ? `At level ${peek.diff.level}` : `Level ${peek.diff.level}: what's new`} onClose={() => setPeek(null)}>
+          <LevelSummary diff={peek.diff} preview={peek.preview} roll={roll} />
+          {peek.preview && <button className="btn primary wide" onClick={() => { setPeek(null); setLevelUp('up') }}>⬆ Level up now</button>}
+        </Sheet>
+      )}
       {settings && (
         <Sheet title="Character" onClose={() => setSettings(false)}>
           <span className="field-label">Color</span>
@@ -298,14 +309,24 @@ function LevelUp({ ch, setCh, start, roll, onClose }) {
   const die = after.hitDie
   const avg = Math.floor(die / 2) + 1
   const setHp = (value) => { const n = { ...next, hpRolls: { ...next.hpRolls, [next.level]: value } }; setNext(n); setStage('choices') }
+  const [summary, setSummary] = useState(null)
   const finish = () => {
     const d2 = derive(next)
     const gainedHp = d2.hp.value - before.hp.value
-    setCh({ ...next, state: { ...next.state, hp: Math.min(d2.hp.value, (ch.state.hp ?? before.hp.value) + Math.max(0, gainedHp)) } })
-    onClose()
+    const levelled = start !== 'choices'
+    setCh({ ...next, state: { ...next.state, hp: Math.min(d2.hp.value, (ch.state.hp ?? before.hp.value) + Math.max(0, gainedHp)), ...(levelled ? { leveledAt: Date.now() } : {}) } })
+    if (!levelled) return onClose()
+    setSummary(levelDiff(before, d2, next))
+    setStage('summary')
   }
   return (
-    <Sheet title={start === 'choices' ? 'Choices to make' : `Level ${ch.level} → ${ch.level + 1}`} onClose={onClose}>
+    <Sheet title={stage === 'summary' ? `Level ${summary.level}!` : start === 'choices' ? 'Choices to make' : `Level ${ch.level} → ${ch.level + 1}`} onClose={onClose}>
+      {stage === 'summary' && (
+        <>
+          <LevelSummary diff={summary} roll={roll} />
+          <button className="btn primary wide" onClick={onClose}>Done</button>
+        </>
+      )}
       {stage === 'preview' && (
         <>
           {gained.length ? gained.map((f) => <div key={f.key} className="panel"><b>{f.name}</b><p className="small">{f.summary}</p></div>) : <p className="muted">Better numbers, no new features this level.</p>}
