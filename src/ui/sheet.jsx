@@ -41,7 +41,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
         </button>
         <button className="stat" onClick={() => show('Armor Class', d.ac)}><span className="lbl">AC</span><b>{d.ac.value}</b></button>
         <button className="stat" onClick={() => show('Speed', d.speed)}><span className="lbl">Speed</span><b>{d.speed.value}</b></button>
-        <button className="stat" onClick={() => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode })}><span className="lbl">Init 🎲</span><b>{signed(d.initiative.value)}</b></button>
+        <button className="stat" onClick={() => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode, parts: d.initiative.sources, rule: 'initiative' })}><span className="lbl">Init 🎲</span><b>{signed(d.initiative.value)}</b></button>
         <div className="stat"><span className="lbl">Prof</span><b>{signed(d.prof)}</b></div>
       </section>
 
@@ -119,7 +119,7 @@ function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
     if (a.cost) spend(a.cost.resource, a.cost.amount)
     if (a.setHp != null) setState({ hp: a.setHp, used: { ...ch.state.used, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}) } })
     if (a.refill) setState({ used: { ...ch.state.used, [a.refill]: 0, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}) } })
-    if (a.roll) roll({ kind: 'expr', label: `${a.name}: ${a.roll.label}`, expr: a.roll.expr }).then((e) => { if (a.heal && e) setState({ hp: Math.min(d.hp.value, hp + Math.max(a.min || 0, e.total)), ...(a.cost || a.refill ? {} : {}) }) })
+    if (a.roll) roll({ kind: 'expr', label: `${a.name}: ${a.roll.label}`, expr: a.roll.expr, parts: a.roll.parts, rule: a.roll.why }).then((e) => { if (a.heal && e) setState({ hp: Math.min(d.hp.value, hp + Math.max(a.min || 0, e.total)), ...(a.cost || a.refill ? {} : {}) }) })
   }
   return (
     <section className="turn">
@@ -131,9 +131,9 @@ function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
             <span className="muted small">{a.type}{a.range ? `, ${a.range} ft` : ''}{a.props?.length ? `, ${a.props.join(', ')}` : ''}{a.note ? `. ${a.note}` : ''}</span>
             {a.mastery && <details className="mastery"><summary>Mastery: {a.mastery.name}</summary>{a.mastery.text}</details>}
           </div>
-          <button className="roll-btn" onClick={() => roll({ kind: 'd20', label: `${a.name} to hit`, bonus: a.toHit, mode, attack: true, critOn: d.crit })}>{signed(a.toHit)}<small>to hit</small></button>
-          <button className="roll-btn" onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage })}>{a.damage}<small>damage</small></button>
-          <button className="roll-btn ghost" onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, crit: true })} aria-label={`${a.name} critical damage`}>×2<small>crit</small></button>
+          <button className="roll-btn" aria-label={`${a.name}: roll to hit, ${signed(a.toHit)}`} onClick={() => roll({ kind: 'd20', label: `${a.name} to hit`, bonus: a.toHit, mode, attack: true, critOn: d.crit, parts: a.toHitSources, rule: 'attack' })}>{signed(a.toHit)}<small>to hit</small></button>
+          <button className="roll-btn" aria-label={`${a.name}: roll damage, ${a.damage}`} onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, parts: a.damageParts, dieWhy: a.dieWhy, rule: 'damage' })}>{a.damage}<small>damage</small></button>
+          <button className="roll-btn ghost" onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, crit: true, parts: a.damageParts, dieWhy: a.dieWhy, rule: 'damage' })} aria-label={`${a.name} critical damage`}>×2<small>crit</small></button>
         </div>
       ))}
       {groups.map((g) => {
@@ -166,15 +166,15 @@ function ChecksTab({ d, roll, mode, show }) {
         {ABILITIES.map((a) => (
           <div key={a} className="abil-card">
             <button className="ab-top" onClick={() => show(`${ABILITY_NAMES[a]} score`, { value: d.scores[a].total, sources: d.scores[a].sources })}><small>{a}</small><b>{d.scores[a].total}</b></button>
-            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.checks[a], mode })}>Check {signed(d.checks[a])}</button>
-            <button className={`ab-roll ${d.saves[a].prof ? 'prof' : ''}`} onClick={() => roll({ kind: 'd20', label: `${a} save`, bonus: d.saves[a].value, mode })}>Save {signed(d.saves[a].value)}</button>
+            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.checks[a], mode, parts: d.checkParts[a], rule: 'check' })}>Check {signed(d.checks[a])}</button>
+            <button className={`ab-roll ${d.saves[a].prof ? 'prof' : ''}`} onClick={() => roll({ kind: 'd20', label: `${a} save`, bonus: d.saves[a].value, mode, parts: d.saves[a].parts, rule: 'save' })}>Save {signed(d.saves[a].value)}</button>
           </div>
         ))}
       </div>
       <h2 className="sec">Skills <span className="muted small">Passive Perception {d.passivePerception}</span></h2>
       <ul className="skills">
         {d.skills.map((s) => (
-          <li key={s.id}><button onClick={() => roll({ kind: 'd20', label: s.name, bonus: s.value, mode })}>
+          <li key={s.id}><button onClick={() => roll({ kind: 'd20', label: s.name, bonus: s.value, mode, parts: s.parts, rule: 'skill' })}>
             <span className={`dot ${s.expertise ? 'ex' : s.prof ? 'pr' : ''}`} aria-label={s.expertise ? 'expertise' : s.prof ? 'proficient' : ''} />
             <span className="grow">{s.name} <small className="muted">{s.ability}</small></span><b className="mono">{signed(s.value)}</b>
           </button></li>
@@ -300,7 +300,7 @@ function ShortRest({ ch, setCh, roll, onClose }) {
   const left = hd ? hd.max - hd.used : 0
   const hp = cur.state.hp ?? d.hp.value
   const spend = async () => {
-    const e = await roll({ kind: 'expr', label: `Hit Die (d${d.hitDie})`, expr: `1d${d.hitDie}` })
+    const e = await roll({ kind: 'expr', label: `Hit Die (d${d.hitDie})`, expr: `1d${d.hitDie}`, rule: 'hitDie' })
     if (!e) return
     const face = e.total
     const r = spendHitDie(cur, face)
