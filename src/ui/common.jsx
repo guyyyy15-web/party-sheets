@@ -1,5 +1,6 @@
 // Small shared pieces: bottom sheet, option cards, number with sources, steppers.
 import React from 'react'
+import { ICONS } from '../content/icons-data.js'
 import { ABILITIES } from '../content/basics.js'
 import { FEATS } from '../content/feats.js'
 
@@ -74,6 +75,13 @@ export function SourcesSheet({ title, total, sources, onClose }) {
 const SHORT = { "Xanathar's Guide to Everything": 'XGtE', "Tasha's Cauldron of Everything": 'TCoE', "Sword Coast Adventurer's Guide": 'SCAG', "Fizban's Treasury of Dragons": 'FTD', "Van Richten's Guide to Ravenloft": 'VRGR', "Explorer's Guide to Wildemount": 'EGtW', "Player's Handbook 2014": 'PHB14', "Dungeon Master's Guide 2014": 'DMG14', 'Heroes of Faerûn': 'HoF' }
 export const SourceTag = ({ source }) => <span className={`src-tag ${/PHB 2024/.test(source) ? '' : 'ext'}`} title={`${source}: written in our own words. Check the numbers in your book.`}>{/PHB 2024/.test(source) ? 'PHB' : SHORT[source] || source.split(/[\s:]/).filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join('').slice(0, 6)}</span>
 
+/** An icon from game-icons.net (CC BY 3.0), drawn in the current text color. Decorative: the text next to it says it. */
+export function GameIcon({ id, size = 28, className = '' }) {
+  const body = ICONS[id]
+  if (!body) return null
+  return <svg className={`gi ${className}`} viewBox="0 0 512 512" width={size} height={size} aria-hidden="true" focusable="false" dangerouslySetInnerHTML={{ __html: body }} />
+}
+
 export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
   const toggle = (id) => {
     if (picked.includes(id)) return onChange(picked.filter((x) => x !== id))
@@ -83,7 +91,8 @@ export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
   return (
     <div className={`cards cols-${columns}`}>
       {options.map((o) => (
-        <button key={o.id} className={`card opt ${picked.includes(o.id) ? 'on' : ''}`} aria-pressed={picked.includes(o.id)} onClick={() => toggle(o.id)} disabled={o.disabled}>
+        <button key={o.id} className={`card opt ${o.icon ? 'has-icon' : ''} ${picked.includes(o.id) ? 'on' : ''}`} aria-pressed={picked.includes(o.id)} onClick={() => toggle(o.id)} disabled={o.disabled}>
+          {o.icon && <GameIcon id={o.icon} size={34} className="opt-icon" />}
           <span className="opt-name">{o.name}{o.source && <SourceTag source={o.source} />}{picked.includes(o.id) && <span className="tick">✓</span>}</span>
           {o.summary && <span className="opt-sum">{o.summary}</span>}
         </button>

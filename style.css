@@ -374,3 +374,24 @@ h1 { letter-spacing: .01em; }
 .admin-chars li { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); } .admin-chars .muted { display: block; }
 .mini-portrait { width: 34px; height: 34px; font-size: 17px; flex: none; }
 @media (min-width: 900px) { .admin-totals { grid-template-columns: repeat(4, minmax(0, 1fr)); } .admin-rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; } }
+
+/* icons (game-icons.net, CC BY 3.0) */
+.gi { flex: none; display: block; }
+.gi path { fill: currentColor; }
+.card.has-icon { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: start; }
+.card.has-icon > :not(.opt-icon) { grid-column: 2; }
+.card.has-icon > .opt-icon { grid-row: 1 / span 3; color: var(--accent); margin-top: 2px; }
+.class-card.has-icon > .opt-icon { width: 44px; height: 44px; }
+.atk-icon, .sp-icon, .cond-icon { color: var(--accent); opacity: .9; }
+.spell-name { display: flex; gap: 10px; align-items: flex-start; } .spell-name .sp-icon { margin-top: 2px; }
+.pick .sp-icon { margin-top: 0; }
+.cond .cond-icon { margin-top: 2px; }
+.gear li { gap: 10px; } .gear li .gi { color: var(--accent); }
+.gear-inline { display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: flex-end; } .gear-inline span { display: inline-flex; align-items: center; gap: 4px; } .gear-inline .gi { color: var(--accent); }
+.gear-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 8px 0 12px; }
+.gear-card { display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; padding: 10px 6px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+.gear-card .gi { color: var(--accent); margin-bottom: 2px; } .gear-card b { font-size: 15px; } .gear-card .muted { line-height: 1.3; }
+.gear-card.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); box-shadow: 0 0 0 1px var(--accent) inset; }
+.gear-card.untrained { opacity: .75; } .gear-card .warn-line { font-size: 12px; }
+@media (min-width: 600px) { .gear-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .gear-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

@@ -209,7 +209,7 @@ function Home({ chars, onOpen, onNew, onBring, onDm, joined, onExport, onImport,
         </div>
         <input ref={file} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f) }} aria-label="Backup file" />
       </section>
-      <p className="muted small legal">Uses rules from the System Reference Document 5.2 by Wizards of the Coast LLC, available under CC-BY-4.0. Not affiliated with Wizards of the Coast.</p>
+      <p className="muted small legal">Uses rules from the System Reference Document 5.2 by Wizards of the Coast LLC, available under CC-BY-4.0. Not affiliated with Wizards of the Coast. Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>, CC BY 3.0.</p>
       {table && (
         <Sheet title="Table settings" onClose={() => setTable(false)}>
           <label className="row toggle"><input type="checkbox" checked={settings.allowRoll !== false} onChange={(e) => setSettings({ ...settings, allowRoll: e.target.checked })} /><span>Allow rolling ability scores (4d6) in the wizard</span></label>

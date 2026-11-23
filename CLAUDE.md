@@ -9,7 +9,11 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   choices and state; never store a derived number. Every derived number keeps its `sources`.
 - Content: the SRD 5.2 (CC-BY-4.0) plus, by Guy's decision (2026-11-23, a private app for his groups), the 2024
   Player's Handbook subclasses and feats as **mechanics in our own words** (`source: 'PHB 2024'`, shown with a PHB
-  tag). Never paste book text or flavor text; summaries say what it does, with the numbers.
+  tag), and every official expansion subclass (`src/content/ext-subclasses-*.js`, `expansion: true`, tagged with its
+  book; older ones follow the 2024 rule: features below level 3 arrive at 3). Never paste book text or flavor text;
+  summaries say what it does, with the numbers.
+- Icons: game-icons.net (CC BY 3.0, credited on the home page). `node scripts/pick-icons.mjs` copies the ones in use
+  into `src/content/icons-data.js` (the page carries only those; no CDN). Use `<GameIcon id="w.longsword" />`.
 - Saves: IndexedDB `party-sheets` (localStorage fallback). The character shape has `v: 1`; a change to it must read
   older characters too. Backups must keep importing.
 - Dice thrown on screen take their result from the physics (`readTop`), never a separate random number.
