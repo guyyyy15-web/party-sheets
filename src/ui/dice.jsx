@@ -95,7 +95,6 @@ export function DiceTray({ pool, setPool, mod, setMod, throwOn, setThrowOn, last
           <button className="btn ghost small" onClick={() => { setPool({}); setMod(0) }} disabled={!count && !mod} aria-label="Reset all dice and the bonus">↺ Reset</button>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </div>
-        <p className="muted small">Tap a die to add one, − to take one off.</p>
         <div className="dice-grid">
           {[4, 6, 8, 10, 12, 20, 100].map((n) => (
             <div key={n} className="die-cell">

@@ -57,7 +57,7 @@ export function SpellsTab({ d, ch, setCh, setState, roll, mode, show }) {
 
       {sc.concentration && (
         <div className="conc" role="status">
-          <span className="grow"><b>Concentrating:</b> {sc.concentration.name}<span className="muted small">{SPELL_RULES.concentration}</span></span>
+          <span className="grow"><b>Concentrating:</b> {sc.concentration.name}<span className="muted small">Damage → CON save (DC 10 or half the damage)</span></span>
           <button className="btn ghost small" onClick={() => setState({ concentration: null })}>End</button>
         </div>
       )}
@@ -66,7 +66,6 @@ export function SpellsTab({ d, ch, setCh, setState, roll, mode, show }) {
         <div className="slots" aria-label="Spell slots">
           {sc.slots.map((s) => <SlotRow key={s.id} name={`${ORD[s.level]} level`} max={s.max} used={used(s.id)} onSet={(n) => setUsed(s.id, n)} />)}
           {sc.pact && <SlotRow name={`Pact slots (${ORD[sc.pact.level]} level, short rest)`} max={sc.pact.count} used={used('pact-slots')} onSet={(n) => setUsed('pact-slots', n)} />}
-          <p className="muted small">{sc.pact ? SPELL_RULES.pact : SPELL_RULES.slots}</p>
         </div>
       )}
 
@@ -148,7 +147,6 @@ function CastSheet({ s, sc, used, onClose, cast, attack, effect }) {
     <Sheet title={`Cast ${s.name}`} onClose={onClose}>
       {!done ? (
         <>
-          <p className="muted small">{SPELL_RULES.slots}</p>
           <div className="cast-options">
             {options.map((o) => (
               <button key={o.key} className="btn wide ghost" disabled={o.left <= 0} onClick={() => { cast(s, o.level, o.id); setDone(o.level) }}>
@@ -196,7 +194,7 @@ function SpellPicker({ sc, ch, setCh, onClose }) {
         {sc.cantripsMax > 0 && <span className={sc.cantripsChosen >= sc.cantripsMax ? 'full' : ''}>Cantrips {sc.cantripsChosen}/{sc.cantripsMax}</span>}
         <span className={sc.preparedChosen >= sc.preparedMax ? 'full' : ''}>Prepared {sc.preparedChosen}/{sc.preparedMax}</span>
       </p>
-      <p className="muted small">{sc.spellbook ? 'Wizards prepare from their spellbook: pick spells you have copied into it.' : 'You can change your prepared spells after a long rest.'} Always-prepared spells don't count.</p>
+      
       <div className="seg sp-tabs" role="tablist">{levels.map((l) => <button key={l} role="tab" aria-selected={tab === l} onClick={() => setTab(l)}>{l === 0 ? 'Cantrips' : ORD[l]}</button>)}</div>
       <input className="input" type="search" placeholder="Search spells" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search spells" />
       <ul className="pick-list">

@@ -36,7 +36,7 @@ export function AdminView({ onBack }) {
     <main className="admin-page">
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="Back">‹</button>
-        <div className="grow"><h1>Admin</h1><p className="muted small">Every group, every character, and how much it's used</p></div>
+        <div className="grow"><h1>Admin</h1></div>
         <button className="btn ghost small" onClick={() => load()}>↻ Refresh</button>
       </header>
       {err && <p className="warn-line" role="alert">{err}</p>}
@@ -111,7 +111,6 @@ function UsageChart({ usage }) {
       </div>
       <div className="bars-axis muted small"><span>{days[0].slice(5)}</span><span>today</span></div>
       <ul className="kinds">{Object.entries(KINDS).map(([k, l]) => <li key={k}><span>{l}</span><b className="mono">{byKind[k] || 0}</b></li>)}</ul>
-      <p className="muted small">Counts changes only (groups made, characters joined, player and DM changes), never what was written.</p>
     </section>
   )
 }

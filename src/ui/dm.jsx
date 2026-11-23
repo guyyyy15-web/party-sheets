@@ -119,7 +119,7 @@ function GroupSettings({ room, onClose, onError }) {
       <label className="field"><span>Group name</span><input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== r.name && save({ name: name.trim() })} /></label>
       <label className="row toggle"><input type="checkbox" checked={!!r.settings?.expansions} disabled={busy} onChange={(e) => save({ settings: { expansions: e.target.checked } })} />
         <span>Allow subclasses from the expansion books (Xanathar's, Tasha's and more), beyond the Player's Handbook</span></label>
-      <p className="muted small">Players see the change the next time their phone checks in with the group. Characters who already took one keep it.</p>
+      
     </Sheet>
   )
 }
