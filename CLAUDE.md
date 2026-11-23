@@ -23,6 +23,9 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   Fighter 1→20 through the real Level up sheet with a fight at 5. Run both after any rules change.
 - Before pushing: `npm test`, `npm run smoke`, `npm run smoke:rooms` and `npm run a11y` (and `npm run campaign` after rules changes), and look at screenshots/ after UI changes. After a
   release: `node scripts/live.cjs` (the real site, iPhone 13 and SE).
+- Level-up UX (`src/engine/levelup.js` `levelDiff` + `headlines`, UI `src/ui/levelup.jsx`): the card after "Become
+  level N" and the next-level preview on the sheet both come from `levelDiff`, so they agree; `state.leveledAt` shows a
+  "What's new" link for a day. The plan for the next UX steps is the Claude doc "Party Sheets — Level-up UX plan".
 - Spellcasting: class data in `src/content/casters.js`, spells in `src/content/spells.js` (SRD only, own words),
   the math in `src/engine/spells.js` (`spellcastingOf`, `spellRoll`). A character stores `spells: { cantrips, prepared }`
   and `state.concentration`; slots are resources `slot-N` / `pact-slots` in `state.used`.

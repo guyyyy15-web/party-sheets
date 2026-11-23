@@ -82,10 +82,23 @@ async function choose(p, scope) {
   async function levelUp(name, to) {
     const before = derive(await stored(name))
     const hpBefore = Number((await p.textContent('.vitals .hp b')).replace(/\s/g, '').split('/')[0])
-    await p.click('button:has-text("⬆ Level up")')
+    // the preview of the next level (from the sheet), then level up, then the summary: they must agree
+    await p.click('.next-level')
+    const preview = await p.$$eval('.sheet .lvl-lines li', (e) => e.map((x) => x.textContent))
+    const asiHere = /Ability Score Improvement|Epic Boon/.test(await p.textContent('.sheet .lvl-summary'))
+    ok((await p.textContent('.next-level')).includes(`Level ${to}`), `${name} ${to}: the sheet previews level ${to}`)
+    await p.click('.sheet button:has-text("Level up now")')
     await p.click('.sheet button:has-text("(average)")')
     await choose(p, '.sheet')
     await p.click(`.sheet button:has-text("Become level ${to}")`)
+    await p.waitForSelector('.sheet .lvl-summary')
+    const summary = await p.$$eval('.sheet .lvl-lines li', (e) => e.map((x) => x.textContent))
+    const hpLine = (list) => list.find((t) => t.startsWith('Max HP'))
+    // with no ASI at this level the preview is exact; with one, the choice (say +2 CON) can change the numbers
+    if (!asiHere) ok(hpLine(summary) === hpLine(preview), `${name} ${to}: summary HP line = preview (${hpLine(summary)})`)
+    const shownMax = Number(hpLine(summary)?.match(/→\s*(\d+)/)?.[1])
+    ok(shownMax === derive(await stored(name)).hp.value, `${name} ${to}: summary shows the new max HP ${shownMax}`)
+    await p.click('.sheet button:text-is("Done")')
     await p.waitForSelector('.scrim', { state: 'detached' })
     const { d } = await sheetMatches(name, to)
     const gained = d.hp.value - before.hp.value
