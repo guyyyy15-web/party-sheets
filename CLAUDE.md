@@ -33,6 +33,12 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   `server/migrations/NNNN_name.sql`; never edit an applied one.
 - Not encrypted (Guy's call): characters are plain JSON. The server keeps only SHA-256 hashes of the invite key,
   the DM key and each phone's owner key. Never log request bodies.
+- **Every character is saved on the server** (Guy, 2026-11-23), in a group or not: `PUT/GET/DELETE /me/characters/:id`
+  with the owner key (`X-Owner`), `GET /me/characters` to restore. The phone's copy is a cache for offline use. The
+  sheet shows Saved / Saving… / Not saved with **Save now**; the home screen warns when something isn't saved.
+  The cloud key link `#/restore/<ownerKey>` (Table settings) brings every character back on a new phone; a restored
+  character keeps its key in `ch.ownerKey` (local only). Deleting a character deletes it on the server; leaving a
+  group (or the admin deleting the group) keeps it saved, with no group. Limit: 50 characters per owner.
 - Links: `#/join/<room>.<playerKey>` and `#/dm/<room>.<dmKey>`; the app clears them from the address bar.
   One room per character (`ch.roomId`, local only). Players see the party list; the DM sees every full sheet.
 - DM quick actions (PATCH) may change only `hp`, `temp`, `conditions`, `inspiration`, `exhaustion`, `deathSaves`.
@@ -46,5 +52,5 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   (`settings.admin_hash`, salted SHA-256), then it's locked. To reset: delete that row in D1 `party-sheets`.
   Usage counts writes only (`usage` table: groups made, characters joined, player changes, DM actions), never content.
 - Limits: 256 KB per character, 12 per room, 10 new rooms per client per hour, 5000 rooms in total.
-- Tests never call production: `npm run test:server` (API, local wrangler dev) and `npm run smoke:rooms` (two phones
+- Tests never call production: `smoke`, `a11y` and `live.cjs` point the API at a closed local port (offline); `npm run test:server` (API, local wrangler dev) and `npm run smoke:rooms` (two phones
   and a DM through a local Worker, with axe). The app reads the API address from localStorage `ps.api` (tests only).

@@ -120,3 +120,31 @@ test('admin: the first password claims it, then stats for the owner only', async
   assert.equal((await call(`/admin/rooms/${room.id}`, { method: 'DELETE', auth: 'my-admin-password-123' })).status, 200)
   assert.ok(!(await call('/admin/stats', { auth: 'my-admin-password-123' })).body.rooms.some((r) => r.name === 'Crowded'))
 })
+
+test('every character is saved on the server: outside a group, joining one, leaving, restoring with the owner key', async () => {
+  const me = key(), thief = key()
+  assert.equal((await call('/me/characters/char_solo1', { method: 'PUT', body: { patch: hero('Solo') } })).status, 401)
+  const put = await call('/me/characters/char_solo1', { method: 'PUT', owner: me, body: { patch: hero('Solo') } })
+  assert.equal(put.status, 201); assert.equal(put.body.roomId, null)
+  const up = await call('/me/characters/char_solo1', { method: 'PUT', owner: me, body: { patch: { notes: 'saved', state: { hp: 9 } } } })
+  assert.equal(up.body.rev, 2); assert.equal(up.body.data.state.hp, 9); assert.equal(up.body.data.state.temp, 0)
+  assert.equal((await call('/me/characters/char_solo1', { method: 'PUT', owner: thief, body: { patch: { name: 'Mine' } } })).status, 403)
+  assert.equal((await call('/me/characters/char_solo1', { owner: thief })).status, 403)
+
+  // it joins a group (same owner), the DM changes it, the owner reads it back from /me
+  const { room, playerKey, dmKey } = (await call('/rooms', { method: 'POST', body: { name: 'Solo joins' } })).body
+  assert.equal((await call(`/rooms/${room.id}/characters/char_solo1`, { method: 'PUT', auth: playerKey, owner: me, body: { patch: { level: 3 } } })).status, 201)
+  assert.equal((await call(`/rooms/${room.id}`, { auth: dmKey })).body.characters.length, 1)
+  await call(`/rooms/${room.id}/characters/char_solo1`, { method: 'PATCH', auth: dmKey, body: { state: { hp: 4 } } })
+  const mine = await call('/me/characters', { owner: me })
+  assert.equal(mine.body.characters.length, 1); assert.equal(mine.body.characters[0].roomId, room.id); assert.equal(mine.body.characters[0].data.state.hp, 4)
+
+  // leaving the group keeps it on the server
+  await call(`/rooms/${room.id}/characters/char_solo1`, { method: 'DELETE', auth: playerKey, owner: me })
+  assert.equal((await call(`/rooms/${room.id}`, { auth: dmKey })).body.characters.length, 0)
+  assert.equal((await call('/me/characters/char_solo1', { owner: me })).body.roomId, null)
+
+  // deleting it removes it from the server
+  assert.equal((await call('/me/characters/char_solo1', { method: 'DELETE', owner: me })).status, 200)
+  assert.equal((await call('/me/characters', { owner: me })).body.characters.length, 0)
+})

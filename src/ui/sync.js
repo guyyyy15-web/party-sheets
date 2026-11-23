@@ -20,7 +20,7 @@ async function api(path, { method = 'GET', key, owner, body } = {}) {
   const headers = {}
   if (body) headers['Content-Type'] = 'application/json'
   if (key) headers.Authorization = `Bearer ${key}`
-  if (owner) headers['X-Owner'] = ownerKey()
+  if (owner) headers['X-Owner'] = typeof owner === 'string' ? owner : ownerKey()
   let r
   try { r = await fetch(apiBase() + path, { method, headers, body: body ? JSON.stringify(body) : undefined }) } catch { throw new ApiError(0, 'offline') }
   const j = await r.json().catch(() => ({}))
@@ -82,58 +82,91 @@ export const syncStatus = (id) => status[id] || null
 export function onSyncStatus(fn) { listeners.add(fn); return () => listeners.delete(fn) }
 const setStatus = (id, s) => { status[id] = { ...s, at: Date.now() }; listeners.forEach((f) => f(id)) }
 
-/** Put a character in a room (the first write claims it for this phone). Returns the character to save. */
+/** The key that proves a character is ours: the phone's own, or the one it was restored with. */
+const keyOf = (ch) => ch?.ownerKey || ownerKey()
+
+/** Put a character in a group (it's already saved on the server; this links it to the group). */
 export async function shareCharacter(ch, r) {
-  const j = await api(`/rooms/${r.id}/characters/${ch.id}`, { method: 'PUT', key: r.playerKey || r.dmKey, owner: true, body: { patch: shareable(ch) } })
+  const j = await api(`/rooms/${r.id}/characters/${ch.id}`, { method: 'PUT', key: r.playerKey || r.dmKey, owner: keyOf(ch), body: { patch: shareable(ch) } })
   setBase(ch.id, j.data, j.rev)
   setStatus(ch.id, { state: 'ok' })
   return { ...ch, roomId: r.id }
 }
-/** Take it out of its room (it stays on this phone). Works offline too: the server copy just stays. */
+/** Take it out of its group. It stays saved, on this phone and on the server. */
 export async function unshareCharacter(ch) {
   const r = roomById(ch.roomId)
-  if (r) { try { await api(`/rooms/${r.id}/characters/${ch.id}`, { method: 'DELETE', key: roomKey(r), owner: true }) } catch (e) { if (e.status !== 0 && e.status !== 404) throw e } }
-  setBase(ch.id, null)
-  delete status[ch.id]
+  if (r) { try { await api(`/rooms/${r.id}/characters/${ch.id}`, { method: 'DELETE', key: roomKey(r), owner: keyOf(ch) }) } catch (e) { if (e.status !== 0 && e.status !== 404) throw e } }
   const { roomId, ...rest } = ch
   return rest
+}
+/** The character was deleted: delete it from the server too (best effort; offline it stays there). */
+export async function deleteRemote(ch) {
+  setBase(ch.id, null)
+  delete status[ch.id]
+  try { await api(`/me/characters/${ch.id}`, { method: 'DELETE', owner: keyOf(ch) }) } catch { /* offline: nothing more to do */ }
+}
+
+/** Something changed and isn't on the server yet. */
+export const markPending = (id) => { if (status[id]?.state !== 'sending') setStatus(id, { state: 'pending' }) }
+
+/** This phone's "cloud key" link: open it on another phone to bring every character back from the server. */
+export const restoreLink = () => `${page()}#/restore/${ownerKey()}`
+/** Bring back every character saved under a cloud key. Returns the characters to save on this phone. */
+export async function restoreFrom(key) {
+  const j = await api('/me/characters', { owner: key })
+  return j.characters.map((c) => {
+    setBase(c.id, c.data, c.rev)
+    setStatus(c.id, { state: 'ok' })
+    return { ...c.data, id: c.id, ...(c.roomId ? { roomId: c.roomId } : {}), ...(key !== ownerKey() ? { ownerKey: key } : {}) }
+  })
 }
 
 const busy = new Set()
 /**
- * Sync one shared character. `latest()` returns this phone's newest copy (it may change while we wait). Returns the
- * character to save, or null when nothing changed here.
+ * Save one character on the server, and pick up changes made elsewhere (the DM's quick actions). One request:
+ * send what changed since the last copy both agreed on, or, with nothing to send, fetch the server copy.
+ * `latest()` returns this phone's newest copy (it may change while we wait). Returns the character to save here,
+ * or null when nothing changed here.
  */
 export async function syncCharacter(id, latest) {
   if (busy.has(id)) return null
   const sent = latest()
-  const r = sent && roomById(sent.roomId)
-  if (!r) { if (sent?.roomId) setStatus(id, { state: 'error', msg: 'This phone doesn\'t have the group\'s link. Open the invite link again.' }); return null }
+  if (!sent) return null
   busy.add(id)
+  const owner = keyOf(sent)
   try {
     const b = getBase(id)
-    if (!b) { await shareCharacter(sent, r); return null }
-    const patch = diff(sent, b)
-    let server, rev
-    if (!isEmpty(patch)) {
+    let server, rev, roomId
+    if (!b) {
+      // the first save: the whole character
       setStatus(id, { state: 'sending' })
-      const j = await api(`/rooms/${r.id}/characters/${id}`, { method: 'PUT', key: r.playerKey || r.dmKey, owner: true, body: { patch } })
-      server = j.data; rev = j.rev
+      const j = await api(`/me/characters/${id}`, { method: 'PUT', owner, body: { patch: shareable(sent) } })
+      server = j.data; rev = j.rev; roomId = j.roomId
     } else {
-      const j = await api(`/rooms/${r.id}/characters/${id}`, { key: r.playerKey || r.dmKey, owner: true })
-      if (j.rev === b._rev) { setStatus(id, { state: 'ok' }); return null }
-      server = j.data; rev = j.rev
+      const patch = diff(sent, b)
+      if (!isEmpty(patch)) {
+        setStatus(id, { state: 'sending' })
+        const j = await api(`/me/characters/${id}`, { method: 'PUT', owner, body: { patch } })
+        server = j.data; rev = j.rev; roomId = j.roomId
+      } else {
+        const j = await api(`/me/characters/${id}`, { owner })
+        roomId = j.roomId
+        if (j.rev === b._rev) { setStatus(id, { state: 'ok' }); return null }
+        server = j.data; rev = j.rev
+      }
     }
     setBase(id, server, rev)
     setStatus(id, { state: 'ok' })
     const now = latest() || sent
-    const next = { ...mergePatch(server, diff(now, sent)), id, roomId: r.id }
-    for (const k of ['draft', 'wizardStep']) if (k in now) next[k] = now[k]
-    return isEmpty(diff(next, now)) ? null : next
+    const next = { ...mergePatch(server, diff(now, sent)), id }
+    for (const k of ['draft', 'wizardStep', 'ownerKey']) if (k in now) next[k] = now[k]
+    if (roomId) next.roomId = roomId // the server knows which group it's in (joined or left on another phone, or by the owner's admin)
+    return !isEmpty(diff(next, now)) || now.roomId !== next.roomId ? next : null
   } catch (e) {
     if (e.status === 0) setStatus(id, { state: 'offline' })
-    else if (e.status === 403) setStatus(id, { state: 'error', msg: 'The group copy belongs to another phone. Leave the group and join it again.' })
-    else if (e.status === 404) setStatus(id, { state: 'error', msg: e.message === 'no such room' ? 'This group no longer exists.' : 'Not in the group any more. Leave and join again.' })
+    else if (e.status === 403) setStatus(id, { state: 'error', msg: 'Saved under another cloud key. Open that phone\'s cloud key link here to take it over.' })
+    else if (e.status === 404) { setBase(id, null); setStatus(id, { state: 'pending' }) } // gone from the server: the next sync saves it again
+    else if (e.status === 507) setStatus(id, { state: 'error', msg: 'The server holds up to 50 characters per player.' })
     else setStatus(id, { state: 'error', msg: e.message })
     return null
   } finally { busy.delete(id) }

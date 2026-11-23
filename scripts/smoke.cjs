@@ -12,6 +12,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' })
   fs.createReadStream(f).pipe(res)
 })
+const OFFLINE_API = 'http://127.0.0.1:9' // tests never call the production server: the app runs as if offline
 let fails = 0
 const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails++ }
 const shots = path.join(root, 'screenshots')
@@ -64,6 +65,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   // auto-accept the long-rest confirm()
 
   const ctx = await b.newContext({ ...devices['iPhone 13'], acceptDownloads: true })
+  await ctx.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), OFFLINE_API)
   const p = await ctx.newPage()
   p.on('dialog', (d) => d.accept())
   const errs = []
@@ -214,6 +216,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   const file = path.join(shots, dl.suggestedFilename())
   await dl.saveAs(file)
   const ctx2 = await b.newContext({ ...devices['iPhone 13'] })
+  await ctx2.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), OFFLINE_API)
   const q = await ctx2.newPage()
   await q.goto(URL)
   await q.waitForSelector('text=No heroes yet')

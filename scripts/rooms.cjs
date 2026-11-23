@@ -67,6 +67,11 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await axe(A.p, 'group links')
     await A.p.click('button[aria-label="Close"]')
     await A.p.setInputFiles('input[aria-label="Backup file"]', backup(aria))
+    // saved on the server before it joins any group
+    await until(() => A.p.evaluate(() => !!localStorage.getItem('ps.owner')))
+    const ownerA = await A.p.evaluate(() => JSON.parse(localStorage.getItem('ps.owner')))
+    const mine = async () => (await (await fetch(`${API}/me/characters`, { headers: { 'X-Owner': ownerA } })).json()).characters
+    ok(await until(async () => (await mine()).some((c) => c.data.name === 'Aria' && c.roomId === null)), 'phone A: Aria is saved on the server without a group')
     await A.p.click('button:has-text("Bring a character")')
     await A.p.click('.sheet button:has-text("Aria")')
     ok(await until(() => A.p.isVisible('text=Aria joined Thursday night')), 'phone A: Aria joined the group')
@@ -113,11 +118,23 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     // offline and back: the change waits, then arrives
     await A.ctx.setOffline(true)
     await A.p.click('.vitals .hp'); await A.p.fill('input[aria-label="Amount"]', '3'); await A.p.click('.sheet button:has-text("Heal")')
-    ok(await until(() => A.p.isVisible('.sync-badge.offline'), 8000), 'phone A: shows offline')
+    ok(await until(() => A.p.isVisible('.sync-badge.offline'), 8000), 'phone A: shows "not saved: no connection"')
+    ok(await A.p.isVisible('.sync-badge button:has-text("Save now")'), 'phone A: offers Save now')
+    await A.p.click('.sync-badge button:has-text("Save now")') // still offline: stays unsaved, nothing lost
+    ok(await until(() => A.p.isVisible('.sync-badge.offline')), 'phone A: Save now while offline keeps it pending')
     await A.ctx.setOffline(false)
-    await A.p.evaluate(() => window.dispatchEvent(new Event('online')))
+    if (await A.p.isVisible('.sync-badge button:has-text("Save now")')) await A.p.click('.sync-badge button:has-text("Save now")').catch(() => {})
+    ok(await until(() => A.p.isVisible('.sync-badge.ok')), 'phone A: saved once back online')
     ok(await until(async () => (await D.textContent('.dm-card:has-text("Aria") .dm-hp b')).startsWith(String(ariaMax - 2)), 15000), 'DM: sees the heal made offline')
     await A.p.screenshot({ path: `${shots}/rooms-4-sheet.png` })
+
+    // a new phone: the cloud key link brings Aria back from the server
+    const N = await phone()
+    await N.p.goto(URL + '#/restore/' + ownerA)
+    ok(await until(() => N.p.isVisible('.char-card:has-text("Aria")')), 'new phone: the cloud key link restored Aria from the server')
+    ok(!(await N.p.evaluate(() => location.hash)), 'new phone: the cloud key is gone from the address bar')
+    await N.p.click('.char-card:has-text("Aria")')
+    ok(await until(async () => (await N.p.textContent('.vitals .hp b')).startsWith(String(ariaMax - 2))), 'new phone: with the latest HP')
 
     // the DM screen on a phone
     const dp = await b.newContext({ ...devices['iPhone 13'] })
@@ -156,6 +173,10 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await A.p.click('button[aria-label="Character settings"]')
     await A.p.click('button:has-text("Leave the group")')
     ok(await until(async () => (await D.locator('.dm-card').count()) === 1, 12000), 'DM: Aria left the room')
+    ok(await until(async () => (await mine()).some((c) => c.data.name === 'Aria' && c.roomId === null)), 'leaving keeps Aria saved on the server')
+    await A.p.click('button[aria-label="Character settings"]')
+    await A.p.click('button:has-text("Delete character")')
+    ok(await until(async () => !(await mine()).some((c) => c.data.name === 'Aria')), 'deleting removes Aria from the server')
     await b.close()
   } finally { stop() }
   console.log(fails ? `\n${fails} FAILED` : '\nall good')

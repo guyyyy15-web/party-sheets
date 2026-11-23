@@ -7,6 +7,8 @@ export const LIMITS = {
   roomName: 60,
   characterBytes: 256 * 1024, // a character with a small portrait
   charactersPerRoom: 12,
+  charactersPerOwner: 50,
+  newCharactersPerClientPerHour: 30,
   roomsPerClientPerHour: 10,
   writesPerClientPerMinute: 120,
   totalRooms: 5000,
@@ -116,7 +118,7 @@ async function route(req, env) {
     if (!key || !same(await sha256(`admin:${key}`), stored)) fail(403, 'wrong admin password')
     if (p === '/admin/stats' && m === 'GET') return json(await adminStats(env))
     const dm = /^\/admin\/rooms\/([A-Za-z0-9_-]+)$/.exec(p)
-    if (dm && m === 'DELETE') { await env.DB.prepare('DELETE FROM characters WHERE room_id = ?').bind(dm[1]).run(); await env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(dm[1]).run(); return json({ ok: true }) }
+    if (dm && m === 'DELETE') { await env.DB.prepare('UPDATE characters SET room_id = NULL, rev = rev + 1 WHERE room_id = ?').bind(dm[1]).run(); await env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(dm[1]).run(); return json({ ok: true }) }
     fail(404, 'not found')
   }
 
@@ -158,16 +160,66 @@ async function route(req, env) {
     return json({ room: { id: room.id, name, settings } })
   }
 
+  // ── my characters: every character is saved on the server, in a group or not. The owner key (X-Owner) is the
+  //    only credential; a phone's "cloud key" link carries it to restore the characters on another phone.
+  if (p === '/me/characters' && m === 'GET') {
+    await limit(env, req, 'reads', 600, 60e3)
+    const owner = await ownerHash(req)
+    const rows = (await env.DB.prepare('SELECT id, room_id, rev, updated_at, data FROM characters WHERE owner_hash = ? ORDER BY updated_at DESC LIMIT 100').bind(owner).all()).results
+    return json({ characters: rows.map((r) => ({ id: r.id, roomId: r.room_id, rev: r.rev, updatedAt: r.updated_at, data: JSON.parse(r.data) })) })
+  }
+  const me = /^\/me\/characters\/([A-Za-z0-9_-]+)$/.exec(p)
+  if (me) {
+    const id = me[1]
+    if (!ID.test(id)) fail(400, 'bad id')
+    const owner = await ownerHash(req)
+    const row = await env.DB.prepare('SELECT * FROM characters WHERE id = ?').bind(id).first()
+    if (row && !same(owner, row.owner_hash)) fail(403, 'not yours')
+    if (m === 'GET') {
+      if (!row) fail(404, 'no such character')
+      return json({ id, rev: row.rev, roomId: row.room_id, data: JSON.parse(row.data) })
+    }
+    if (m === 'PUT') {
+      await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
+      const body = await readJson(req, LIMITS.characterBytes + 1024)
+      const patch = body?.patch
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) fail(400, 'patch required')
+      if (row) {
+        const data = mergePatch(JSON.parse(row.data), patch)
+        data.id = id
+        const text = JSON.stringify(data)
+        if (text.length > LIMITS.characterBytes) fail(413, 'character too large')
+        const rev = await env.DB.prepare('UPDATE characters SET data = ?, rev = rev + 1, updated_at = ? WHERE id = ? RETURNING rev').bind(text, Date.now(), id).first('rev')
+        await count(env, 'player_write')
+        return json({ id, rev, roomId: row.room_id, data })
+      }
+      await newCharacterChecks(env, req, owner)
+      const data = { ...patch, id }
+      if (typeof data.name !== 'string' || !data.scores) fail(400, 'not a character')
+      const text = JSON.stringify(data)
+      if (text.length > LIMITS.characterBytes) fail(413, 'character too large')
+      await env.DB.prepare('INSERT INTO characters (id, room_id, owner_hash, data, rev, updated_at) VALUES (?, NULL, ?, ?, 1, ?)').bind(id, owner, text, Date.now()).run()
+      await count(env, 'character_saved')
+      return json({ id, rev: 1, roomId: null, data }, 201)
+    }
+    if (m === 'DELETE') {
+      // the owner deleted the character: gone from the server too
+      if (row) await env.DB.prepare('DELETE FROM characters WHERE id = ?').bind(id).run()
+      return json({ ok: true })
+    }
+  }
+
   const cm = /^\/rooms\/([A-Za-z0-9_-]+)\/characters\/([A-Za-z0-9_-]+)$/.exec(p)
   if (cm) {
     const { room, role } = await roleIn(env, req, cm[1])
     const id = cm[2]
     if (!ID.test(id)) fail(400, 'bad id')
     const row = await env.DB.prepare('SELECT * FROM characters WHERE id = ?').bind(id).first()
-    if (row && row.room_id !== room.id) fail(409, 'character is in another room')
+    if (row && row.room_id && row.room_id !== room.id) fail(409, 'character is in another room')
+    const inRoom = row && row.room_id === room.id
 
     if (m === 'GET') {
-      if (!row) fail(404, 'no such character')
+      if (!inRoom) fail(404, 'no such character')
       if (role !== 'dm' && !same(await ownerHash(req), row.owner_hash)) fail(403, 'not yours')
       return json({ id, rev: row.rev, data: JSON.parse(row.data) })
     }
@@ -179,18 +231,22 @@ async function route(req, env) {
       const body = await readJson(req, LIMITS.characterBytes + 1024)
       const patch = body?.patch
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) fail(400, 'patch required')
+      if (!inRoom) {
+        const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM characters WHERE room_id = ?').bind(room.id).first('n')
+        if (n >= LIMITS.charactersPerRoom) fail(507, 'room is full')
+      }
       if (row) {
+        // an update, or a saved character joining this room
         if (!same(owner, row.owner_hash)) fail(403, 'not yours')
         const data = mergePatch(JSON.parse(row.data), patch)
         data.id = id
         const text = JSON.stringify(data)
         if (text.length > LIMITS.characterBytes) fail(413, 'character too large')
-        const rev = await env.DB.prepare('UPDATE characters SET data = ?, rev = rev + 1, updated_at = ? WHERE id = ? RETURNING rev').bind(text, Date.now(), id).first('rev')
-        await count(env, 'player_write')
-        return json({ id, rev, data })
+        const rev = await env.DB.prepare('UPDATE characters SET data = ?, room_id = ?, rev = rev + 1, updated_at = ? WHERE id = ? RETURNING rev').bind(text, room.id, Date.now(), id).first('rev')
+        await count(env, inRoom ? 'player_write' : 'character_joined')
+        return json({ id, rev, data }, inRoom ? 200 : 201)
       }
-      const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM characters WHERE room_id = ?').bind(room.id).first('n')
-      if (n >= LIMITS.charactersPerRoom) fail(507, 'room is full')
+      await newCharacterChecks(env, req, owner)
       const data = { ...patch, id }
       if (typeof data.name !== 'string' || !data.scores) fail(400, 'not a character')
       const text = JSON.stringify(data)
@@ -203,7 +259,7 @@ async function route(req, env) {
     if (m === 'PATCH') {
       // DM quick actions: only these state fields
       if (role !== 'dm') fail(403, 'DM only')
-      if (!row) fail(404, 'no such character')
+      if (!inRoom) fail(404, 'no such character')
       await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
       const body = await readJson(req, 4096)
       const st = body?.state
@@ -224,14 +280,21 @@ async function route(req, env) {
     }
 
     if (m === 'DELETE') {
-      // the owner takes the character out of the room (it stays on the phone)
-      if (!row) return json({ ok: true })
+      // out of the room: the character stays saved (on the phone and on the server), just in no group
+      if (!inRoom) return json({ ok: true })
       if (role !== 'dm' && !same(await ownerHash(req), row.owner_hash)) fail(403, 'not yours')
-      await env.DB.prepare('DELETE FROM characters WHERE id = ?').bind(id).run()
+      await env.DB.prepare('UPDATE characters SET room_id = NULL, rev = rev + 1, updated_at = ? WHERE id = ?').bind(Date.now(), id).run()
       return json({ ok: true })
     }
   }
   fail(404, 'not found')
+}
+
+/** A brand-new character: limits per owner and per client. */
+async function newCharacterChecks(env, req, owner) {
+  await limit(env, req, 'new-character', LIMITS.newCharactersPerClientPerHour, 3600e3)
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM characters WHERE owner_hash = ?').bind(owner).first('n')
+  if (n >= LIMITS.charactersPerOwner) fail(507, 'too many characters')
 }
 
 /** Everything the owner's admin screen shows: totals, every group with its characters (a summary, not full sheets),
@@ -256,6 +319,7 @@ async function adminStats(env) {
   return {
     totals: { ...totals, activeRooms7d: rooms.results.filter((r) => Math.max(r.updated_at, lastActive.get(r.id) || 0) >= week).length, activeCharacters7d: chars.results.filter((c) => c.updated_at >= week).length },
     limits: LIMITS,
+    solo: (byRoom.get(null) || []).sort((a, b) => b.updatedAt - a.updatedAt),
     rooms: rooms.results.map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at, lastActive: Math.max(r.updated_at, lastActive.get(r.id) || 0), characters: byRoom.get(r.id) || [] })).sort((a, b) => b.lastActive - a.lastActive),
     usage: usage.results,
   }

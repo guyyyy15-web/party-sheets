@@ -8,6 +8,8 @@ const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails+
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
   for (const [devName, dev] of [['iPhone 13', devices['iPhone 13']], ['iPhone SE', devices['iPhone SE']]]) {
     const ctx = await b.newContext({ ...dev })
+    // the real site, but its test characters must not land in the real database: saving points at a closed port
+    await ctx.addInitScript(() => localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9')))
     const p = await ctx.newPage()
     const errs = []
     p.on('pageerror', (e) => errs.push(e.message))

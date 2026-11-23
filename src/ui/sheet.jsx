@@ -11,7 +11,7 @@ import { SpellsTab } from './spells.jsx'
 const KIND = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction', free: 'Free / on a hit', info: 'Good to know' }
 const THEMES = ['gold', 'red', 'jade', 'blue', 'violet', 'rose']
 
-export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete, group }) {
+export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete, group, onSaveNow }) {
   const d = useMemo(() => derive(ch), [ch])
   const [tab, setTab] = useState('turn')
   const [sources, setSources] = useState(null)
@@ -34,7 +34,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="All characters">‹</button>
         <Portrait ch={ch} size={44} />
-        <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}</p>{group && <SyncBadge id={ch.id} roomName={group.name} />}</div>
+        <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}</p><SyncBadge id={ch.id} roomName={group?.name} onSaveNow={onSaveNow} /></div>
         <button className="icon-btn" onClick={() => setSettings(true)} aria-label="Character settings">⚙</button>
       </header>
 
@@ -127,11 +127,11 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
           {group && (
             <div className="panel">
               <b>Group: {group.name}</b>
-              <p className="muted small">Your DM sees this sheet live and can mark damage, conditions and Inspiration.</p>
+              <p className="muted small">Your DM sees this sheet live and can mark damage, conditions and Inspiration. Leaving keeps the character saved.</p>
               <button className="btn ghost wide" onClick={() => { if (confirm(`Take ${ch.name} out of ${group.name}? The character stays on this phone.`)) { setSettings(false); group.onLeave() } }}>Leave the group</button>
             </div>
           )}
-          <button className="btn danger wide" onClick={() => { if (confirm(`Delete ${ch.name}? Export a backup first if you might want it back.`)) onDelete() }}>Delete character</button>
+          <button className="btn danger wide" onClick={() => { if (confirm(`Delete ${ch.name}? It's deleted from the server too. Export a backup first if you might want it back.`)) onDelete() }}>Delete character</button>
         </Sheet>
       )}
     </main>

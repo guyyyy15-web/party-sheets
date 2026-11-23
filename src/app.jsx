@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { newCharacter, derive } from './engine/engine.js'
 import { allCharacters, saveCharacter, deleteCharacter, getSetting, setSetting, backupText, backupName, parseBackupFile, backupRooms, shareFile } from './ui/store.js'
 import { parseLink } from './sync-core.js'
-import { joinRoom, listRooms, roomById, restoreRooms, shareCharacter, unshareCharacter, syncCharacter, fetchRoom } from './ui/sync.js'
+import { joinRoom, listRooms, roomById, restoreRooms, shareCharacter, unshareCharacter, syncCharacter, fetchRoom, deleteRemote, markPending, restoreFrom, restoreLink, syncStatus, onSyncStatus } from './ui/sync.js'
 import { RoomsSection } from './ui/rooms.jsx'
 import { DmView } from './ui/dm.jsx'
 import { AdminView } from './ui/admin.jsx'
@@ -42,6 +42,16 @@ function App() {
       const link = parseLink(location.hash)
       if (!link) return
       history.replaceState(null, '', location.pathname + location.search)
+      if (link.kind === 'restore') {
+        try {
+          const list = await restoreFrom(link.key)
+          for (const c of list) await saveCharacter(c)
+          setChars(await allCharacters())
+          setView({ name: 'home' })
+          say(list.length ? `Restored ${list.length} character${list.length > 1 ? 's' : ''} from the server.` : 'Nothing saved under that cloud key yet.')
+        } catch (e) { say(e.status === 0 ? 'No connection: open the link again when online.' : 'That cloud key link doesn\'t work.') }
+        return
+      }
       try {
         const r = await joinRoom(link)
         if (link.kind === 'dm') setView({ name: 'dm', roomId: r.id })
@@ -53,7 +63,8 @@ function App() {
     return () => window.removeEventListener('hashchange', open)
   }, [])
 
-  // shared characters: send changes a moment after they happen, and pick up the DM's changes every 10 s
+  // every character is saved on the server: changes go up a moment after they happen; a character in a group also
+  // picks up the DM's changes every 10 s (the others once a minute, in case it was changed on another phone)
   const runSync = useCallback(async (id) => {
     const next = await syncCharacter(id, () => charsRef.current?.find((c) => c.id === id))
     if (next) { setChars((list) => list.map((c) => (c.id === id ? next : c))); saveCharacter(next) }
@@ -63,9 +74,10 @@ function App() {
     let tick = 0
     const all = () => {
       if (document.hidden) return
-      for (const c of charsRef.current || []) if (c.roomId && !c.draft) runSync(c.id)
+      for (const c of charsRef.current || []) if (c.roomId || tick % 6 === 0) runSync(c.id)
       // the groups' names and settings (the DM may allow expansions), every 30 s
-      if (tick++ % 3 === 0) for (const r of listRooms()) fetchRoom(r, false).catch(() => {})
+      if (tick % 3 === 0) for (const r of listRooms()) fetchRoom(r, false).catch(() => {})
+      tick++
     }
     const t = setInterval(all, 10000)
     window.addEventListener('online', all); document.addEventListener('visibilitychange', all)
@@ -80,8 +92,10 @@ function App() {
   const update = useCallback((next) => {
     setChars((list) => list.map((c) => (c.id === next.id ? next : c)))
     saveCharacter(next)
-    if (next.roomId && !next.draft) schedule(next.id)
+    markPending(next.id)
+    schedule(next.id)
   }, [schedule])
+  const saveNow = useCallback((id) => { clearTimeout(timers.current[id]); return runSync(id) }, [runSync])
   const bring = async (c, r) => {
     try { const next = await shareCharacter(c, r); setChars((l) => l.map((x) => (x.id === c.id ? next : x))); saveCharacter(next); say(`${c.name} joined ${r.name}.`) }
     catch (e) { say(e.status === 0 ? 'No connection. Try again when online.' : e.status === 507 ? 'That group is full (12 characters).' : e.message) }
@@ -91,7 +105,8 @@ function App() {
     catch (e) { say(e.message) }
   }
   const remove = async (c) => {
-    if (c.roomId) await unshareCharacter(c).catch(() => {})
+    clearTimeout(timers.current[c.id])
+    await deleteRemote(c)
     await deleteCharacter(c.id); setChars((l) => l.filter((x) => x.id !== c.id))
   }
   const roll = async (req) => {
@@ -111,6 +126,7 @@ function App() {
     await saveCharacter(ch)
     setChars((l) => [ch, ...(l || [])])
     setView({ name: 'wizard', id: ch.id })
+    schedule(ch.id)
   }
   const exportAll = async () => {
     const r = await shareFile(backupText((chars || []).filter((c) => !c.draft), listRooms()), backupName())
@@ -123,6 +139,7 @@ function App() {
       restoreRooms(backupRooms(text))
       for (const c of list) await saveCharacter(c)
       setChars(await allCharacters())
+      for (const c of list) schedule(c.id)
       say(`Imported ${list.length} character${list.length > 1 ? 's' : ''}.`)
     } catch (e) { say(e.message) }
   }
@@ -132,19 +149,20 @@ function App() {
   let screen
   if (view.name === 'wizard' && current) {
     screen = <Wizard ch={current} setCh={update} settings={settings} throwOn={throwOn}
-      onCancel={async () => { if (!current.name && !current.classId) { await deleteCharacter(current.id); setChars((l) => l.filter((c) => c.id !== current.id)) } setView({ name: 'home' }) }}
+      onCancel={async () => { if (!current.name && !current.classId) await remove(current); setView({ name: 'home' }) }}
       onDone={() => { const d = derive(current); update({ ...current, draft: false, wizardStep: 0, state: { ...current.state, hp: d.hp.value } }); setView({ name: 'sheet', id: current.id }) }} />
   } else if (view.name === 'sheet' && current) {
     const room = current.roomId && roomById(current.roomId)
     screen = <CharacterSheet ch={current} setCh={update} roll={roll} mode={mode} setMode={setMode} onBack={() => setView({ name: 'home' })}
       group={current.roomId ? { name: room?.name || 'Group', onLeave: () => leave(current) } : null}
+      onSaveNow={() => saveNow(current.id)}
       onDelete={async () => { await remove(current); setView({ name: 'home' }) }} />
   } else if (view.name === 'admin') {
     screen = <AdminView onBack={() => { history.replaceState(null, '', location.pathname); setView({ name: 'home' }) }} />
   } else if (view.name === 'dm' && roomById(view.roomId)) {
     screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} />
   } else {
-    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onNew={start} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
+    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
   }
 
   return (
@@ -159,7 +177,7 @@ function App() {
   )
 }
 
-function Home({ chars, onOpen, onNew, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
+function Home({ chars, onOpen, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
   const file = useRef(null)
   const [table, setTable] = useState(false)
   const [installHidden, setInstallHidden] = useState(() => getSetting('installHidden', false))
@@ -199,10 +217,11 @@ function Home({ chars, onOpen, onNew, onBring, onDm, joined, onExport, onImport,
       ) : solo.length > 0 && (
         <ul className="char-list">{solo.map(card)}</ul>
       )}
+      <UnsavedBanner chars={chars} onSaveAll={onSaveAll} />
       <button className="btn primary wide big-btn" onClick={() => onNew()}>+ New character</button>
       <RoomsSection chars={real} renderChar={card} onDm={onDm} onNewInRoom={(r) => onNew(r)} onBring={onBring} joined={joined} />
       <section className="backup">
-        <p className="muted small">Characters live on this phone (and in their group, if they have one). {last ? `Last backup ${Math.round((Date.now() - last) / 86400e3)} days ago.` : 'No backup yet.'}</p>
+        <p className="muted small">Every character is saved on the server, and on this phone for when there's no signal. {last ? `Last backup ${Math.round((Date.now() - last) / 86400e3)} days ago.` : 'No backup yet.'}</p>
         <div className="row">
           <button className="btn ghost grow" onClick={onExport} disabled={!real.length}>⬆ Export all</button>
           <button className="btn ghost grow" onClick={() => file.current?.click()}>⬇ Import</button>
@@ -216,10 +235,50 @@ function Home({ chars, onOpen, onNew, onBring, onDm, joined, onExport, onImport,
           <p className="muted small">The DM decides. Standard array and point buy are always there.</p>
           <label className="row toggle"><input type="checkbox" checked={settings.showMath !== false} onChange={(e) => setSettings({ ...settings, showMath: e.target.checked })} /><span>Show the math on every roll (to learn to play with real dice)</span></label>
           <label className="row toggle"><input type="checkbox" checked={!!settings.expansions} onChange={(e) => setSettings({ ...settings, expansions: e.target.checked })} /><span>Allow subclasses from the expansion books (for characters not in a group; in a group, its DM decides)</span></label>
+          <div className="panel">
+            <b>Your cloud key</b>
+            <p className="muted small">Your characters are saved on the server under this phone's key. Open this link on a new phone to bring them all back. Keep it private: whoever has it can change your characters.</p>
+            <CloudKey />
+          </div>
           <button className="btn ghost wide" onClick={() => { setTable(false); location.hash = '#/admin' }}>Owner: admin screen</button>
         </Sheet>
       )}
     </main>
+  )
+}
+
+/** "2 characters not saved yet" with Save now, when something didn't reach the server. */
+function UnsavedBanner({ chars, onSaveAll }) {
+  const [, bump] = useState(0)
+  useEffect(() => onSyncStatus(() => bump((n) => n + 1)), [])
+  const stuck = chars.filter((c) => ['offline', 'error', 'pending'].includes(syncStatus(c.id)?.state) && Date.now() - syncStatus(c.id).at > 3000)
+  if (!stuck.length) return null
+  const offline = stuck.some((c) => syncStatus(c.id).state === 'offline')
+  return (
+    <div className="panel warn unsaved" role="status">
+      <b>{stuck.length} character{stuck.length > 1 ? 's' : ''} not saved on the server yet</b>
+      <p className="small">{offline ? 'No connection. Changes are kept on this phone and go up as soon as you\'re back online.' : syncStatus(stuck[0].id).msg || 'Tap to try again.'}</p>
+      <button className="btn primary" onClick={onSaveAll}>Save now</button>
+    </div>
+  )
+}
+
+function CloudKey() {
+  const [shown, setShown] = useState(false)
+  const [done, setDone] = useState(null)
+  const url = restoreLink()
+  const share = async () => {
+    try { if (navigator.share) { await navigator.share({ title: 'Party Sheets cloud key', url }); setDone('shared'); return } } catch (e) { if (e?.name === 'AbortError') return }
+    try { await navigator.clipboard.writeText(url); setDone('copied') } catch { setShown(true) }
+  }
+  return (
+    <>
+      {shown && <input className="input mono" readOnly value={url} aria-label="Cloud key link" onFocus={(e) => e.target.select()} />}
+      <div className="row">
+        <button className="btn ghost grow" onClick={() => setShown(!shown)}>{shown ? 'Hide' : 'Show the link'}</button>
+        <button className="btn ghost grow" onClick={share}>{done === 'copied' ? '✓ Copied' : 'Share / copy'}</button>
+      </div>
+    </>
   )
 }
 
