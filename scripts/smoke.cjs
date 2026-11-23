@@ -212,7 +212,9 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.screenshot({ path: `${shots}/07-home.png` })
 
   // backup round trip
+  await p.click('button[aria-label="Table settings"]')
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('text=Export all')])
+  await p.click('.sheet button[aria-label="Close"]')
   const file = path.join(shots, dl.suggestedFilename())
   await dl.saveAs(file)
   const ctx2 = await b.newContext({ ...devices['iPhone 13'] })

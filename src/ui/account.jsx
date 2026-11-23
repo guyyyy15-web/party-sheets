@@ -46,7 +46,7 @@ export function AccountSheet({ onClose, onSignedIn, onSignOut, hasCharacters }) 
       {tabs}
       {mode === 'signin' && (
         <>
-          <p className="muted small">Your characters and groups come back, and you go straight to your character.</p>
+          
           {pk && <button className="btn primary wide big-btn" disabled={!!busy} onClick={signinPk}>{busy === 'pk' ? 'Waiting for ' + passkeyName() + '…' : `Sign in with ${passkeyName()}`}</button>}
           {pk && <p className="or"><span>or</span></p>}
           {pwForm(signinPw, 'Sign in', false)}
@@ -54,7 +54,7 @@ export function AccountSheet({ onClose, onSignedIn, onSignOut, hasCharacters }) 
       )}
       {mode === 'create' && (
         <>
-          <p className="muted small">Save your characters and groups to an account, then sign in on any phone or computer. Your password never leaves this device: it unlocks an encrypted copy the server can't read.</p>
+          <p className="muted small">Sign in on any phone or computer. Your password never leaves this device.</p>
           {pk && <button className="btn primary wide big-btn" disabled={!!busy} onClick={createPk}>{busy === 'pk' ? 'Waiting for ' + passkeyName() + '…' : `Use ${passkeyName()}`}</button>}
           {pk && <p className="or"><span>and / or</span></p>}
           {pwForm(createPw, 'Create with username + password', true)}
@@ -67,7 +67,7 @@ export function AccountSheet({ onClose, onSignedIn, onSignOut, hasCharacters }) 
             <li><span className="grow">{passkeyName()}</span>{has('passkey') ? <span className="ok-line">✓ on</span> : pk ? <button className="btn small ghost" disabled={!!busy} onClick={createPk}>Add</button> : <span className="muted small">not on this device</span>}</li>
             <li><span className="grow">Username + password</span>{has('password') ? <span className="ok-line">✓ on</span> : <button className="btn small ghost" onClick={() => setMode('add-pw')}>Add</button>}</li>
           </ul>
-          <p className="muted small">Sign in on another phone with either one: your characters and groups come with you.</p>
+          
           <button className="btn danger wide" onClick={() => { if (confirm('Sign out on this phone? Your characters stay saved in your account, and come back when you sign in again.')) onSignOut() }}>Sign out on this phone</button>
         </>
       )}
@@ -86,10 +86,6 @@ export function AccountChip({ onOpen }) {
 export function SaveAccountNudge({ onOpen }) {
   if (signedIn()) return null
   return (
-    <div className="panel info nudge">
-      <b>Sign in on any phone</b>
-      <p className="small">Create an account with {passkeysAvailable() ? `${passkeyName()} or ` : ''}a username and password: your characters and groups follow you, and you land straight on your character.</p>
-      <button className="btn primary" onClick={onOpen}>Create an account</button>
-    </div>
+    <button className="nudge" onClick={onOpen}><span>Save to an account to sign in on any phone</span><b>Create ›</b></button>
   )
 }

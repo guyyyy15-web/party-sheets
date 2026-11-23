@@ -75,7 +75,6 @@ function HeroStep({ ch, setCh }) {
   return (
     <section>
       <h1 className="wiz-title">Who is your hero?</h1>
-      <p className="lead">A name, a face, and the level you start at. You can change all of it later.</p>
       <label className="field"><span>Name</span>
         <input className="input" value={ch.name} onChange={(e) => setCh({ ...ch, name: e.target.value.slice(0, 40) })} placeholder="e.g. Katsebushi" autoComplete="off" enterKeyHint="next" />
       </label>
@@ -112,7 +111,6 @@ function ClassStep({ ch, setCh }) {
   return (
     <section>
       <h1 className="wiz-title">Pick a class</h1>
-      <p className="lead">Your class is how you fight and what you're good at.</p>
       <details className="quiz">
         <summary>Not sure? Two quick questions</summary>
         {QUIZ.map((q, i) => (
@@ -140,7 +138,6 @@ function SpeciesStep({ ch, setCh, d }) {
   return (
     <section>
       <h1 className="wiz-title">Pick a species</h1>
-      <p className="lead">Where your hero comes from: senses, speed and a gift or two.</p>
       <div className="cards cols-2">
         {SPECIES.map((s) => (
           <button key={s.id} className={`card opt has-icon ${ch.speciesId === s.id ? 'on' : ''}`} aria-pressed={ch.speciesId === s.id} onClick={() => setCh({ ...ch, speciesId: s.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('species.'))) })}><GameIcon id={`species.${s.id}`} size={40} className="opt-icon" />
@@ -168,7 +165,6 @@ function BackgroundStep({ ch, setCh, d }) {
   return (
     <section>
       <h1 className="wiz-title">Pick a background</h1>
-      <p className="lead">What you did before adventuring. It raises your ability scores and gives a feat, skills and a tool.</p>
       <div className="cards">
         {BACKGROUNDS.map((b) => (
           <button key={b.id} className={`card opt has-icon ${ch.backgroundId === b.id ? 'on' : ''}`} aria-pressed={ch.backgroundId === b.id} onClick={() => setCh({ ...ch, backgroundId: b.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('background'))) })}><GameIcon id={`bg.${b.id}`} size={40} className="opt-icon" />
@@ -242,7 +238,7 @@ function AbilityStep({ ch, setCh, d, settings, throwOn }) {
   return (
     <section>
       <h1 className="wiz-title">Ability scores</h1>
-      <p className="lead">{cls ? `A ${cls.name} wants high ${cls.primary.join(' and ')}.` : ''} Background bonuses are added on top.</p>
+      {cls && <p className="lead">A {cls.name} wants high {cls.primary.join(' and ')}.</p>}
       <div className="seg">{methods.map(([m, l]) => <button key={m} aria-pressed={method === m} onClick={() => setMethod(m)}>{l}</button>)}</div>
       {method === 'roll' && (
         <div className="panel">
@@ -306,7 +302,7 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
   if (!list.length) return embedded ? null : <section><h1 className="wiz-title">Choices</h1><p className="lead">Nothing to choose here. Next!</p></section>
   return (
     <section>
-      {!embedded && <><h1 className="wiz-title">Your choices</h1><p className="lead">What your class and feats let you pick at level {ch.level}.</p></>}
+      {!embedded && <h1 className="wiz-title">Your choices</h1>}
       {list.map((c) => (
         <div key={c.key} className={`panel choice ${c.done ? 'done' : ''}`}>
           <h2>{c.featureName && c.featureName !== c.label ? `${c.featureName}: ` : ''}{c.label}{c.level > 1 ? <span className="muted small"> · level {c.level}</span> : null}</h2>
@@ -331,7 +327,7 @@ function GearStep({ ch, setCh, d }) {
   return (
     <section>
       <h1 className="wiz-title">Gear</h1>
-      <p className="lead">Take the {cls?.name} kit or gold to shop with. Your background adds 50 GP. You can change weapons and armor on the sheet.</p>
+      <p className="lead">The {cls?.name} kit, or gold to shop with.</p>
       <OptionCards count={1} picked={ch.equipment.pack ? [ch.equipment.pack] : []} onChange={([id]) => setPack(cls.packs.find((p) => p.id === id))}
         options={(cls?.packs || []).map((p) => ({ id: p.id, name: p.name, summary: p.items, icon: p.weapons?.length || p.armor ? 'ui.pack' : 'ui.gold' }))} />
       {cls?.armor.includes('shield') && (

@@ -413,3 +413,33 @@ h1 { letter-spacing: .01em; }
 .seg [role=tab][aria-selected='true'] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .home-top { gap: 8px; } .home-top .brand { min-width: 0; } .home-top .brand h1 { white-space: nowrap; }
 @media (max-width: 480px) { .home-top .brand p { display: none; } .home-top .brand h1 { font-size: 24px; } .home-top .logo { font-size: 30px; } .acct-chip { max-width: 38vw; padding: 0 12px; font-size: 14px; } }
+/* two-column choice cards: the icon sits above the name, so long names (Heavy Crossbow) never widen the page */
+.cards.cols-2 .card.has-icon { display: flex; flex-direction: column; }
+.cards.cols-2 .card.has-icon > .opt-icon { width: 28px; height: 28px; margin: 0 0 2px; }
+.opt-name, .opt-sum, .gear-card b { overflow-wrap: anywhere; min-width: 0; }
+
+/* ── calmer, easier to read (Guy): icon above, text below across the whole card; more space, fewer words */
+body { line-height: 1.5; }
+.cards { gap: 12px; }
+.card { padding: 16px; gap: 6px; }
+.card.has-icon, .cards.cols-2 .card.has-icon { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.card.has-icon > .opt-icon, .cards.cols-2 .card.has-icon > .opt-icon { width: 34px; height: 34px; margin: 0 0 2px; grid-row: auto; }
+.class-card.has-icon > .opt-icon { width: 40px; height: 40px; }
+.opt-name { font-size: 17px; line-height: 1.3; }
+.opt-sum { font-size: 14.5px; line-height: 1.5; }
+.facts { margin-top: 6px; }
+.panel { padding: 16px; margin: 16px 0; }
+.panel.choice h2 { margin-bottom: 8px; }
+.wiz-title { margin-bottom: 6px; } .lead { margin: 0 0 14px; }
+.home .char-list { gap: 12px; }
+.section-head { margin-top: 28px; }
+.legal { margin-top: 18px; }
+.home-top { margin-bottom: 18px; } .brand h1 { margin: 0; }
+.nudge { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; margin: 12px 0; padding: 10px 14px; border-radius: 12px; border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); background: none; color: var(--muted); font-size: 14.5px; text-align: left; }
+.nudge b { color: var(--accent); white-space: nowrap; }
+/* list rows with an icon: a smaller icon, the text gets the room */
+.attack .atk-icon { width: 26px; height: 26px; align-self: flex-start; margin-top: 2px; }
+.spell-name .sp-icon { width: 24px; height: 24px; }
+.pick .sp-icon { width: 24px; height: 24px; }
+.cond .cond-icon { width: 24px; height: 24px; }
+.gear-card { padding: 12px 8px; gap: 4px; }

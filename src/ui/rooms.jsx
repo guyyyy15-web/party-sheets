@@ -27,8 +27,8 @@ export function ShareLinks({ room, onClose }) {
   const inv = inviteLink(room), dm = dmLink(room)
   return (
     <Sheet title={`Links for ${room.name}`} onClose={onClose}>
-      {inv && <LinkRow label="Invite for players" hint="Players open it on their phone and bring a character. They see the party, not each other's sheets." url={inv} title={`Join ${room.name}`} text={`Join our group "${room.name}" on Party Sheets:`} />}
-      {dm && <LinkRow label="DM link (keep it for the DM)" hint="Opens the DM screen: every sheet, live, with quick HP, conditions and Inspiration. Send it only to the DM." url={dm} title={`DM: ${room.name}`} text={`DM screen for "${room.name}":`} />}
+      {inv && <LinkRow label="Invite for players" hint="For the players." url={inv} title={`Join ${room.name}`} text={`Join our group "${room.name}" on Party Sheets:`} />}
+      {dm && <LinkRow label="DM link (keep it for the DM)" hint="Only for the DM: every sheet, live." url={dm} title={`DM: ${room.name}`} text={`DM screen for "${room.name}":`} />}
     </Sheet>
   )
 }
@@ -43,7 +43,7 @@ export function NewRoomSheet({ onClose, onCreated }) {
   }
   return (
     <Sheet title="New group" onClose={onClose}>
-      <p className="muted small">One group per table. You get two links: an invite for the players and a link for the DM.</p>
+      
       <label className="field"><span>Group name</span><input className="input" value={name} maxLength={60} placeholder="Thursday night" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) go() }} autoFocus /></label>
       {err && <p className="warn-line" role="alert">{err}</p>}
       <button className="btn primary wide" disabled={!name.trim() || busy} onClick={go}>{busy ? 'Creating…' : 'Create group'}</button>
@@ -69,7 +69,7 @@ export function RoomsSection({ chars, renderChar, onDm, onNewInRoom, onBring, jo
   return (
     <section className="rooms" aria-label="Groups">
       <div className="section-head"><h2>Groups</h2><button className="btn ghost small" onClick={() => setCreate(true)}>+ New group</button></div>
-      {rooms.length === 0 && <p className="muted small">Playing with a group? Make a group and send the invite: the DM sees everyone's sheet live. Or open an invite link someone sent you.</p>}
+      {rooms.length === 0 && <p className="muted small">Make a group, or open an invite someone sent you.</p>}
       {rooms.map((r) => {
         const own = mine(r), others = (party[r.id] || []).filter((p) => !own.some((c) => c.id === p.id))
         return (
@@ -79,7 +79,7 @@ export function RoomsSection({ chars, renderChar, onDm, onNewInRoom, onBring, jo
               {r.dmKey && <button className="btn small primary" onClick={() => onDm(r)}>DM screen</button>}
               <button className="btn small ghost" onClick={() => setShare(r)} aria-label={`Links for ${r.name}`}>Links</button>
             </div>
-            {joined === r.id && <p className="panel info small" role="status">You joined <b>{r.name}</b>. Bring a character or build a new one for this group.</p>}
+            {joined === r.id && <p className="ok-line small" role="status">You joined {r.name}.</p>}
             {own.length > 0 && <ul className="char-list">{own.map(renderChar)}</ul>}
             {others.length > 0 && <p className="muted small party-line">Also here: {others.map((p) => `${p.name} (${p.level})`).join(', ')}</p>}
             {r.playerKey && (
@@ -95,7 +95,7 @@ export function RoomsSection({ chars, renderChar, onDm, onNewInRoom, onBring, jo
       {create && <NewRoomSheet onClose={() => setCreate(false)} onCreated={(r) => { setCreate(false); setRooms(listRooms()); setShare(r) }} />}
       {bring && (
         <Sheet title={`Bring to ${bring.name}`} onClose={() => setBring(null)}>
-          <p className="muted small">A character is in one group at a time. It stays on your phone too, and keeps working offline.</p>
+          
           <ul className="char-list">{free.map((c) => <li key={c.id}><button className="btn wide ghost" onClick={() => { onBring(c, bring); setBring(null) }}>{c.name || 'Unnamed hero'}</button></li>)}</ul>
         </Sheet>
       )}

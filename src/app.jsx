@@ -15,8 +15,6 @@ import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
 import { Sheet, themeOf } from './ui/common.jsx'
 
-const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-const standalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true
 
 function App() {
   const [chars, setChars] = useState(null)
@@ -208,7 +206,6 @@ function App() {
 function Home({ chars, onOpen, onAccount, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
   const file = useRef(null)
   const [table, setTable] = useState(false)
-  const [installHidden, setInstallHidden] = useState(() => getSetting('installHidden', false))
   const last = getSetting('lastBackupAt', null)
   const real = chars.filter((c) => !c.draft || c.name)
   const known = new Set(listRooms().map((r) => r.id))
@@ -226,22 +223,14 @@ function Home({ chars, onOpen, onAccount, onNew, onSaveAll, onBring, onDm, joine
   return (
     <main className="home">
       <header className="home-top">
-        <div className="brand"><span className="logo" aria-hidden>🎲</span><div><h1>Party Sheets</h1><p className="muted small">Character sheets for our table</p></div></div>
+        <div className="brand"><span className="logo" aria-hidden>🎲</span><h1>Party Sheets</h1></div>
         <span className="top-actions"><AccountChip onOpen={onAccount} /><button className="icon-btn" onClick={() => setTable(true)} aria-label="Table settings">⚙</button></span>
       </header>
-      {isIOS() && !standalone() && !installHidden && (
-        <div className="panel info">
-          <button className="icon-btn corner" aria-label="Hide" onClick={() => { setSetting('installHidden', true); setInstallHidden(true) }}>✕</button>
-          <b>Add it to your Home Screen</b>
-          <p className="small">Share ⎋ → "Add to Home Screen". It opens like an app, works with no signal, and keeps your characters safe from Safari's clean-ups.</p>
-        </div>
-      )}
       {real.length === 0 ? (
         <div className="empty">
           <div className="empty-art" aria-hidden>🐉</div>
           <h2>No heroes yet</h2>
-          <p className="muted">Played before? <button className="linkish" onClick={onAccount}>Sign in</button> and your characters come back.</p>
-          <p className="muted">Build one in a few minutes: class, species, background, and dice for your scores.</p>
+          <p className="muted">Played before? <button className="linkish" onClick={onAccount}>Sign in</button></p>
         </div>
       ) : solo.length > 0 && (
         <ul className="char-list">{solo.map(card)}</ul>
@@ -250,27 +239,27 @@ function Home({ chars, onOpen, onAccount, onNew, onSaveAll, onBring, onDm, joine
       {real.some((c) => !c.draft) && <SaveAccountNudge onOpen={onAccount} />}
       <button className="btn primary wide big-btn" onClick={() => onNew()}>+ New character</button>
       <RoomsSection chars={real} renderChar={card} onDm={onDm} onNewInRoom={(r) => onNew(r)} onBring={onBring} joined={joined} />
-      <section className="backup">
-        <p className="muted small">Every character is saved on the server, and on this phone for when there's no signal. {last ? `Last backup ${Math.round((Date.now() - last) / 86400e3)} days ago.` : 'No backup yet.'}</p>
-        <div className="row">
-          <button className="btn ghost grow" onClick={onExport} disabled={!real.length}>⬆ Export all</button>
-          <button className="btn ghost grow" onClick={() => file.current?.click()}>⬇ Import</button>
-        </div>
-        <input ref={file} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f) }} aria-label="Backup file" />
-      </section>
-      <p className="muted small legal">Uses rules from the System Reference Document 5.2 by Wizards of the Coast LLC, available under CC-BY-4.0. Not affiliated with Wizards of the Coast. Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>, CC BY 3.0.</p>
+      <input ref={file} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f) }} aria-label="Backup file" />
       {table && (
         <Sheet title="Table settings" onClose={() => setTable(false)}>
           <label className="row toggle"><input type="checkbox" checked={settings.allowRoll !== false} onChange={(e) => setSettings({ ...settings, allowRoll: e.target.checked })} /><span>Allow rolling ability scores (4d6) in the wizard</span></label>
-          <p className="muted small">The DM decides. Standard array and point buy are always there.</p>
-          <label className="row toggle"><input type="checkbox" checked={settings.showMath !== false} onChange={(e) => setSettings({ ...settings, showMath: e.target.checked })} /><span>Show the math on every roll (to learn to play with real dice)</span></label>
-          <label className="row toggle"><input type="checkbox" checked={!!settings.expansions} onChange={(e) => setSettings({ ...settings, expansions: e.target.checked })} /><span>Allow subclasses from the expansion books (for characters not in a group; in a group, its DM decides)</span></label>
+          <label className="row toggle"><input type="checkbox" checked={settings.showMath !== false} onChange={(e) => setSettings({ ...settings, showMath: e.target.checked })} /><span>Show the math on every roll</span></label>
+          <label className="row toggle"><input type="checkbox" checked={!!settings.expansions} onChange={(e) => setSettings({ ...settings, expansions: e.target.checked })} /><span>Expansion subclasses (characters not in a group)</span></label>
           <div className="panel">
             <b>Your cloud key</b>
-            <p className="muted small">Your characters are saved on the server under this phone's key. Open this link on a new phone to bring them all back. Keep it private: whoever has it can change your characters.</p>
+            <p className="muted small">Opens your characters on another phone. Keep it private.</p>
             <CloudKey />
           </div>
+          <div className="panel">
+            <b>Backup file</b>
+            <p className="muted small">{last ? `Last one ${Math.round((Date.now() - last) / 86400e3)} days ago.` : 'None yet.'}</p>
+            <div className="row">
+              <button className="btn ghost grow" onClick={onExport} disabled={!real.length}>⬆ Export all</button>
+              <button className="btn ghost grow" onClick={() => file.current?.click()}>⬇ Import</button>
+            </div>
+          </div>
           <button className="btn ghost wide" onClick={() => { setTable(false); location.hash = '#/admin' }}>Owner: admin screen</button>
+          <p className="muted small legal">Rules: System Reference Document 5.2 by Wizards of the Coast LLC, CC-BY-4.0; not affiliated with Wizards of the Coast. Icons: Lorc, Delapouite and contributors, <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>, CC BY 3.0.</p>
         </Sheet>
       )}
     </main>

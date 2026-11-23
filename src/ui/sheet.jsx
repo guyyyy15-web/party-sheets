@@ -127,7 +127,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
           {group && (
             <div className="panel">
               <b>Group: {group.name}</b>
-              <p className="muted small">Your DM sees this sheet live and can mark damage, conditions and Inspiration. Leaving keeps the character saved.</p>
+              <p className="muted small">Your DM sees this sheet live.</p>
               <button className="btn ghost wide" onClick={() => { if (confirm(`Take ${ch.name} out of ${group.name}? The character stays on this phone.`)) { setSettings(false); group.onLeave() } }}>Leave the group</button>
             </div>
           )}
@@ -227,7 +227,7 @@ function FeaturesTab({ d }) {
       {block(d.subclass?.name || 'Subclass', by('subclass'))}
       {block(d.species?.name || 'Species', by('species'))}
       {block('Feats', [...by('background'), ...by('feat')])}
-      <p className="muted small legal">Rules summarised from the SRD 5.2 by Wizards of the Coast, CC-BY-4.0. The book wins.</p>
+      
     </section>
   )
 }
