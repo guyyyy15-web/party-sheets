@@ -3,9 +3,10 @@ import React, { useState, useMemo } from 'react'
 import { derive, rest, spendHitDie } from '../engine/engine.js'
 import { CONDITIONS, EXHAUSTION, INSPIRATION } from '../content/conditions.js'
 import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTERY } from '../content/basics.js'
-import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend } from './common.jsx'
+import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend, themeOf } from './common.jsx'
 import { ChoicesStep, Portrait } from './wizard.jsx'
 import { SyncBadge } from './rooms.jsx'
+import { SpellsTab } from './spells.jsx'
 
 const KIND = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction', free: 'Free / on a hit', info: 'Good to know' }
 const THEMES = ['gold', 'red', 'jade', 'blue', 'violet', 'rose']
@@ -24,7 +25,9 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const used = (id) => ch.state.used?.[id] || 0
   const spend = (id, n = 1) => setState({ used: { ...ch.state.used, [id]: Math.max(0, used(id) + n) } })
   const show = (title, x) => setSources({ title, total: x.value, sources: x.sources })
-  const theme = ch.theme || { fighter: 'red', rogue: 'violet', monk: 'gold' }[ch.classId] || 'gold'
+  const theme = themeOf(ch)
+  // spell slots live in the Spells tab
+  const sideRes = d.resources.filter((r) => !(d.spellcasting && (/^slot-\d$/.test(r.id) || r.id === 'pact-slots')))
 
   return (
     <main className={`sheet-page theme-${theme}`}>
@@ -68,9 +71,9 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       </section>
       {d.exhaustion > 0 && <p className="warn-line" role="status">Exhaustion {d.exhaustion}: -{d.d20Pen} on every d20 test and -{d.exhaustion * EXHAUSTION.speedPerLevel} ft speed (already in the numbers below).</p>}
 
-      {d.resources.length > 0 && (
+      {sideRes.length > 0 && (
         <section className="resources">
-          {d.resources.map((r) => (
+          {sideRes.map((r) => (
             <div key={r.id} className="res">
               <span className="res-name">{r.name}<small>{r.reset === 'short' ? 'short rest' : 'long rest'}</small></span>
               <span className="pips">{Array.from({ length: r.max }).map((_, i) => (
@@ -82,6 +85,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
         </section>
       )}
 
+      {d.spellcasting?.concentration && <button className="banner conc-banner" onClick={() => setTab('spells')}>◎ Concentrating: {d.spellcasting.concentration.name} ›</button>}
       {d.pending.length > 0 && <button className="banner" onClick={() => setLevelUp('choices')}>⚠ {d.pending.length} choice{d.pending.length > 1 ? 's' : ''} to make ›</button>}
 
       <section className="rests">
@@ -94,7 +98,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       <div className="sheet-main">
       <nav className="tabs" role="tablist">
-        {[['turn', 'My Turn'], ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
+        {[['turn', 'My Turn'], ...(d.spellcasting ? [['spells', 'Spells']] : []), ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{l}</button>
         ))}
       </nav>
@@ -102,6 +106,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       <div className="seg mode">{[['dis', 'Disadvantage'], ['normal', 'Normal'], ['adv', 'Advantage']].map(([m, l]) => <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}>{l}</button>)}</div>
 
       {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} used={used} spend={spend} setState={setState} hp={hp} show={show} />}
+      {tab === 'spells' && d.spellcasting && <SpellsTab d={d} ch={ch} setCh={setCh} setState={setState} roll={roll} mode={mode} show={show} />}
       {tab === 'checks' && <ChecksTab d={d} roll={roll} mode={mode} show={show} />}
       {tab === 'features' && <FeaturesTab d={d} />}
       {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} />}
@@ -265,6 +270,7 @@ export function HpSheet({ d, ch, hp, setState, onClose }) {
         <button className="btn ok grow" disabled={!v} onClick={() => { setState({ hp: Math.min(d.hp.value, hp + v) }); onClose() }}>Heal</button>
         <button className="btn ghost grow" disabled={!v} onClick={() => { setState({ temp: Math.max(ch.state.temp || 0, v) }); onClose() }}>Temp HP</button>
       </div>
+      {ch.state.concentration && <p className="warn-line">Concentrating: taking damage means a CON save (DC 10 or half the damage, whichever is higher) or the spell ends.</p>}
       {hp === 0 && (
         <div className="panel"><h2>Death saves</h2>
           <div className="row"><span className="grow">Successes</span><Stepper value={ch.state.deathSaves?.ok || 0} min={0} max={3} label="Successes" onChange={(ok) => setState({ deathSaves: { ...ch.state.deathSaves, ok } })} /></div>

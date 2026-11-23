@@ -1,5 +1,6 @@
 // Fighter, Rogue and Monk from the SRD 5.2 (CC-BY-4.0), levels 1-20, with the SRD subclass of each, summarised.
 import { FEATS } from './feats.js'
+import { CASTER_CLASSES } from './casters.js'
 import { WEAPONS } from './basics.js'
 
 const ASI_LEVELS = [4, 8, 12, 16]
@@ -200,6 +201,6 @@ export const MONK = {
   }],
 }
 
-export const CLASSES = [FIGHTER, ROGUE, MONK]
+export const CLASSES = [FIGHTER, ROGUE, MONK, ...CASTER_CLASSES]
 export const classById = (id) => CLASSES.find((c) => c.id === id) || null
 export { ASI_LEVELS }

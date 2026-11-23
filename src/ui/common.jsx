@@ -133,3 +133,7 @@ export function Stepper({ value, onChange, min = -Infinity, max = Infinity, labe
     </span>
   )
 }
+
+/** Each class's default color (a character can pick its own). */
+export const CLASS_THEME = { barbarian: 'red', bard: 'rose', cleric: 'gold', druid: 'jade', fighter: 'red', monk: 'gold', paladin: 'blue', ranger: 'jade', rogue: 'violet', sorcerer: 'rose', warlock: 'violet', wizard: 'blue' }
+export const themeOf = (ch) => ch.theme || CLASS_THEME[ch.classId] || 'gold'

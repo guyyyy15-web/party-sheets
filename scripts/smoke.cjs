@@ -183,7 +183,30 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
     picks: { choices: ['Acrobatics', 'Deception', 'Perception', 'Investigation', 'Expertise|Stealth', 'Expertise|Sleight of Hand', 'Dagger', 'Shortbow'] } })
   ok(await p.isVisible('.action:has-text("Sneak Attack")'), 'rogue has Sneak Attack')
   await p.click('button[aria-label="All characters"]')
-  ok((await p.$$('.char-card')).length === 3, 'home lists 3 heroes')
+
+  // a spellcaster: choose spells, cast one with a slot, roll its healing
+  await buildHero(p, { name: 'Mira', cls: 'Cleric', species: 'Dwarf', bg: 'Acolyte', method: 'standard',
+    picks: { choices: ['Medicine', 'Persuasion', 'Protector'] } })
+  await p.click('[role=tab]:has-text("Spells")')
+  ok(/^[0-9]+$/.test(await p.textContent('.sc-head .stat-card b')), 'cleric: spell save DC shown')
+  await p.click('.banner:has-text("Choose your spells")')
+  for (const n of ['Sacred Flame', 'Guidance', 'Spare the Dying']) await p.click(`.pick:has(b:text-is("${n}"))`)
+  await p.click('.sp-tabs button:text-is("1st")')
+  for (const n of ['Bless', 'Cure Wounds', 'Healing Word', 'Shield of Faith']) await p.click(`.pick:has(b:text-is("${n}"))`)
+  ok(await p.isDisabled('.pick:has(b:text-is("Command")) input'), 'cleric: no more than the prepared limit')
+  await p.screenshot({ path: `${shots}/08-spell-picker.png` })
+  await p.click('.sheet button:text-is("Done")')
+  ok(!(await p.isVisible('.banner:has-text("Choose your spells")')), 'cleric: all spells chosen')
+  await p.click('.spell:has-text("Cure Wounds") button:text-is("Cast")')
+  await p.click('.sheet button:has-text("1st-level slot")')
+  await p.click('.sheet button:has-text("Heal 2d8")')
+  await p.waitForTimeout(4000)
+  await p.mouse.click(5, 5)
+  if (await p.isVisible('.sheet button:text-is("Done")')) await p.click('.sheet button:text-is("Done")')
+  ok((await p.textContent('.slots .res small')).startsWith('1 of 2'), 'cleric: casting used a 1st-level slot')
+  await p.screenshot({ path: `${shots}/09-spells.png`, fullPage: true })
+  await p.click('button[aria-label="All characters"]')
+  ok((await p.$$('.char-card')).length === 4, 'home lists 4 heroes')
   await p.screenshot({ path: `${shots}/07-home.png` })
 
   // backup round trip
@@ -195,8 +218,8 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await q.goto(URL)
   await q.waitForSelector('text=No heroes yet')
   await q.setInputFiles('input[type=file]', file)
-  await q.waitForSelector('text=Imported 3 characters')
-  ok((await q.$$('.char-card')).length === 3, 'a new phone imports all 3 from the backup')
+  await q.waitForSelector('text=Imported 4 characters')
+  ok((await q.$$('.char-card')).length === 4, 'a new phone imports all 4 from the backup')
 
   // offline
   await p.evaluate(() => navigator.serviceWorker.ready)

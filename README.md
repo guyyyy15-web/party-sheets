@@ -22,6 +22,17 @@ Dice from any screen, thrown on the screen with real physics.
   the 14 conditions and Exhaustion (-2 per level on d20 tests, -5 ft speed, -1 level per long rest), and species
   abilities as actions (Giant Ancestry, Large Form, Stonecunning, Draconic Flight, Relentless Endurance, lineage spells)
 
+## Spellcasters (phase 2)
+
+- All 12 SRD classes: Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock,
+  Wizard, each with its SRD subclass, levels 1 to 20. 339 SRD spells.
+- **Spells tab:** spell save DC and spell attack with their math (8 + ability modifier + proficiency), slots as pips
+  (Pact Magic for the Warlock, back on a short rest), concentration with a reminder when you take damage, cantrips
+  and prepared spells (always-prepared spells from the subclass don't count).
+- Cast with a chosen slot (a higher slot adds its dice), or as a ritual; then roll the spell attack and the
+  damage or healing. Cantrip dice grow at character levels 5, 11 and 17.
+- The SRD has one subclass per class and 18 feats; others are in the Player's Handbook and can't be included.
+
 ## Groups (phase 2)
 
 - Each playing group gets its own **group**: an invite link for the players and a separate link for its DM.

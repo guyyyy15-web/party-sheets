@@ -327,3 +327,34 @@ h1 { letter-spacing: .01em; }
 .dm-actions { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; }
 @media (min-width: 700px) { .dm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1200px) { .dm-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } #root:has(.dm-page) { max-width: 1500px; } }
+.cls-barbarian { --accent: #c7614f; } .cls-bard { --accent: #c97a9b; } .cls-cleric { --accent: #c9a35c; } .cls-druid { --accent: #79a179; }
+.cls-paladin { --accent: #6f98c4; } .cls-ranger { --accent: #79a179; } .cls-sorcerer { --accent: #c97a9b; } .cls-warlock { --accent: #9c82c9; } .cls-wizard { --accent: #6f98c4; }
+
+/* spells */
+.sc-head { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+.stat-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 76px; padding: 8px 4px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); text-align: center; }
+.stat-card b { font: 700 26px var(--mono); } .stat-card .muted { font-size: 11px; }
+.conc, .slots { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; margin: 10px 0; }
+.conc { display: flex; gap: 10px; align-items: center; border-color: var(--info); } .conc .muted { display: block; margin-top: 2px; }
+.conc-banner { border-color: var(--info); background: color-mix(in srgb, var(--info) 16%, transparent); }
+.sp-level { font-size: 17px; margin: 18px 0 6px; font-family: var(--display); } .sp-level .muted { font-family: var(--sans, inherit); }
+.spell-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.spell { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px 8px; }
+.spell.open { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.spell-name { display: block; width: 100%; min-height: 44px; background: none; border: 0; padding: 4px 0; text-align: left; color: var(--text); }
+.spell-name b { display: block; font-size: 16.5px; }
+.sp-tags { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.sp-tags .tag-c, .sp-tags .tag-r { border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; color: var(--text); }
+.sp-tags .tag-c { border-color: var(--info); } .sp-tags .tag-save { color: var(--k-ability, #9fb6e8); } .sp-tags .tag-always { color: var(--accent); }
+.spell-body p { margin: 6px 0; }
+.spell-actions { display: flex; flex-wrap: wrap; gap: 6px; } .spell-actions:empty { display: none; }
+.cast-options { display: grid; gap: 6px; margin: 8px 0; }
+.counter { display: flex; gap: 12px; font: 600 15px var(--mono); margin: 0 0 6px; } .counter .full { color: var(--ok); }
+.sp-tabs { overflow-x: auto; flex-wrap: nowrap; } .sp-tabs button { flex: 0 0 auto; min-width: 56px; }
+.pick-list { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; }
+.pick { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
+.pick.on { border-color: var(--accent); } .pick.off { opacity: .55; }
+.pick input { width: 22px; height: 22px; margin-top: 2px; flex: none; accent-color: var(--accent); }
+.pick b { display: block; } .pick .muted { display: block; margin-top: 4px; }
+.tabs { overflow-x: auto; }
+.sp-tabs button[aria-selected='true'] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 20%, transparent); }
