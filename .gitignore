@@ -1,2 +1,4 @@
 screenshots/
 node_modules/
+server/.wrangler/
+server/node_modules/
