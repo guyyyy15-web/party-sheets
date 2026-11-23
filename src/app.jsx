@@ -7,6 +7,9 @@ import { joinRoom, listRooms, roomById, restoreRooms, shareCharacter, unshareCha
 import { RoomsSection } from './ui/rooms.jsx'
 import { DmView } from './ui/dm.jsx'
 import { AdminView } from './ui/admin.jsx'
+import { AccountSheet, AccountChip, SaveAccountNudge } from './ui/account.jsx'
+import { refreshAccount, signOutLocal } from './ui/account.js'
+import { ownerKey } from './ui/sync.js'
 import { DiceTray, performRoll, throwDefault, load3d, RollCard } from './ui/dice.jsx'
 import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
@@ -30,10 +33,14 @@ function App() {
   const busy = useRef(false)
   const [joined, setJoined] = useState(null) // a group just joined through its invite link
   const charsRef = useRef(null)
+  const prevOwnerRef = useRef(null)
   charsRef.current = chars
   const timers = useRef({})
 
   useEffect(() => { allCharacters().then(setChars); navigator.storage?.persist?.().catch(() => {}) }, [])
+  // the account keeps the player's groups: re-save it when they change
+  useEffect(() => { const f = () => refreshAccount(); window.addEventListener('ps-rooms', f); return () => window.removeEventListener('ps-rooms', f) }, [])
+  const [acct, setAcct] = useState(false)
 
   // an invite or DM link: check it, remember the group, and clear the key from the address bar
   useEffect(() => {
@@ -109,6 +116,26 @@ function App() {
     await deleteRemote(c)
     await deleteCharacter(c.id); setChars((l) => l.filter((x) => x.id !== c.id))
   }
+  // signed in on this phone: its characters come back from the server, and we go straight to the latest one
+  const onSignedIn = async (body, prevOwner) => {
+    // characters made on this phone before signing in keep working under their own key
+    for (const c of charsRef.current || []) if (!c.ownerKey && prevOwner && prevOwner !== body.owner) { const n = { ...c, ownerKey: prevOwner }; await saveCharacter(n) }
+    let list = []
+    try { list = await restoreFrom(body.owner) } catch (e) { say(e.status === 0 ? 'Signed in. Your characters load when you\'re online.' : e.message) }
+    for (const c of list) await saveCharacter(c)
+    const all = await allCharacters()
+    setChars(all)
+    setAcct(false)
+    const latest = list.filter((c) => !c.draft).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0]
+    say(`Welcome back${body.username ? `, ${body.username}` : ''}!${list.length ? ` ${list.length} character${list.length > 1 ? 's' : ''} loaded.` : ''}`)
+    setView(latest ? { name: 'sheet', id: latest.id } : { name: 'home' })
+  }
+  const onSignOut = async () => {
+    for (const c of chars || []) await deleteCharacter(c.id)
+    signOutLocal()
+    setChars([]); setAcct(false); setView({ name: 'home' })
+    say('Signed out on this phone. Your characters are saved in your account.')
+  }
   const roll = async (req) => {
     if (busy.current) return null
     busy.current = true
@@ -162,7 +189,7 @@ function App() {
   } else if (view.name === 'dm' && roomById(view.roomId)) {
     screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} />
   } else {
-    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
+    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
   }
 
   return (
@@ -172,12 +199,13 @@ function App() {
       {tray && <DiceTray pool={pool} setPool={setPool} mod={poolMod} setMod={setPoolMod} throwOn={throwOn} setThrowOn={setThrowOn} last={log[0]}
         onClose={() => setTray(false)} onThrow={() => { setTray(false); roll({ kind: 'pool', pool, mod: poolMod }) }} />}
       {shown && <RollCard e={shown} onClose={() => setShown(null)} />}
+      {acct && <AccountSheet onClose={() => setAcct(false)} hasCharacters={(chars || []).some((c) => !c.draft)} onSignedIn={(b) => onSignedIn(b, prevOwnerRef.current)} onSignOut={onSignOut} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </>
   )
 }
 
-function Home({ chars, onOpen, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
+function Home({ chars, onOpen, onAccount, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
   const file = useRef(null)
   const [table, setTable] = useState(false)
   const [installHidden, setInstallHidden] = useState(() => getSetting('installHidden', false))
@@ -199,7 +227,7 @@ function Home({ chars, onOpen, onNew, onSaveAll, onBring, onDm, joined, onExport
     <main className="home">
       <header className="home-top">
         <div className="brand"><span className="logo" aria-hidden>🎲</span><div><h1>Party Sheets</h1><p className="muted small">Character sheets for our table</p></div></div>
-        <button className="icon-btn" onClick={() => setTable(true)} aria-label="Table settings">⚙</button>
+        <span className="top-actions"><AccountChip onOpen={onAccount} /><button className="icon-btn" onClick={() => setTable(true)} aria-label="Table settings">⚙</button></span>
       </header>
       {isIOS() && !standalone() && !installHidden && (
         <div className="panel info">
@@ -212,12 +240,14 @@ function Home({ chars, onOpen, onNew, onSaveAll, onBring, onDm, joined, onExport
         <div className="empty">
           <div className="empty-art" aria-hidden>🐉</div>
           <h2>No heroes yet</h2>
+          <p className="muted">Played before? <button className="linkish" onClick={onAccount}>Sign in</button> and your characters come back.</p>
           <p className="muted">Build one in a few minutes: class, species, background, and dice for your scores.</p>
         </div>
       ) : solo.length > 0 && (
         <ul className="char-list">{solo.map(card)}</ul>
       )}
       <UnsavedBanner chars={chars} onSaveAll={onSaveAll} />
+      {real.some((c) => !c.draft) && <SaveAccountNudge onOpen={onAccount} />}
       <button className="btn primary wide big-btn" onClick={() => onNew()}>+ New character</button>
       <RoomsSection chars={real} renderChar={card} onDm={onDm} onNewInRoom={(r) => onNew(r)} onBring={onBring} joined={joined} />
       <section className="backup">

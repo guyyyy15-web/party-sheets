@@ -36,11 +36,12 @@ function keepRoom(r) {
   const old = list.find((x) => x.id === r.id)
   const next = old ? list.map((x) => (x.id === r.id ? { ...x, ...Object.fromEntries(Object.entries(r).filter(([, v]) => v != null)) } : x)) : [...list, r]
   setSetting('rooms', next)
+  window.dispatchEvent(new Event('ps-rooms'))
   return next.find((x) => x.id === r.id)
 }
 /** Groups from a backup file: added when this phone doesn't know them yet. */
 export function restoreRooms(list) { for (const r of list) if (!roomById(r.id)) keepRoom({ id: r.id, name: r.name, playerKey: r.playerKey, dmKey: r.dmKey }) }
-export const forgetRoom = (id) => setSetting('rooms', listRooms().filter((r) => r.id !== id))
+export const forgetRoom = (id) => { setSetting('rooms', listRooms().filter((r) => r.id !== id)); window.dispatchEvent(new Event('ps-rooms')) }
 const roomKey = (r) => r.dmKey || r.playerKey
 
 export async function createRoom(name) {

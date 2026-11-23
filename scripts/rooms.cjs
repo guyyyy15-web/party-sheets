@@ -128,6 +128,55 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     ok(await until(async () => (await D.textContent('.dm-card:has-text("Aria") .dm-hp b')).startsWith(String(ariaMax - 2)), 15000), 'DM: sees the heal made offline')
     await A.p.screenshot({ path: `${shots}/rooms-4-sheet.png` })
 
+    // accounts: phone A saves an account with a username + password and with "Face ID" (a virtual authenticator with
+    // PRF, the same thing a passkey does on an iPhone); a new phone signs in and lands on Aria's sheet, with the groups
+    const cdpA = await A.ctx.newCDPSession(A.p)
+    await cdpA.send('WebAuthn.enable')
+    const { authenticatorId: authA } = await cdpA.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, hasPrf: true, automaticPresenceSimulation: true } })
+    await A.p.click('button[aria-label="All characters"]')
+    await A.p.click('.acct-chip')
+    await A.p.click('[role=tab]:has-text("Create one")')
+    await A.p.fill('input[autocomplete="username"]', 'aria_player'); await A.p.fill('input[type=password]', 'secret-password-1')
+    await A.p.click('button:has-text("Create with username + password")')
+    ok(await until(() => A.p.isVisible('text=✓ on')), 'phone A: account created with username + password')
+    await A.p.click('.acct-methods li:has-text("Face ID"), .acct-methods li:has-text("passkey"), .acct-methods li:has-text("fingerprint") >> button:has-text("Add")').catch(() => {})
+    const pkOn = await until(async () => (await A.p.locator('.acct-methods .ok-line').count()) === 2, 15000)
+    ok(pkOn, 'phone A: Face ID (passkey with PRF) added too')
+    await A.p.click('.sheet button[aria-label="Close"]')
+    ok((await A.p.textContent('.acct-chip')).includes('aria_player'), 'phone A: the account chip shows the username')
+
+    const P = await phone()
+    await P.p.goto(URL)
+    await P.p.click('.acct-chip')
+    await P.p.screenshot({ path: `${shots}/rooms-8-sign-in.png` })
+    await axe(P.p, 'sign-in sheet')
+    await P.p.fill('input[autocomplete="username"]', 'aria_player'); await P.p.fill('input[type=password]', 'wrong-password-9')
+    await P.p.click('.acct-form button:text-is("Sign in")')
+    ok(await until(() => P.p.isVisible('text=Wrong username or password')), 'new phone: a wrong password is refused')
+    await P.p.fill('input[type=password]', 'secret-password-1')
+    await P.p.click('.acct-form button:text-is("Sign in")')
+    ok(await until(() => P.p.isVisible('.char-top h1:text-is("Aria")'), 20000), 'new phone: signed in with the password, straight onto Aria\'s sheet')
+    await P.p.click('button[aria-label="All characters"]')
+    ok(await until(() => P.p.isVisible('.room:has-text("Thursday night")')), 'new phone: the group came back too')
+    ok(await P.p.isVisible('.room:has-text("Thursday night") button:has-text("DM screen")'), 'new phone: with its DM link')
+    await P.p.screenshot({ path: `${shots}/rooms-7-signed-in.png`, fullPage: true })
+
+    if (pkOn) {
+      // Face ID round trip on phone A: sign out (its copy goes), then sign back in with the passkey
+      await A.p.click('.acct-chip')
+      await A.p.click('button:has-text("Sign out on this phone")')
+      ok(await until(() => A.p.isVisible('text=No heroes yet')), 'phone A: signed out')
+      await A.p.click('.acct-chip')
+      await A.p.click('.sheet button:has-text("Sign in with")')
+      ok(await until(() => A.p.isVisible('.char-top h1:text-is("Aria")'), 20000), 'phone A: signed back in with Face ID (passkey), straight onto Aria\'s sheet')
+      if (!(await A.p.isVisible('.char-top h1'))) console.log('   phone A says:', await A.p.locator('.sheet .warn-line').textContent().catch(() => '(nothing)'))
+    }
+
+    // sign out on the new phone: its copy goes, the account keeps everything
+    await P.p.click('.acct-chip')
+    await P.p.click('button:has-text("Sign out on this phone")')
+    ok(await until(() => P.p.isVisible('text=No heroes yet')), 'new phone: signed out, nothing left on the phone')
+
     // a new phone: the cloud key link brings Aria back from the server
     const N = await phone()
     await N.p.goto(URL + '#/restore/' + ownerA)

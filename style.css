@@ -400,3 +400,16 @@ h1 { letter-spacing: .01em; }
 .sync-badge .sync-msg { flex-basis: 100%; font-size: 12px; }
 .sync-badge.ok { color: var(--ok); }
 .unsaved { display: grid; gap: 6px; }
+/* accounts */
+.top-actions { display: flex; align-items: center; gap: 6px; }
+.acct-chip { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); font-weight: 600; font-size: 15px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-chip.in { border-color: var(--line); background: var(--panel); }
+.acct-form { display: grid; gap: 4px; }
+.or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; margin: 10px 0; } .or::before, .or::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
+.acct-who { display: flex; align-items: center; gap: 10px; font-size: 18px; } .acct-avatar { font-size: 26px; }
+.acct-methods { list-style: none; padding: 0; margin: 8px 0; } .acct-methods li { display: flex; align-items: center; gap: 8px; min-height: 48px; border-bottom: 1px solid var(--line); }
+.linkish { background: none; border: 0; padding: 0 2px; min-height: 0; color: var(--accent); font: inherit; text-decoration: underline; }
+.nudge { display: grid; gap: 6px; } .nudge .btn { justify-self: start; }
+.seg [role=tab][aria-selected='true'] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.home-top { gap: 8px; } .home-top .brand { min-width: 0; } .home-top .brand h1 { white-space: nowrap; }
+@media (max-width: 480px) { .home-top .brand p { display: none; } .home-top .brand h1 { font-size: 24px; } .home-top .logo { font-size: 30px; } .acct-chip { max-width: 38vw; padding: 0 12px; font-size: 14px; } }
