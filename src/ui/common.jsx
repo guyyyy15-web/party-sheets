@@ -5,6 +5,47 @@ import { FEATS } from '../content/feats.js'
 
 export const signed = (n) => (n >= 0 ? `+${n}` : `${n}`)
 
+/** Kinds of numbers, each with one color everywhere (and a word, so color is never the only cue). */
+export const KINDS = {
+  dice: { name: 'Die roll', short: 'die' },
+  ability: { name: 'Ability modifier', short: 'mod' },
+  prof: { name: 'Proficiency bonus', short: 'prof' },
+  expertise: { name: 'Expertise (proficiency x2)', short: 'exp' },
+  bonus: { name: 'Feat, species, gear or class bonus', short: 'bonus' },
+  level: { name: 'Class level', short: 'lvl' },
+  base: { name: 'Base value', short: 'base' },
+  penalty: { name: 'Penalty', short: 'pen' },
+}
+
+/** A number in the color of its kind. */
+export function Num({ kind = 'base', value, sign = true, className = '' }) {
+  return <span className={`num k-${kind} ${className}`}>{sign && typeof value === 'number' ? signed(value) : value}</span>
+}
+
+/** How a total is made, as small colored chips: +3 DEX · +2 prof. */
+export function Breakdown({ parts, label = 'Made of' }) {
+  const list = (parts || []).filter((p) => p.value !== 0)
+  if (!list.length) return null
+  return (
+    <span className="bd" aria-label={`${label}: ${list.map((p) => `${signed(p.value)} ${KINDS[p.kind || 'base']?.short || ''}`).join(', ')}`}>
+      {list.map((p, i) => <span key={i} className={`bd-chip k-${p.kind || 'base'}`} title={p.label}>{signed(p.value)}<small>{short(p)}</small></span>)}
+    </span>
+  )
+}
+const short = (p) => (p.kind === 'ability' ? (p.label.match(/^(STR|DEX|CON|INT|WIS|CHA)/)?.[1] || 'mod')
+  : (p.kind === 'bonus' || p.kind === 'level') && p.label && p.label.length <= 14 ? p.label // e.g. "Alert", "Shield", "Fighter level"
+  : KINDS[p.kind || 'base']?.short || '')
+
+/** The color key, shown once on the sheet and in the roll card. */
+export function Legend({ kinds = ['dice', 'ability', 'prof', 'expertise', 'bonus', 'level', 'penalty'] }) {
+  return (
+    <details className="legend">
+      <summary>Color key</summary>
+      <ul>{kinds.map((k) => <li key={k}><span className={`swatch-dot k-${k}`} aria-hidden />{KINDS[k].name}</li>)}</ul>
+    </details>
+  )
+}
+
 export function Sheet({ title, onClose, children }) {
   return (
     <div className="scrim" onClick={onClose}>
@@ -21,7 +62,7 @@ export function SourcesSheet({ title, total, sources, onClose }) {
   return (
     <Sheet title={title} onClose={onClose}>
       <ul className="sources">
-        {sources.map((s, i) => <li key={i}><span>{s.label}</span><span className="mono">{i === 0 && !String(s.label).startsWith('+') ? s.value : signed(s.value)}</span></li>)}
+        {sources.map((s, i) => <li key={i}><span><span className={`swatch-dot k-${s.kind || 'base'}`} aria-hidden />{s.label}</span><Num kind={s.kind || 'base'} value={s.value} sign={!(i === 0 && (s.kind === 'base' || !s.kind))} className="mono" /></li>)}
         <li className="total"><span>Total</span><span className="mono">{total}</span></li>
       </ul>
     </Sheet>

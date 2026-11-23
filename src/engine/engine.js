@@ -72,12 +72,12 @@ function collectFeatures(ch) {
 /** Ability scores with where each point came from. */
 function computeScores(ch, features) {
   const out = {}
-  for (const a of ABILITIES) out[a] = { base: ch.scores[a] || 10, total: ch.scores[a] || 10, sources: [{ label: 'Base', value: ch.scores[a] || 10 }] }
+  for (const a of ABILITIES) out[a] = { base: ch.scores[a] || 10, total: ch.scores[a] || 10, sources: [{ label: 'Base', value: ch.scores[a] || 10, kind: 'base' }] }
   const plus = (a, n, label, max = 20) => {
     if (!out[a]) return
     const room = Math.max(0, max - out[a].total)
     const v = Math.min(n, room)
-    if (v) { out[a].total += v; out[a].sources.push({ label, value: v }) }
+    if (v) { out[a].total += v; out[a].sources.push({ label, value: v, kind: 'bonus' }) }
   }
   const bg = backgroundById(ch.backgroundId)
   const bgPick = ch.choices['background.abilities']
@@ -146,7 +146,7 @@ export function derive(input) {
   const shield = !!ch.equipment?.shield
   const exhaustion = Math.max(0, Math.min(EXHAUSTION.max, ch.state?.exhaustion || 0))
   const d20Pen = exhaustion * EXHAUSTION.d20PerLevel // every d20 test: attacks, saves, checks, initiative
-  const penSource = d20Pen ? [{ label: `Exhaustion level ${exhaustion}`, value: -d20Pen }] : []
+  const penSource = d20Pen ? [{ label: `Exhaustion level ${exhaustion}`, value: -d20Pen, kind: 'penalty' }] : []
 
   // proficiencies
   const skillProf = new Map() // id → [sources]
@@ -185,46 +185,46 @@ export function derive(input) {
   const acBases = [{ label: armor ? `${armor.name} (${armor.base}${armor.dexMax === 0 ? '' : ` + DEX${armor.dexMax ? ` max ${armor.dexMax}` : ''}`})` : 'No armor (10 + DEX)', value: armor ? armor.base + (armor.dexMax === null ? mod.DEX : Math.min(armor.dexMax, mod.DEX)) : 10 + mod.DEX }]
   for (const e of active) if (e.type === 'ac') acBases.push({ label: e.label, value: e.value(ctx) })
   const acBase = acBases.reduce((a, b) => (b.value > a.value ? b : a))
-  const ac = { value: acBase.value, sources: [acBase] }
-  if (shield) { ac.value += 2; ac.sources.push({ label: 'Shield', value: 2 }) }
-  const bonus = (target) => active.filter((e) => e.type === 'bonus' && e.target === target).map((e) => ({ label: e.label || e.from, value: e.value(ctx) }))
+  const ac = { value: acBase.value, sources: [{ ...acBase, kind: 'base' }] }
+  if (shield) { ac.value += 2; ac.sources.push({ label: 'Shield', value: 2, kind: 'bonus' }) }
+  const bonus = (target) => active.filter((e) => e.type === 'bonus' && e.target === target).map((e) => ({ label: e.label || e.from, value: e.value(ctx), kind: 'bonus' }))
   for (const b of bonus('ac')) { ac.value += b.value; ac.sources.push(b) }
   if (ch.overrides?.ac != null) ac.override = ch.overrides.ac
 
   // speed
   let baseSpeed = sp?.speed || 30
   for (const e of active) if (e.type === 'speed') baseSpeed = Math.max(baseSpeed, e.value)
-  const speed = { value: baseSpeed, sources: [{ label: `${sp?.name || 'Base'} speed`, value: baseSpeed }] }
+  const speed = { value: baseSpeed, sources: [{ label: `${sp?.name || 'Base'} speed`, value: baseSpeed, kind: 'base' }] }
   for (const b of bonus('speed')) { speed.value += b.value; speed.sources.push(b) }
-  if (armor?.str && ctx.score.STR < armor.str) { speed.value -= 10; speed.sources.push({ label: `${armor.name} needs STR ${armor.str}`, value: -10 }) }
-  if (exhaustion) { const v = -EXHAUSTION.speedPerLevel * exhaustion; speed.value = Math.max(0, speed.value + v); speed.sources.push({ label: `Exhaustion level ${exhaustion}`, value: v }) }
+  if (armor?.str && ctx.score.STR < armor.str) { speed.value -= 10; speed.sources.push({ label: `${armor.name} needs STR ${armor.str}`, value: -10, kind: 'penalty' }) }
+  if (exhaustion) { const v = -EXHAUSTION.speedPerLevel * exhaustion; speed.value = Math.max(0, speed.value + v); speed.sources.push({ label: `Exhaustion level ${exhaustion}`, value: v, kind: 'penalty' }) }
 
   // HP: max die at level 1, then the rolled or average value per level, + CON each level
   const hitDie = cls?.hitDie || 8
   const hp = { value: 0, sources: [] }
   if (cls) {
     // each level: the die (max at level 1, then rolled or average) + CON, at least 1 per level
-    hp.sources.push({ label: `Level 1: d${hitDie} max ${signed(mod.CON)} CON`, value: Math.max(1, hitDie + mod.CON) })
+    hp.sources.push({ label: `Level 1: d${hitDie} max ${signed(mod.CON)} CON`, value: Math.max(1, hitDie + mod.CON), kind: 'base' })
     let rest = 0
     for (let l = 2; l <= level; l++) rest += Math.max(1, (ch.hpRolls?.[l] ?? Math.floor(hitDie / 2) + 1) + mod.CON)
-    if (level > 1) hp.sources.push({ label: `Levels 2-${level}: d${hitDie} ${signed(mod.CON)} CON each`, value: rest })
+    if (level > 1) hp.sources.push({ label: `Levels 2-${level}: d${hitDie} ${signed(mod.CON)} CON each`, value: rest, kind: 'base' })
     for (const b of bonus('hpMax')) hp.sources.push(b)
     hp.value = Math.max(1, hp.sources.reduce((t, s) => t + s.value, 0))
   }
 
-  const initiative = { value: mod.DEX, sources: [{ label: `DEX modifier (score ${scores.DEX.total})`, value: mod.DEX }, ...bonus('initiative'), ...penSource] }
+  const initiative = { value: mod.DEX, sources: [{ label: `DEX modifier (score ${scores.DEX.total})`, value: mod.DEX, kind: 'ability' }, ...bonus('initiative'), ...penSource] }
   initiative.value = initiative.sources.reduce((t, s) => t + s.value, 0)
 
   // "where each number comes from", in words a player can redo at the table
-  const abilityPart = (a) => ({ label: `${a} modifier (score ${scores[a].total})`, value: mod[a] })
-  const profPart = (why) => ({ label: `Proficiency bonus (${why})`, value: prof })
+  const abilityPart = (a) => ({ label: `${a} modifier (score ${scores[a].total})`, value: mod[a], kind: 'ability' })
+  const profPart = (why) => ({ label: `Proficiency bonus (${why})`, value: prof, kind: 'prof' })
   const saves = Object.fromEntries(ABILITIES.map((a) => [a, { prof: saveProf.has(a), value: mod[a] + (saveProf.has(a) ? prof : 0) - d20Pen,
     parts: [abilityPart(a), ...(saveProf.has(a) ? [profPart(`proficient in ${a} saves`)] : []), ...penSource] }]))
   const checks = Object.fromEntries(ABILITIES.map((a) => [a, mod[a] - d20Pen]))
   const checkParts = Object.fromEntries(ABILITIES.map((a) => [a, [abilityPart(a), ...penSource]]))
   const skills = SKILLS.map((s) => {
     const p = skillProf.has(s.id), ex = expertise.has(s.id) && p
-    const parts = [abilityPart(s.ability), ...(ex ? [{ label: `Expertise: proficiency bonus x2 (${s.name})`, value: 2 * prof }] : p ? [profPart(`proficient in ${s.name}`)] : []), ...penSource]
+    const parts = [abilityPart(s.ability), ...(ex ? [{ label: `Expertise: proficiency bonus x2 (${s.name})`, value: 2 * prof, kind: 'expertise' }] : p ? [profPart(`proficient in ${s.name}`)] : []), ...penSource]
     return { ...s, prof: p, expertise: ex, value: mod[s.ability] + (ex ? 2 * prof : p ? prof : 0) - d20Pen, sources: skillProf.get(s.id) || [], parts }
   })
   // passive scores aren't rolls, so Exhaustion (which reduces d20 rolls) leaves them alone
@@ -265,20 +265,20 @@ export function derive(input) {
     let die = wp.dmg
     if (isMonkWeapon && maDie && dieSize(maDie) > dieSize(wp.dmg) && !wp.dmg.startsWith('2')) die = `1${maDie}`
     const why = isMonkWeapon && ability === 'DEX' ? 'Martial Arts lets a monk use DEX' : ability === 'DEX' ? (isRanged(wp) ? 'ranged weapons use DEX' : 'Finesse: the better of STR and DEX') : 'melee weapons use STR'
-    const toHitParts = [{ label: `${ability} modifier (score ${scores[ability].total}; ${why})`, value: mod[ability] }]
+    const toHitParts = [{ label: `${ability} modifier (score ${scores[ability].total}; ${why})`, value: mod[ability], kind: 'ability' }]
     if (proficientWith(wp)) toHitParts.push(profPart(`proficient with ${wp.name}s`))
     if (isRanged(wp)) toHitParts.push(...bonus('attack.ranged'))
     toHitParts.push(...penSource)
     const toHit = toHitParts.reduce((t, s) => t + s.value, 0)
     let vDie = wp.versatile
     if (vDie && isMonkWeapon && maDie && dieSize(maDie) > dieSize(vDie)) vDie = `1${maDie}`
-    const damageParts = mod[ability] ? [{ label: `${ability} modifier (the same one as the attack)`, value: mod[ability] }] : []
+    const damageParts = mod[ability] ? [{ label: `${ability} modifier (the same one as the attack)`, value: mod[ability], kind: 'ability' }] : []
     attacks.push({ id: wp.id, name: wp.name, toHit, toHitSources: toHitParts, damageParts, damageDie: die, dieWhy: die !== wp.dmg ? `your Martial Arts die (${die.slice(1)}) instead of the ${wp.name}'s ${wp.dmg}` : `the ${wp.name}'s damage die`, damage: `${die}${mod[ability] ? signed(mod[ability]) : ''}`, type: wp.type, props: wp.props, range: wp.range, versatile: vDie && `${vDie}${signed(mod[ability])}`, mastery: masteries.has(wp.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
   }
   const unarmedAbility = monkWeapons && mod.DEX > mod.STR ? 'DEX' : 'STR'
   attacks.push({
-    id: 'unarmed', name: 'Unarmed Strike', toHit: mod[unarmedAbility] + prof - d20Pen, toHitSources: [{ label: `${unarmedAbility} modifier (score ${scores[unarmedAbility].total}${unarmedAbility === 'DEX' ? '; Martial Arts lets a monk use DEX' : ''})`, value: mod[unarmedAbility] }, profPart('everyone is proficient with Unarmed Strikes'), ...penSource],
-    damageParts: monkWeapons && maDie ? [{ label: `${unarmedAbility} modifier`, value: mod[unarmedAbility] }] : [{ label: 'Unarmed Strike: 1', value: 1 }, { label: `STR modifier (score ${scores.STR.total})`, value: mod.STR }],
+    id: 'unarmed', name: 'Unarmed Strike', toHit: mod[unarmedAbility] + prof - d20Pen, toHitSources: [{ label: `${unarmedAbility} modifier (score ${scores[unarmedAbility].total}${unarmedAbility === 'DEX' ? '; Martial Arts lets a monk use DEX' : ''})`, value: mod[unarmedAbility], kind: 'ability' }, profPart('everyone is proficient with Unarmed Strikes'), ...penSource],
+    damageParts: monkWeapons && maDie ? [{ label: `${unarmedAbility} modifier`, value: mod[unarmedAbility], kind: 'ability' }] : [{ label: 'Unarmed Strike: 1', value: 1, kind: 'base' }, { label: `STR modifier (score ${scores.STR.total})`, value: mod.STR, kind: 'ability' }],
     damageDie: monkWeapons && maDie ? `1${maDie}` : null, dieWhy: monkWeapons && maDie ? `your Martial Arts die (${maDie})` : null,
     damage: monkWeapons && maDie ? `1${maDie}${signed(mod[unarmedAbility])}` : `${Math.max(0, 1 + mod.STR)}`, type: 'bludgeoning', props: [], crit,
     note: `Or Grapple / Shove (DC ${8 + (monkWeapons ? Math.max(mod.STR, mod.DEX) : mod.STR) + prof})`,

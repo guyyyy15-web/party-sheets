@@ -208,3 +208,93 @@ textarea.input { min-height: 120px; resize: vertical; }
 .rule { margin: 8px 0 0; font-size: 13px; color: var(--muted); line-height: 1.4; }
 /* a bottom sheet is open: the roll card goes to the top so the sheet's buttons stay reachable */
 body:has(.scrim) .roll-card { bottom: auto; top: calc(10px + env(safe-area-inset-top)); max-height: 40vh; }
+
+/* ===== 2a: readability, colors for numbers, desktop ===== */
+:root {
+  /* one color per kind of number (also used by the 3D dice panel) */
+  --k-dice: #f3ead6; --k-ability: #86bdf2; --k-prof: #f0c463; --k-expertise: #c3a6f7;
+  --k-bonus: #93d98d; --k-level: #f0a36a; --k-base: #ece5d6; --k-penalty: #f38f84;
+}
+html, body { font-size: 17px; line-height: 1.5; }
+.small { font-size: 14px; } .lbl { font-size: 12px; }
+h1 { letter-spacing: .01em; }
+.wiz-title { font-size: 32px; } .lead { font-size: 17px; }
+.char-top h1 { font-size: 26px; }
+.opt-sum { font-size: 14.5px; } .opt-name { font-size: 17px; }
+.vitals b { font-size: 24px; }
+.sec { font-size: 13.5px; margin-top: 22px; }
+.attack .grow b, .action .grow b { font-size: 17px; }
+.math { font-size: 15px; } .rule { font-size: 14px; }
+
+.num { font-family: var(--mono); font-weight: 700; }
+.k-dice { color: var(--k-dice); } .k-ability { color: var(--k-ability); } .k-prof { color: var(--k-prof); }
+.k-expertise { color: var(--k-expertise); } .k-bonus { color: var(--k-bonus); } .k-level { color: var(--k-level); }
+.k-base { color: var(--k-base); } .k-penalty { color: var(--k-penalty); }
+.swatch-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; vertical-align: middle; background: currentColor; flex: none; }
+.swatch-dot.k-dice { background: var(--k-dice); } .swatch-dot.k-ability { background: var(--k-ability); } .swatch-dot.k-prof { background: var(--k-prof); }
+.swatch-dot.k-expertise { background: var(--k-expertise); } .swatch-dot.k-bonus { background: var(--k-bonus); } .swatch-dot.k-level { background: var(--k-level); }
+.swatch-dot.k-base { background: var(--k-base); } .swatch-dot.k-penalty { background: var(--k-penalty); }
+.bd { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 0 6px; vertical-align: middle; }
+.bd-chip { font: 700 12.5px var(--mono); border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; line-height: 1.6; background: rgba(255,255,255,.03); }
+.bd-chip small { font: 700 10.5px var(--font); margin-left: 3px; text-transform: uppercase; letter-spacing: .03em; }
+.legend { margin: 14px 0; font-size: 14px; } .legend summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--muted); font-weight: 600; }
+.legend ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; }
+.legend li { display: flex; align-items: center; }
+.tap-hint { font-size: 10.5px; color: var(--muted); }
+.stat .bd { margin: 2px 0 0; } .stat .bd-chip { font-size: 10.5px; }
+.abil-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 0 0 10px; }
+.abil-mini { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; min-height: 64px; }
+.abil-mini small { font-size: 11px; color: var(--muted); letter-spacing: .06em; } .abil-mini .big { font-size: 20px; } .abil-mini .score { font: 12px var(--mono); color: var(--muted); }
+.atk-math { display: block; font-size: 13px; color: var(--muted); margin: 2px 0; }
+.ab-top { gap: 2px; } .ab-top small { font-size: 12px; } .ab-top .num { font-size: 15px; }
+.ab-roll { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 2px; gap: 2px; min-height: 48px; }
+.ab-roll span { font-size: 12.5px; color: var(--muted); } .ab-roll b { font: 700 17px var(--mono); }
+.ab-roll .bd { margin: 2px 0 0; justify-content: center; } .ab-roll .bd-chip { font-size: 10.5px; }
+.skills button { min-height: 50px; } .sk-total { min-width: 40px; text-align: right; font-size: 17px; }
+.skills .bd { margin: 0 4px 0 0; }
+@media (max-width: 380px) { .skills .bd { display: none; } }
+
+/* desktop and tablets in landscape: a real two-column sheet, dialogs instead of bottom sheets */
+@media (min-width: 900px) {
+  html, body { font-size: 18px; }
+  #root { max-width: 1240px; padding: 24px 32px 48px; }
+  .sheet-grid { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 28px; align-items: start; }
+  .sheet-side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; padding-right: 4px; }
+  .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vitals .hp { grid-column: 1 / -1; min-height: 84px; }
+  .tabs { position: static; }
+  .abil-cards { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .skills { columns: 2; column-gap: 28px; } .skills li { break-inside: avoid; }
+  .home .char-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .home .big-btn { max-width: 360px; }
+  .wizard { max-width: 920px; margin: 0 auto; }
+  .wizard .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wizard .cards.cols-2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .assign-row { grid-template-columns: 140px minmax(0, 1fr) 90px; }
+  .scrim { align-items: center; }
+  .sheet { border-radius: 18px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line)); max-height: 82vh; padding: 20px 24px; }
+  .roll-card { left: auto; right: 28px; transform: none; width: 440px; }
+  body:has(.scrim) .roll-card { top: 16px; }
+  .fab { left: auto; right: 28px; bottom: 28px; }
+  body:has(.roll-card) .fab { bottom: auto; top: 20px; }
+  .wiz-foot .btn { max-width: 520px; }
+}
+@media (min-width: 1400px) { .home .char-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.tabs button { font-size: 15.5px; } .seg.mode button { font-size: 14.5px; min-height: 44px; }
+@media (min-width: 900px) { .tabs button { font-size: 17px; } .seg.mode button { font-size: 15px; } }
+/* phone: one column in reading order: vitals, then the tabs, then rests and the color key at the end */
+@media (max-width: 899px) {
+  .sheet-grid { display: flex; flex-direction: column; }
+  .sheet-side { display: contents; }
+  .sheet-main { order: 5; }
+  .sheet-side > .rests, .sheet-side > .legend { order: 10; }
+}
+
+.atk-math { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.am-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.am-lbl { min-width: 58px; font-size: 13px; color: var(--muted); }
+.am-line .bd { margin: 0; }
+@media (max-width: 599px) {
+  .attack { flex-wrap: wrap; }
+  .attack > .grow { flex-basis: 100%; }
+  .attack > .roll-btn { flex: 1; }
+}

@@ -39,21 +39,21 @@ function stepsFor(req, r) {
   const sgn = (n) => (n >= 0 ? `+${n}` : `${n}`)
   const steps = []
   if (req.kind === 'd20') {
-    if (r.faces.length > 1) steps.push({ text: `${req.mode === 'adv' ? 'Advantage' : 'Disadvantage'}: two d20 rolled ${r.faces.join(' and ')}, keep the ${req.mode === 'adv' ? 'higher' : 'lower'}`, value: String(r.kept) })
-    else steps.push({ text: 'Roll a d20', value: String(r.kept) })
+    if (r.faces.length > 1) steps.push({ text: `${req.mode === 'adv' ? 'Advantage' : 'Disadvantage'}: two d20 rolled ${r.faces.join(' and ')}, keep the ${req.mode === 'adv' ? 'higher' : 'lower'}`, value: String(r.kept), kind: 'dice' })
+    else steps.push({ text: 'Roll a d20', value: String(r.kept), kind: 'dice' })
   } else if (req.kind === 'expr') {
     for (const g of r.rolls) {
       const n = g.faces.length
-      steps.push({ text: `${req.crit ? 'Critical: twice the dice, roll' : 'Roll'} ${n}d${g.sides}${req.dieWhy ? ` (${req.dieWhy})` : ''}${n > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: String(g.faces.reduce((a, b) => a + b, 0)) })
+      steps.push({ text: `${req.crit ? 'Critical: twice the dice, roll' : 'Roll'} ${n}d${g.sides}${req.dieWhy ? ` (${req.dieWhy})` : ''}${n > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: String(g.faces.reduce((a, b) => a + b, 0)), kind: 'dice' })
     }
   } else {
-    for (const g of r.groups) steps.push({ text: `Roll ${g.faces.length}d${g.sides}${g.faces.length > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: String(g.faces.reduce((a, b) => a + b, 0)) })
+    for (const g of r.groups) steps.push({ text: `Roll ${g.faces.length}d${g.sides}${g.faces.length > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: String(g.faces.reduce((a, b) => a + b, 0)), kind: 'dice' })
   }
   const bonus = req.kind === 'd20' ? req.bonus : req.kind === 'expr' ? r.bonus : req.mod
   const parts = (req.parts || []).filter((p) => p.value !== 0)
   const partsSum = parts.reduce((t, p) => t + p.value, 0)
-  for (const p of parts) steps.push({ text: p.label, value: sgn(p.value) })
-  if (bonus - partsSum !== 0) steps.push({ text: parts.length ? 'Other bonus' : 'Bonus', value: sgn(bonus - partsSum) })
+  for (const p of parts) steps.push({ text: p.label, value: sgn(p.value), kind: p.kind || 'bonus' })
+  if (bonus - partsSum !== 0) steps.push({ text: parts.length ? 'Other bonus' : 'Bonus', value: sgn(bonus - partsSum), kind: 'bonus' })
   return steps
 }
 
@@ -135,7 +135,7 @@ export function RollCard({ e, onClose }) {
       </div>
       {e.steps?.length > 0 && (
         <ol className="math" aria-label="How it was calculated">
-          {e.steps.map((s, i) => <li key={i}><span>{s.text}</span><b className="mono">{s.value}</b></li>)}
+          {e.steps.map((s, i) => <li key={i}><span><span className={`swatch-dot k-${s.kind || 'base'}`} aria-hidden />{s.text}</span><b className={`mono num k-${s.kind || 'base'}`}>{s.value}</b></li>)}
           <li className="sum"><span>Total</span><b className="mono">{e.total}</b></li>
         </ol>
       )}

@@ -29,7 +29,7 @@ export const FIGHTER = {
     { id: 'second-wind', level: 1, name: 'Second Wind', summary: 'Bonus action: regain 1d10 + fighter level HP. One use back on a short rest, all on a long rest.',
       effects: [
         { type: 'resource', id: 'second-wind', name: 'Second Wind', max: (c) => scale([[1, 2], [4, 3], [10, 4]])(c.level), reset: 'long', short: 1 },
-        { type: 'action', id: 'second-wind', name: 'Second Wind', kind: 'bonus', cost: { resource: 'second-wind', amount: 1 }, summary: 'Regain hit points.', roll: { label: 'Heal', expr: (c) => `1d10+${c.level}`, parts: (c) => [{ label: 'Fighter level', value: c.level }], why: 'Second Wind: roll 1d10 and add your fighter level.' }, heal: true },
+        { type: 'action', id: 'second-wind', name: 'Second Wind', kind: 'bonus', cost: { resource: 'second-wind', amount: 1 }, summary: 'Regain hit points.', roll: { label: 'Heal', expr: (c) => `1d10+${c.level}`, parts: (c) => [{ label: 'Fighter level', value: c.level, kind: 'level' }], why: 'Second Wind: roll 1d10 and add your fighter level.' }, heal: true },
       ] },
     { id: 'fighter-mastery', level: 1, name: 'Weapon Mastery', summary: 'Use the mastery property of weapons you choose. Swap one on a long rest.',
       choices: [masteryChoice((c) => scale([[1, 3], [4, 4], [10, 5], [16, 6]])(c.level), (wp) => true)] },
@@ -158,10 +158,10 @@ export const MONK = {
     { id: 'uncanny-metabolism', level: 2, name: 'Uncanny Metabolism', summary: 'When you roll initiative: regain all Focus Points and heal a Martial Arts die + monk level. Once per long rest.',
       effects: [
         { type: 'resource', id: 'uncanny-metabolism', name: 'Uncanny Metabolism', max: () => 1, reset: 'long' },
-        { type: 'action', id: 'uncanny-metabolism', name: 'Uncanny Metabolism', kind: 'free', cost: { resource: 'uncanny-metabolism', amount: 1 }, summary: 'On initiative: Focus back to full.', roll: { label: 'Heal', expr: (c) => `1${martialArts(c.level)}+${c.level}`, parts: (c) => [{ label: 'Monk level', value: c.level }], why: 'Uncanny Metabolism: roll your Martial Arts die and add your monk level.' }, heal: true, refill: 'focus' },
+        { type: 'action', id: 'uncanny-metabolism', name: 'Uncanny Metabolism', kind: 'free', cost: { resource: 'uncanny-metabolism', amount: 1 }, summary: 'On initiative: Focus back to full.', roll: { label: 'Heal', expr: (c) => `1${martialArts(c.level)}+${c.level}`, parts: (c) => [{ label: 'Monk level', value: c.level, kind: 'level' }], why: 'Uncanny Metabolism: roll your Martial Arts die and add your monk level.' }, heal: true, refill: 'focus' },
       ] },
     { id: 'deflect-attacks', level: 3, name: 'Deflect Attacks', summary: 'Reaction: reduce Bludgeoning, Piercing or Slashing damage from an attack by 1d10 + DEX + monk level. At 0, spend 1 Focus to redirect it.',
-      effects: [{ type: 'action', id: 'deflect', name: 'Deflect Attacks', kind: 'reaction', summary: 'Reduce the damage. At 0, 1 Focus to redirect.', roll: { label: 'Reduce by', expr: (c) => `1d10+${c.mod.DEX + c.level}`, parts: (c) => [{ label: 'DEX modifier', value: c.mod.DEX }, { label: 'Monk level', value: c.level }], why: 'Deflect Attacks: roll 1d10, add DEX and your monk level, and take that much less damage.' } }] },
+      effects: [{ type: 'action', id: 'deflect', name: 'Deflect Attacks', kind: 'reaction', summary: 'Reduce the damage. At 0, 1 Focus to redirect.', roll: { label: 'Reduce by', expr: (c) => `1d10+${c.mod.DEX + c.level}`, parts: (c) => [{ label: 'DEX modifier', value: c.mod.DEX, kind: 'ability' }, { label: 'Monk level', value: c.level, kind: 'level' }], why: 'Deflect Attacks: roll 1d10, add DEX and your monk level, and take that much less damage.' } }] },
     asi(4),
     { id: 'slow-fall', level: 4, name: 'Slow Fall', summary: 'Reaction: reduce falling damage by 5 x monk level.',
       effects: [{ type: 'action', id: 'slow-fall', name: 'Slow Fall', kind: 'reaction', summary: (c) => `Reduce falling damage by ${5 * c.level}.` }] },
@@ -187,11 +187,11 @@ export const MONK = {
     id: 'open-hand', name: 'Warrior of the Open Hand', summary: 'Master of unarmed combat: push, topple, deny reactions.',
     features: [
       { id: 'open-hand-technique', level: 3, name: 'Open Hand Technique', summary: 'On a Flurry hit: Addle (no reactions), Push (STR save or 15 ft), or Topple (DEX save or Prone).',
-        effects: [{ type: 'note', save: { label: 'Push / Topple DC', dc: (c) => 8 + c.mod.WIS + c.prof } }] },
+        effects: [{ type: 'note', save: { label: 'Push (STR save) or Topple (DEX save):', dc: (c) => 8 + c.mod.WIS + c.prof } }] },
       { id: 'wholeness-of-body', level: 6, name: 'Wholeness of Body', summary: 'Bonus action: heal a Martial Arts die + WIS (min 1). WIS modifier uses (min 1) per long rest.',
         effects: [
           { type: 'resource', id: 'wholeness', name: 'Wholeness of Body', max: (c) => Math.max(1, c.mod.WIS), reset: 'long' },
-          { type: 'action', id: 'wholeness', name: 'Wholeness of Body', kind: 'bonus', cost: { resource: 'wholeness', amount: 1 }, summary: 'Heal yourself (at least 1 HP).', roll: { label: 'Heal', expr: (c) => `1${martialArts(c.level)}${c.mod.WIS >= 0 ? '+' : ''}${c.mod.WIS}`, parts: (c) => [{ label: 'WIS modifier', value: c.mod.WIS }], why: 'Wholeness of Body: roll your Martial Arts die and add WIS (at least 1 HP).' }, heal: true, min: 1 },
+          { type: 'action', id: 'wholeness', name: 'Wholeness of Body', kind: 'bonus', cost: { resource: 'wholeness', amount: 1 }, summary: 'Heal yourself (at least 1 HP).', roll: { label: 'Heal', expr: (c) => `1${martialArts(c.level)}${c.mod.WIS >= 0 ? '+' : ''}${c.mod.WIS}`, parts: (c) => [{ label: 'WIS modifier', value: c.mod.WIS, kind: 'ability' }], why: 'Wholeness of Body: roll your Martial Arts die and add WIS (at least 1 HP).' }, heal: true, min: 1 },
         ] },
       { id: 'fleet-step', level: 11, name: 'Fleet Step', summary: 'After any other bonus action, use Step of the Wind right away.' },
       { id: 'quivering-palm', level: 17, name: 'Quivering Palm', summary: '4 Focus on an Unarmed Strike hit: later, end the vibrations for a CON save, 10d12 Force (half on a success).',

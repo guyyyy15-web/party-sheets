@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react'
 import { derive, rest, spendHitDie } from '../engine/engine.js'
 import { CONDITIONS, EXHAUSTION, INSPIRATION } from '../content/conditions.js'
 import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTERY } from '../content/basics.js'
-import { SourcesSheet, Sheet, Stepper, signed } from './common.jsx'
+import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend } from './common.jsx'
 import { ChoicesStep, Portrait } from './wizard.jsx'
 
 const KIND = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction', free: 'Free / on a hit', info: 'Good to know' }
@@ -34,15 +34,25 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
         <button className="icon-btn" onClick={() => setSettings(true)} aria-label="Character settings">⚙</button>
       </header>
 
+      <div className="sheet-grid">
+      <aside className="sheet-side" aria-label="Vitals and resources">
       <section className="vitals">
         <button className="hp" onClick={() => setHpOpen(true)} aria-label="Hit points">
           <span className="lbl">HP</span><b className="mono">{hp}<small>/{d.hp.value}</small></b>{ch.state.temp > 0 && <span className="temp">+{ch.state.temp} temp</span>}
           <span className="hp-bar"><span style={{ width: `${Math.max(0, Math.min(100, (hp / d.hp.value) * 100))}%` }} /></span>
         </button>
-        <button className="stat" onClick={() => show('Armor Class', d.ac)}><span className="lbl">AC</span><b>{d.ac.value}</b></button>
-        <button className="stat" onClick={() => show('Speed', d.speed)}><span className="lbl">Speed</span><b>{d.speed.value}</b></button>
-        <button className="stat" onClick={() => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode, parts: d.initiative.sources, rule: 'initiative' })}><span className="lbl">Init 🎲</span><b>{signed(d.initiative.value)}</b></button>
-        <div className="stat"><span className="lbl">Prof</span><b>{signed(d.prof)}</b></div>
+        <button className="stat" onClick={() => show('Armor Class', d.ac)} aria-label={`Armor Class ${d.ac.value}: how it's made`}><span className="lbl">AC</span><b>{d.ac.value}</b><span className="tap-hint" aria-hidden>how?</span></button>
+        <button className="stat" onClick={() => show('Speed', d.speed)} aria-label={`Speed ${d.speed.value} ft: how it's made`}><span className="lbl">Speed</span><b>{d.speed.value}</b><span className="tap-hint" aria-hidden>ft</span></button>
+        <button className="stat" onClick={() => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode, parts: d.initiative.sources, rule: 'initiative' })} aria-label={`Roll initiative, ${signed(d.initiative.value)}`}><span className="lbl">Init 🎲</span><b>{signed(d.initiative.value)}</b><Breakdown parts={d.initiative.sources} /></button>
+        <div className="stat"><span className="lbl">Prof</span><b><Num kind="prof" value={d.prof} /></b></div>
+      </section>
+
+      <section className="abil-strip" aria-label="Ability scores">
+        {ABILITIES.map((a) => (
+          <button key={a} className="abil-mini" onClick={() => show(`${ABILITY_NAMES[a]} score`, { value: d.scores[a].total, sources: d.scores[a].sources })} aria-label={`${ABILITY_NAMES[a]} ${d.scores[a].total}, modifier ${signed(d.mod[a])}`}>
+            <small>{a}</small><Num kind="ability" value={d.mod[a]} className="big" /><span className="score">{d.scores[a].total}</span>
+          </button>
+        ))}
       </section>
 
       <section className="status-row" aria-label="Inspiration and conditions">
@@ -73,6 +83,15 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       {d.pending.length > 0 && <button className="banner" onClick={() => setLevelUp('choices')}>⚠ {d.pending.length} choice{d.pending.length > 1 ? 's' : ''} to make ›</button>}
 
+      <section className="rests">
+        <button className="btn ghost" onClick={() => setShortRest(true)}>☕ Short rest</button>
+        <button className="btn ghost" onClick={() => { if (confirm('Long rest: HP and every resource back to full?')) setCh({ ...ch, state: rest(ch, 'long') }) }}>🌙 Long rest</button>
+        {ch.level < 20 && <button className="btn primary" onClick={() => setLevelUp('up')}>⬆ Level up</button>}
+      </section>
+      <Legend />
+      </aside>
+
+      <div className="sheet-main">
       <nav className="tabs" role="tablist">
         {[['turn', 'My Turn'], ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{l}</button>
@@ -85,13 +104,9 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       {tab === 'checks' && <ChecksTab d={d} roll={roll} mode={mode} show={show} />}
       {tab === 'features' && <FeaturesTab d={d} />}
       {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} />}
-      {tab === 'notes' && <textarea className="input notes" value={ch.notes} placeholder="Backstory, NPCs, loot, plans…" onChange={(e) => setCh({ ...ch, notes: e.target.value })} />}
-
-      <section className="rests">
-        <button className="btn ghost" onClick={() => setShortRest(true)}>☕ Short rest</button>
-        <button className="btn ghost" onClick={() => { if (confirm('Long rest: HP and every resource back to full?')) setCh({ ...ch, state: rest(ch, 'long') }) }}>🌙 Long rest</button>
-        {ch.level < 20 && <button className="btn primary" onClick={() => setLevelUp('up')}>⬆ Level up</button>}
-      </section>
+      {tab === 'notes' && <textarea className="input notes" value={ch.notes} placeholder="Backstory, NPCs, loot, plans…" onChange={(e) => setCh({ ...ch, notes: e.target.value })} aria-label="Notes" />}
+      </div>
+      </div>
 
       {sources && <SourcesSheet {...sources} onClose={() => setSources(null)} />}
       {shortRest && <ShortRest ch={ch} setCh={setCh} roll={roll} onClose={() => setShortRest(false)} />}
@@ -128,6 +143,8 @@ function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
         <div key={a.id} className="attack">
           <div className="grow">
             <b>{a.name}</b>
+            <span className="atk-math"><span className="am-line"><span className="am-lbl">To hit</span><span className="num k-dice">d20</span><Breakdown parts={a.toHitSources} label="To hit" /></span>
+              <span className="am-line"><span className="am-lbl">Damage</span><span className="num k-dice">{a.damageDie || a.damage.split(/[+-]/)[0]}</span><Breakdown parts={a.damageParts} label="Damage" /></span></span>
             <span className="muted small">{a.type}{a.range ? `, ${a.range} ft` : ''}{a.props?.length ? `, ${a.props.join(', ')}` : ''}{a.note ? `. ${a.note}` : ''}</span>
             {a.mastery && <details className="mastery"><summary>Mastery: {a.mastery.name}</summary>{a.mastery.text}</details>}
           </div>
@@ -165,9 +182,9 @@ function ChecksTab({ d, roll, mode, show }) {
       <div className="abil-cards">
         {ABILITIES.map((a) => (
           <div key={a} className="abil-card">
-            <button className="ab-top" onClick={() => show(`${ABILITY_NAMES[a]} score`, { value: d.scores[a].total, sources: d.scores[a].sources })}><small>{a}</small><b>{d.scores[a].total}</b></button>
-            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.checks[a], mode, parts: d.checkParts[a], rule: 'check' })}>Check {signed(d.checks[a])}</button>
-            <button className={`ab-roll ${d.saves[a].prof ? 'prof' : ''}`} onClick={() => roll({ kind: 'd20', label: `${a} save`, bonus: d.saves[a].value, mode, parts: d.saves[a].parts, rule: 'save' })}>Save {signed(d.saves[a].value)}</button>
+            <button className="ab-top" onClick={() => show(`${ABILITY_NAMES[a]} score`, { value: d.scores[a].total, sources: d.scores[a].sources })} aria-label={`${ABILITY_NAMES[a]} score ${d.scores[a].total}: how it's made`}><small>{ABILITY_NAMES[a]}</small><b>{d.scores[a].total}</b><Num kind="ability" value={d.mod[a]} /></button>
+            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.checks[a], mode, parts: d.checkParts[a], rule: 'check' })} aria-label={`${ABILITY_NAMES[a]} check, ${signed(d.checks[a])}`}><span>Check</span><b>{signed(d.checks[a])}</b></button>
+            <button className={`ab-roll ${d.saves[a].prof ? 'prof' : ''}`} onClick={() => roll({ kind: 'd20', label: `${a} save`, bonus: d.saves[a].value, mode, parts: d.saves[a].parts, rule: 'save' })} aria-label={`${a} saving throw, ${signed(d.saves[a].value)}${d.saves[a].prof ? ', proficient' : ''}`}><span>Save{d.saves[a].prof ? ' ●' : ''}</span><b>{signed(d.saves[a].value)}</b><Breakdown parts={d.saves[a].parts} label="Save" /></button>
           </div>
         ))}
       </div>
@@ -176,7 +193,7 @@ function ChecksTab({ d, roll, mode, show }) {
         {d.skills.map((s) => (
           <li key={s.id}><button onClick={() => roll({ kind: 'd20', label: s.name, bonus: s.value, mode, parts: s.parts, rule: 'skill' })}>
             <span className={`dot ${s.expertise ? 'ex' : s.prof ? 'pr' : ''}`} aria-label={s.expertise ? 'expertise' : s.prof ? 'proficient' : ''} />
-            <span className="grow">{s.name} <small className="muted">{s.ability}</small></span><b className="mono">{signed(s.value)}</b>
+            <span className="grow">{s.name} <small className="muted">{s.ability}</small></span><Breakdown parts={s.parts} label={s.name} /><b className="mono sk-total">{signed(s.value)}</b>
           </button></li>
         ))}
       </ul>
