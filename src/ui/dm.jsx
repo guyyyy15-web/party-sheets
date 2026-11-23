@@ -7,7 +7,8 @@ import { ABILITIES } from '../content/basics.js'
 import { signed, Num, themeOf } from './common.jsx'
 import { Portrait } from './wizard.jsx'
 import { HpSheet, ConditionsSheet } from './sheet.jsx'
-import { fetchRoom, dmPatch, inviteLink, dmLink } from './sync.js'
+import { fetchRoom, dmPatch, updateRoom, roomById } from './sync.js'
+import { Sheet } from './common.jsx'
 import { ShareLinks } from './rooms.jsx'
 
 const POLL_MS = 5000
@@ -19,6 +20,7 @@ export function DmView({ room, onBack }) {
   const [hpFor, setHpFor] = useState(null)
   const [condFor, setCondFor] = useState(null)
   const [share, setShare] = useState(false)
+  const [settings, setSettings] = useState(false)
   const [, tick] = useState(0)
   const pending = useRef(0)
 
@@ -49,6 +51,7 @@ export function DmView({ room, onBack }) {
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="Back">‹</button>
         <div className="grow"><h1>{room.name}</h1><p className="muted small">DM screen · updates every few seconds</p></div>
+        <button className="btn ghost small" onClick={() => setSettings(true)}>Settings</button>
         <button className="btn ghost small" onClick={() => setShare(true)}>Invite</button>
       </header>
       {err && <p className="warn-line" role="status">{err}</p>}
@@ -63,6 +66,7 @@ export function DmView({ room, onBack }) {
       {hpC && <HpSheet d={derive(hpC.ch)} ch={hpC.ch} hp={hpC.ch.state.hp ?? derive(hpC.ch).hp.value} setState={(s) => act(hpC.c, s)} onClose={() => setHpFor(null)} />}
       {condC && <ConditionsSheet d={derive(condC.ch)} ch={condC.ch} setState={(s) => act(condC.c, s)} onClose={() => setCondFor(null)} />}
       {share && <ShareLinks room={room} onClose={() => setShare(false)} />}
+      {settings && <GroupSettings room={room} onClose={() => setSettings(false)} onError={setErr} />}
     </main>
   )
 }
@@ -101,5 +105,21 @@ function DmCard({ c, onHp, onCond, act }) {
         <button className={`cond-btn ${conds.length ? 'on' : ''}`} onClick={onCond}>{conds.length ? conds.join(', ') : 'No conditions'}</button>
       </div>
     </li>
+  )
+}
+
+/** The DM's group settings: its name, and whether expansion subclasses are allowed. */
+function GroupSettings({ room, onClose, onError }) {
+  const [r, setR] = useState(() => roomById(room.id) || room)
+  const [name, setName] = useState(r.name)
+  const [busy, setBusy] = useState(false)
+  const save = async (body) => { setBusy(true); try { setR(await updateRoom(r, body)) } catch (e) { onError(e.status === 0 ? 'Offline: settings not saved.' : e.message) } finally { setBusy(false) } }
+  return (
+    <Sheet title="Group settings" onClose={onClose}>
+      <label className="field"><span>Group name</span><input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== r.name && save({ name: name.trim() })} /></label>
+      <label className="row toggle"><input type="checkbox" checked={!!r.settings?.expansions} disabled={busy} onChange={(e) => save({ settings: { expansions: e.target.checked } })} />
+        <span>Allow subclasses from the expansion books (Xanathar's, Tasha's and more), beyond the Player's Handbook</span></label>
+      <p className="muted small">Players see the change the next time their phone checks in with the group. Characters who already took one keep it.</p>
+    </Sheet>
   )
 }

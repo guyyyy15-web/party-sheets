@@ -7,8 +7,13 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   The build sets `VERSION` in `sw.js` from the files' content. New files the page needs go in `FILES` in `sw.js`.
 - Rules are data in `src/content/`, applied by `src/engine/engine.js` (pure, no DOM). A character stores only its
   choices and state; never store a derived number. Every derived number keeps its `sources`.
-- Content: only the SRD 5.2 (CC-BY-4.0), written in our own words. Never paste Player's Handbook text. Table
-  content from the book goes in by the players themselves ("My content", phase 3).
+- Content: the SRD 5.2 (CC-BY-4.0) plus, by Guy's decision (2026-11-23, a private app for his groups), the 2024
+  Player's Handbook subclasses and feats as **mechanics in our own words** (`source: 'PHB 2024'`, shown with a PHB
+  tag), and every official expansion subclass (`src/content/ext-subclasses-*.js`, `expansion: true`, tagged with its
+  book; older ones follow the 2024 rule: features below level 3 arrive at 3). Never paste book text or flavor text;
+  summaries say what it does, with the numbers.
+- Icons: game-icons.net (CC BY 3.0, credited on the home page). `node scripts/pick-icons.mjs` copies the ones in use
+  into `src/content/icons-data.js` (the page carries only those; no CDN). Use `<GameIcon id="w.longsword" />`.
 - Saves: IndexedDB `party-sheets` (localStorage fallback). The character shape has `v: 1`; a change to it must read
   older characters too. Backups must keep importing.
 - Dice thrown on screen take their result from the physics (`readTop`), never a separate random number.
@@ -35,6 +40,11 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - Sync (`src/ui/sync.js`, pure parts in `src/sync-core.js`): one request per sync. Send `diff(local, base)` (PUT,
   merged by field; `state` one level deeper) or fetch the server copy. Every 10 s and 0.8 s after a change; the DM
   screen refreshes every 5 s. The same `mergePatch` runs on both sides.
+- Group settings (`rooms.settings`, DM only): `expansions` = subclasses from the expansion books (`expansion: true`,
+  tagged with their book). A character in no group follows the phone's Table setting.
+- Admin screen (`#/admin`, `src/ui/admin.jsx`, `GET /admin/stats`): the first password set becomes the admin's
+  (`settings.admin_hash`, salted SHA-256), then it's locked. To reset: delete that row in D1 `party-sheets`.
+  Usage counts writes only (`usage` table: groups made, characters joined, player changes, DM actions), never content.
 - Limits: 256 KB per character, 12 per room, 10 new rooms per client per hour, 5000 rooms in total.
 - Tests never call production: `npm run test:server` (API, local wrangler dev) and `npm run smoke:rooms` (two phones
   and a DM through a local Worker, with axe). The app reads the API address from localStorage `ps.api` (tests only).

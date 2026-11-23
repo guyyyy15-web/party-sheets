@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react'
 import { derive, rest, spendHitDie } from '../engine/engine.js'
 import { CONDITIONS, EXHAUSTION, INSPIRATION } from '../content/conditions.js'
 import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTERY } from '../content/basics.js'
-import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend, themeOf } from './common.jsx'
+import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend, themeOf, GameIcon } from './common.jsx'
 import { ChoicesStep, Portrait } from './wizard.jsx'
 import { SyncBadge } from './rooms.jsx'
 import { SpellsTab } from './spells.jsx'
@@ -154,6 +154,7 @@ function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
       <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>
       {atk.map((a) => (
         <div key={a.id} className="attack">
+          <GameIcon id={`w.${a.id}`} size={34} className="atk-icon" />
           <div className="grow">
             <b>{a.name}</b>
             <span className="atk-math"><span className="am-line"><span className="am-lbl">To hit</span><span className="num k-dice">d20</span><Breakdown parts={a.toHitSources} label="To hit" /></span>
@@ -210,7 +211,7 @@ function ChecksTab({ d, roll, mode, show }) {
           </button></li>
         ))}
       </ul>
-      {(d.senses.length > 0 || d.resistances.length > 0) && <p className="muted small">{d.senses.map((s) => `${s.name} ${s.range} ft`).join(', ')}{d.resistances.length ? `${d.senses.length ? '. ' : ''}Resistant to ${d.resistances.join(', ')}.` : ''}</p>}
+      {(d.senses.length > 0 || d.resistances.length > 0 || d.immunities.length > 0) && <p className="muted small">{[d.senses.map((s) => `${s.name} ${s.range} ft`).join(', '), d.resistances.length ? `Resistant to ${d.resistances.join(', ')}` : '', d.immunities.length ? `Immune to ${d.immunities.join(', ')}` : ''].filter(Boolean).join('. ')}.</p>}
     </section>
   )
 }
@@ -238,19 +239,25 @@ function GearTab({ d, ch, setCh }) {
   return (
     <section>
       <h2 className="sec">Armor</h2>
-      <select className="input" value={eq.armor || ''} onChange={(e) => setEq({ armor: e.target.value || null })} aria-label="Armor">
-        <option value="">No armor</option>
-        {ARMOR.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.type}, AC {a.base})</option>)}
-      </select>
+      <div className="gear-grid" role="radiogroup" aria-label="Armor">
+        {[{ id: '', name: 'No armor', type: 'unarmored', base: null }, ...ARMOR].map((a) => {
+          const on = (eq.armor || '') === a.id
+          return (
+            <button key={a.id || 'none'} role="radio" aria-checked={on} className={`gear-card ${on ? 'on' : ''}`} onClick={() => setEq({ armor: a.id || null })}>
+              <GameIcon id={a.id ? `a.${a.id}` : 'a.none'} size={36} />
+              <b>{a.name}</b><span className="muted small">{a.base != null ? `${a.type}, AC ${a.base}${a.dex === false || a.type === 'heavy' ? '' : a.type === 'medium' ? ' + DEX (max 2)' : ' + DEX'}` : '10 + DEX'}</span>
+            </button>
+          )
+        })}
+      </div>
       <label className="row toggle"><input type="checkbox" checked={!!eq.shield} onChange={(e) => setEq({ shield: e.target.checked })} /><span>Shield (+2 AC)</span></label>
       {armorById(eq.armor) && d.cls && !d.cls.armor.includes(armorById(eq.armor).type) && <p className="warn-line">Not proficient with {armorById(eq.armor).type} armor: disadvantage on STR and DEX rolls, no spells.</p>}
       <h2 className="sec">Weapons</h2>
       <ul className="gear">
-        {(eq.weapons || []).map((id, i) => <li key={`${id}${i}`}><span className="grow">{weaponById(id)?.name}</span><button className="icon-btn" aria-label={`Remove ${weaponById(id)?.name}`} onClick={() => setEq({ weapons: eq.weapons.filter((_, j) => j !== i) })}>✕</button></li>)}
+        {(eq.weapons || []).map((id, i) => <li key={`${id}${i}`}><GameIcon id={`w.${id}`} size={30} /><span className="grow">{weaponById(id)?.name}<span className="muted small"> · {weaponById(id)?.dmg} {weaponById(id)?.type}</span></span><button className="icon-btn" aria-label={`Remove ${weaponById(id)?.name}`} onClick={() => setEq({ weapons: eq.weapons.filter((_, j) => j !== i) })}>✕</button></li>)}
       </ul>
-      {adding
-        ? <select className="input" autoFocus defaultValue="" onChange={(e) => { if (e.target.value) setEq({ weapons: [...(eq.weapons || []), e.target.value] }); setAdding(false) }} aria-label="Add a weapon"><option value="">Choose a weapon…</option>{WEAPONS.map((wp) => <option key={wp.id} value={wp.id}>{wp.name} ({wp.dmg} {wp.type})</option>)}</select>
-        : <button className="btn ghost" onClick={() => setAdding(true)}>+ Add a weapon</button>}
+      <button className="btn ghost" onClick={() => setAdding(true)}>+ Add a weapon</button>
+      {adding && <WeaponPicker cls={d.cls} onPick={(id) => { setEq({ weapons: [...(eq.weapons || []), id] }); setAdding(false) }} onClose={() => setAdding(false)} />}
       <h2 className="sec">Gold and items</h2>
       <div className="row"><span className="grow">Gold pieces</span><Stepper value={eq.gp || 0} min={0} label="Gold" onChange={(gp) => setEq({ gp })} /></div>
       <textarea className="input" value={eq.items || ''} onChange={(e) => setEq({ items: e.target.value })} placeholder="Rope, rations, a mysterious key…" />
@@ -370,12 +377,46 @@ export function ConditionsSheet({ d, ch, setState, onClose }) {
           <li key={c.id}>
             <label className="cond">
               <input type="checkbox" checked={on.has(c.id)} onChange={() => toggle(c.id)} />
+              <GameIcon id={`cond.${c.id}`} size={30} className="cond-icon" />
               <span><b>{c.name}</b><span className="muted small">{c.summary}</span></span>
             </label>
           </li>
         ))}
       </ul>
       <button className="btn ghost wide" disabled={!d.conditions.length} onClick={() => setState({ conditions: [] })}>Clear all conditions</button>
+    </Sheet>
+  )
+}
+
+/** Choose a weapon from cards: picture, damage, properties; the ones you're trained with first. */
+function WeaponPicker({ cls, onPick, onClose }) {
+  const [q, setQ] = useState('')
+  const trained = (w) => !cls || cls.weapons.some((t) => t === w.cat.split('-')[0] || (t === 'martial-light' && w.cat.startsWith('martial') && w.props.includes('light')) || (t === 'martial-finesse-light' && w.cat.startsWith('martial') && (w.props.includes('finesse') || w.props.includes('light'))))
+  const groups = [['simple-melee', 'Simple melee'], ['simple-ranged', 'Simple ranged'], ['martial-melee', 'Martial melee'], ['martial-ranged', 'Martial ranged']]
+  const list = WEAPONS.filter((w) => !q || w.name.toLowerCase().includes(q.toLowerCase()))
+  return (
+    <Sheet title="Add a weapon" onClose={onClose}>
+      <input className="input" type="search" placeholder="Search weapons" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search weapons" />
+      {groups.map(([cat, label]) => {
+        const ws = list.filter((w) => w.cat === cat)
+        if (!ws.length) return null
+        return (
+          <React.Fragment key={cat}>
+            <h3 className="sp-level">{label}</h3>
+            <div className="gear-grid">
+              {ws.map((w) => (
+                <button key={w.id} className={`gear-card ${trained(w) ? '' : 'untrained'}`} onClick={() => onPick(w.id)}>
+                  <GameIcon id={`w.${w.id}`} size={36} />
+                  <b>{w.name}</b>
+                  <span className="muted small">{w.dmg} {w.type}{w.range ? ` · ${w.range} ft` : ''}</span>
+                  <span className="muted small">{[...w.props, w.mastery && `mastery: ${w.mastery}`].filter(Boolean).join(', ')}</span>
+                  {!trained(w) && <span className="warn-line small">Not trained</span>}
+                </button>
+              ))}
+            </div>
+          </React.Fragment>
+        )
+      })}
     </Sheet>
   )
 }

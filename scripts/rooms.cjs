@@ -126,6 +126,32 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     ok(await DP.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'DM on a phone: nothing scrolls sideways')
     await DP.screenshot({ path: `${shots}/rooms-5-dm-phone.png`, fullPage: true })
 
+    // the DM allows expansion subclasses for the group; the player's phone learns it
+    await D.click('button:text-is("Settings")')
+    await D.click('label:has-text("Allow subclasses from the expansion books") input')
+    await D.waitForTimeout(500)
+    await D.click('.sheet button[aria-label="Close"]')
+    ok(await until(() => B.p.evaluate(() => JSON.parse(localStorage.getItem('ps.rooms') || '[]')[0]?.settings?.expansions === true), 40000), 'phone B: knows the DM allowed expansions')
+
+    // the owner's admin screen: set the password, then see every group and character
+    const adm = await b.newContext({ viewport: { width: 1280, height: 900 } })
+    await adm.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), API)
+    const AD = await adm.newPage(); AD.on('pageerror', (e) => ok(false, `admin page error: ${e.message}`))
+    await AD.goto(URL + '#/admin')
+    await AD.fill('input[type=password]', 'owner-password-123'); await AD.click('button:text-is("Open")')
+    await AD.waitForSelector('text=Choose the admin password')
+    await AD.click('button:text-is("Set the admin password")')
+    ok(await until(() => AD.isVisible('.admin-rooms .room:has-text("Thursday night")')), 'admin: sees the group')
+    ok(await AD.locator('.admin-rooms .room:has-text("Thursday night") .admin-chars li').count() === 2, 'admin: sees both characters')
+    ok((await AD.textContent('.kinds')).includes('DM actions'), 'admin: usage by kind')
+    await AD.screenshot({ path: `${shots}/rooms-6-admin.png`, fullPage: true })
+    await axe(AD, 'admin screen')
+    const octx = await b.newContext()
+    await octx.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), API)
+    const other = await octx.newPage()
+    await other.goto(URL + '#/admin'); await other.fill('input[type=password]', 'not-the-password-1'); await other.click('button:text-is("Open")')
+    ok(await until(() => other.isVisible('text=Wrong admin password')), 'admin: a wrong password is refused')
+
     // leaving the group
     await A.p.click('button[aria-label="Character settings"]')
     await A.p.click('button:has-text("Leave the group")')

@@ -2,7 +2,7 @@
 // spells, casting with a chosen slot, and a picker for the spells you prepare.
 import React, { useState, useMemo } from 'react'
 import { spellRoll } from '../engine/spells.js'
-import { Sheet, Num, Breakdown, signed } from './common.jsx'
+import { Sheet, Num, Breakdown, signed, GameIcon } from './common.jsx'
 
 const LEVEL = (n) => (n === 0 ? 'Cantrip' : `Level ${n}`)
 const ORD = ['', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th']
@@ -116,7 +116,8 @@ function SpellRow({ s, sc, level, open, onToggle, attack, effect, onCast }) {
   return (
     <li className={`spell ${open ? 'open' : ''}`}>
       <button className="spell-name" onClick={onToggle} aria-expanded={open}>
-        <b>{s.name}</b><Tags s={s} sc={sc} always={sc.always.get(s.id)} />
+        <GameIcon id={`school.${s.school.toLowerCase()}`} size={30} className="sp-icon" />
+        <span><b>{s.name}</b><Tags s={s} sc={sc} always={sc.always.get(s.id)} /></span>
       </button>
       {open && (
         <div className="spell-body">
@@ -206,6 +207,7 @@ function SpellPicker({ sc, ch, setCh, onClose }) {
             <li key={s.id}>
               <label className={`pick ${on ? 'on' : ''} ${!on && count >= max ? 'off' : ''}`}>
                 <input type="checkbox" checked={on} disabled={!!always || (!on && count >= max)} onChange={() => toggle(s.id)} />
+                <GameIcon id={`school.${s.school.toLowerCase()}`} size={28} className="sp-icon" />
                 <span><b>{s.name}</b><Tags s={s} sc={sc} always={always} /><span className="muted small">{s.summary}</span></span>
               </label>
             </li>

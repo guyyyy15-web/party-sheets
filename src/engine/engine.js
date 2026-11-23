@@ -109,7 +109,7 @@ function openChoices(ch, features, ctx) {
   const cls = classById(ch.classId)
   const bg = backgroundById(ch.backgroundId)
   if (cls && ch.level >= cls.subclassLevel && !cls.subclasses.some((s) => s.id === ch.subclassId)) {
-    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary })), picked: [], source: 'class', level: cls.subclassLevel })
+    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary, source: s.source, expansion: !!s.expansion })), picked: [], source: 'class', level: cls.subclassLevel })
   }
   if (cls) {
     const picked = ch.choices['class.skills'] || []
@@ -210,6 +210,7 @@ export function derive(input) {
     for (let l = 2; l <= level; l++) rest += Math.max(1, (ch.hpRolls?.[l] ?? Math.floor(hitDie / 2) + 1) + mod.CON)
     if (level > 1) hp.sources.push({ label: `Levels 2-${level}: d${hitDie} ${signed(mod.CON)} CON each`, value: rest, kind: 'base' })
     for (const b of bonus('hpMax')) hp.sources.push(b)
+    for (const e of active) if (e.type === 'hp') hp.sources.push({ label: e.label || e.from, value: e.value(ctx), kind: 'bonus' })
     hp.value = Math.max(1, hp.sources.reduce((t, s) => t + s.value, 0))
   }
 
@@ -295,14 +296,15 @@ export function derive(input) {
   for (const e of active) if (e.type === 'note' && e.save) actions.push({ id: `note-${e.from}`, name: e.from, kind: 'info', summary: e.save.label, save: { dc: e.save.dc(ctx) } })
 
   const senses = active.filter((e) => e.type === 'sense').map((e) => ({ name: e.name, range: e.range }))
-  const resistances = [...new Set(active.filter((e) => e.type === 'resist').map((e) => e.damage))]
+  const immunities = [...new Set(active.filter((e) => e.type === 'immune').map((e) => e.damage))]
+  const resistances = [...new Set(active.filter((e) => e.type === 'resist').map((e) => e.damage))].filter((x) => !immunities.includes(x))
   const choices = openChoices(ch, features, ctx)
 
   return {
     name: ch.name, level, cls, species: sp, background: bg, subclass: cls?.subclasses.find((s) => s.id === ch.subclassId) || null,
     scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, spellcasting, resources, attacks, attacksPerAction, actions,
     exhaustion, d20Pen, inspiration: !!ch.state?.inspiration, conditions: ch.state?.conditions || [],
-    senses, resistances, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
+    senses, resistances, immunities, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
     choices, pending: choices.filter((c) => !c.done), armor, shield, crit,
   }
 }

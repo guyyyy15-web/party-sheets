@@ -66,6 +66,12 @@ async function limit(env, req, kind, max, windowMs) {
   if (n > max) fail(429, 'too many requests')
 }
 
+const today = () => new Date().toISOString().slice(0, 10)
+/** Daily usage counters for the owner's admin screen. Writes only, never request content. */
+async function count(env, kind) {
+  try { await env.DB.prepare('INSERT INTO usage (day, kind, count) VALUES (?, ?, 1) ON CONFLICT (day, kind) DO UPDATE SET count = count + 1').bind(today(), kind).run() } catch { /* never fail a request over a counter */ }
+}
+
 /** Who is calling for this room: 'dm', 'player', or an error. Bearer key = the player or the DM key. */
 async function roleIn(env, req, roomId) {
   if (!ID.test(roomId || '')) fail(400, 'bad room')
@@ -83,13 +89,36 @@ const ownerHash = async (req) => {
   if (!KEY.test(o)) fail(401, 'no owner key')
   return sha256(o)
 }
-const publicRoom = (r) => ({ id: r.id, name: r.name })
+const roomSettings = (r) => { try { return JSON.parse(r.settings || '{}') } catch { return {} } }
+const publicRoom = (r) => ({ id: r.id, name: r.name, settings: roomSettings(r) })
 
 async function route(req, env) {
   const url = new URL(req.url)
   const p = url.pathname
   const m = req.method
   if (p === '/' || p === '/health') return json({ ok: true, service: 'party-sheets-sync' })
+
+  // ── the owner's admin screen. The first password set becomes the admin's (only its hash is kept); then it's locked.
+  if (p === '/admin/claim' && m === 'POST') {
+    await limit(env, req, 'admin', 10, 3600e3)
+    const body = await readJson(req, 512)
+    const key = String(body?.key || '')
+    if (key.length < 12 || key.length > 200) fail(400, 'password: 12 characters or more')
+    const done = await env.DB.prepare("INSERT INTO settings (key, value) VALUES ('admin_hash', ?) ON CONFLICT (key) DO NOTHING RETURNING key").bind(await sha256(`admin:${key}`)).first('key')
+    if (!done) fail(409, 'the admin password is already set')
+    return json({ ok: true }, 201)
+  }
+  if (p.startsWith('/admin/')) {
+    await limit(env, req, 'admin', 120, 3600e3)
+    const stored = await env.DB.prepare("SELECT value FROM settings WHERE key = 'admin_hash'").first('value')
+    if (!stored) fail(404, 'no admin yet')
+    const key = (req.headers.get('Authorization') || '').replace(/^Bearer /, '')
+    if (!key || !same(await sha256(`admin:${key}`), stored)) fail(403, 'wrong admin password')
+    if (p === '/admin/stats' && m === 'GET') return json(await adminStats(env))
+    const dm = /^\/admin\/rooms\/([A-Za-z0-9_-]+)$/.exec(p)
+    if (dm && m === 'DELETE') { await env.DB.prepare('DELETE FROM characters WHERE room_id = ?').bind(dm[1]).run(); await env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(dm[1]).run(); return json({ ok: true }) }
+    fail(404, 'not found')
+  }
 
   // Create a room: returns the two keys once (the links carry them; the server keeps hashes).
   if (p === '/rooms' && m === 'POST') {
@@ -102,6 +131,7 @@ async function route(req, env) {
     const id = randomKey(9), playerKey = randomKey(), dmKey = randomKey()
     const now = Date.now()
     await env.DB.prepare('INSERT INTO rooms (id, name, player_hash, dm_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, name, await sha256(playerKey), await sha256(dmKey), now, now).run()
+    await count(env, 'room_created')
     return json({ room: { id, name }, playerKey, dmKey }, 201)
   }
 
@@ -120,10 +150,12 @@ async function route(req, env) {
     const { room, role } = await roleIn(env, req, rm[1])
     if (role !== 'dm') fail(403, 'DM only')
     const body = await readJson(req, 1024)
-    const name = String(body?.name || '').trim().slice(0, LIMITS.roomName)
+    const name = body?.name == null ? room.name : String(body.name).trim().slice(0, LIMITS.roomName)
     if (!name) fail(400, 'name required')
-    await env.DB.prepare('UPDATE rooms SET name = ?, updated_at = ? WHERE id = ?').bind(name, Date.now(), room.id).run()
-    return json({ room: { id: room.id, name } })
+    const settings = { ...roomSettings(room) }
+    if (body?.settings && typeof body.settings === 'object') { if ('expansions' in body.settings) settings.expansions = !!body.settings.expansions }
+    await env.DB.prepare('UPDATE rooms SET name = ?, settings = ?, updated_at = ? WHERE id = ?').bind(name, JSON.stringify(settings), Date.now(), room.id).run()
+    return json({ room: { id: room.id, name, settings } })
   }
 
   const cm = /^\/rooms\/([A-Za-z0-9_-]+)\/characters\/([A-Za-z0-9_-]+)$/.exec(p)
@@ -154,6 +186,7 @@ async function route(req, env) {
         const text = JSON.stringify(data)
         if (text.length > LIMITS.characterBytes) fail(413, 'character too large')
         const rev = await env.DB.prepare('UPDATE characters SET data = ?, rev = rev + 1, updated_at = ? WHERE id = ? RETURNING rev').bind(text, Date.now(), id).first('rev')
+        await count(env, 'player_write')
         return json({ id, rev, data })
       }
       const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM characters WHERE room_id = ?').bind(room.id).first('n')
@@ -163,6 +196,7 @@ async function route(req, env) {
       const text = JSON.stringify(data)
       if (text.length > LIMITS.characterBytes) fail(413, 'character too large')
       await env.DB.prepare('INSERT INTO characters (id, room_id, owner_hash, data, rev, updated_at) VALUES (?, ?, ?, ?, 1, ?)').bind(id, room.id, owner, text, Date.now()).run()
+      await count(env, 'character_joined')
       return json({ id, rev: 1, data }, 201)
     }
 
@@ -185,6 +219,7 @@ async function route(req, env) {
       if ('inspiration' in clean) clean.inspiration = !!clean.inspiration
       const data = mergePatch(JSON.parse(row.data), { state: clean })
       const rev = await env.DB.prepare('UPDATE characters SET data = ?, rev = rev + 1, updated_at = ? WHERE id = ? RETURNING rev').bind(JSON.stringify(data), Date.now(), id).first('rev')
+      await count(env, 'dm_action')
       return json({ id, rev, data })
     }
 
@@ -197,6 +232,33 @@ async function route(req, env) {
     }
   }
   fail(404, 'not found')
+}
+
+/** Everything the owner's admin screen shows: totals, every group with its characters (a summary, not full sheets),
+ *  and the last 30 days of usage. */
+async function adminStats(env) {
+  const week = Date.now() - 7 * 864e5
+  const [rooms, chars, usage, totals] = await Promise.all([
+    env.DB.prepare('SELECT id, name, created_at, updated_at FROM rooms ORDER BY updated_at DESC LIMIT 500').all(),
+    env.DB.prepare(`SELECT id, room_id, owner_hash, rev, updated_at, json_extract(data, '$.name') AS name, json_extract(data, '$.classId') AS classId,
+      json_extract(data, '$.subclassId') AS subclassId, json_extract(data, '$.speciesId') AS speciesId, json_extract(data, '$.level') AS level,
+      json_extract(data, '$.state.hp') AS hp, json_extract(data, '$.portrait.kind') AS pk, json_extract(data, '$.portrait.src') AS ps, length(data) AS bytes FROM characters`).all(),
+    env.DB.prepare('SELECT day, kind, count FROM usage WHERE day >= ? ORDER BY day').bind(new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)).all(),
+    env.DB.prepare('SELECT (SELECT COUNT(*) FROM rooms) AS rooms, (SELECT COUNT(*) FROM characters) AS characters, (SELECT COUNT(DISTINCT owner_hash) FROM characters) AS players, (SELECT COALESCE(SUM(length(data)), 0) FROM characters) AS bytes').first(),
+  ])
+  const byRoom = new Map()
+  const lastActive = new Map()
+  for (const c of chars.results) {
+    if (!byRoom.has(c.room_id)) byRoom.set(c.room_id, [])
+    byRoom.get(c.room_id).push({ id: c.id, name: c.name, classId: c.classId, subclassId: c.subclassId, speciesId: c.speciesId, level: c.level, hp: c.hp, rev: c.rev, updatedAt: c.updated_at, bytes: c.bytes, player: c.owner_hash.slice(0, 6), portrait: c.pk === 'icon' ? c.ps : null })
+    lastActive.set(c.room_id, Math.max(lastActive.get(c.room_id) || 0, c.updated_at))
+  }
+  return {
+    totals: { ...totals, activeRooms7d: rooms.results.filter((r) => Math.max(r.updated_at, lastActive.get(r.id) || 0) >= week).length, activeCharacters7d: chars.results.filter((c) => c.updated_at >= week).length },
+    limits: LIMITS,
+    rooms: rooms.results.map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at, lastActive: Math.max(r.updated_at, lastActive.get(r.id) || 0), characters: byRoom.get(r.id) || [] })).sort((a, b) => b.lastActive - a.lastActive),
+    usage: usage.results,
+  }
 }
 
 /** Changed top-level fields replace the stored ones; `state` merges one level deeper (so a DM's HP change and the

@@ -73,6 +73,12 @@ test('a room: create, join as a player and as the DM, share characters, DM quick
   // the other room's keys don't open this one
   assert.equal((await call(`/rooms/${room.id}`, { auth: r2.dmKey })).status, 403)
 
+  // group settings: only the DM changes them; everyone reads them
+  assert.equal((await call(`/rooms/${room.id}`, { method: 'PATCH', auth: playerKey, body: { settings: { expansions: true } } })).status, 403)
+  assert.deepEqual((await call(`/rooms/${room.id}`, { method: 'PATCH', auth: dmKey, body: { settings: { expansions: true, junk: 1 } } })).body.room.settings, { expansions: true })
+  assert.equal((await call(`/rooms/${room.id}`, { auth: playerKey })).body.room.settings.expansions, true)
+  assert.equal((await call(`/rooms/${room.id}`, { auth: dmKey })).body.room.name, 'Thursday group')
+
   // the owner leaves the room
   assert.equal((await call(`/rooms/${room.id}/characters/char_aria1`, { method: 'DELETE', auth: playerKey, owner: me })).status, 200)
   assert.equal((await call(`/rooms/${room.id}`, { auth: dmKey })).body.characters.length, 0)
@@ -96,4 +102,21 @@ test('12 characters per room', async () => {
   const { room, playerKey } = (await call('/rooms', { method: 'POST', body: { name: 'Crowded' } })).body
   for (let i = 0; i < 12; i++) assert.equal((await call(`/rooms/${room.id}/characters/char_c${i}xxxx`, { method: 'PUT', auth: playerKey, owner: key(), body: { patch: hero(`H${i}`) } })).status, 201)
   assert.equal((await call(`/rooms/${room.id}/characters/char_c99xxx`, { method: 'PUT', auth: playerKey, owner: key(), body: { patch: hero() } })).status, 507)
+})
+
+test('admin: the first password claims it, then stats for the owner only', async () => {
+  assert.equal((await call('/admin/stats', { auth: 'nope-nope-nope' })).status, 404)
+  assert.equal((await call('/admin/claim', { method: 'POST', body: { key: 'short' } })).status, 400)
+  assert.equal((await call('/admin/claim', { method: 'POST', body: { key: 'my-admin-password-123' } })).status, 201)
+  assert.equal((await call('/admin/claim', { method: 'POST', body: { key: 'someone-else-later-999' } })).status, 409)
+  assert.equal((await call('/admin/stats', { auth: 'someone-else-later-999' })).status, 403)
+  const s = await call('/admin/stats', { auth: 'my-admin-password-123' })
+  assert.equal(s.status, 200)
+  assert.ok(s.body.totals.rooms >= 3 && s.body.totals.characters >= 1)
+  const room = s.body.rooms.find((r) => r.name === 'Crowded')
+  assert.equal(room.characters.length, 12); assert.equal(room.characters[0].classId, 'fighter'); assert.equal(room.characters[0].data, undefined)
+  assert.ok(s.body.usage.some((u) => u.kind === 'room_created' && u.count >= 3))
+  assert.ok(s.body.usage.some((u) => u.kind === 'dm_action'))
+  assert.equal((await call(`/admin/rooms/${room.id}`, { method: 'DELETE', auth: 'my-admin-password-123' })).status, 200)
+  assert.ok(!(await call('/admin/stats', { auth: 'my-admin-password-123' })).body.rooms.some((r) => r.name === 'Crowded'))
 })

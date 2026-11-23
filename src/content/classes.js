@@ -1,6 +1,13 @@
 // Fighter, Rogue and Monk from the SRD 5.2 (CC-BY-4.0), levels 1-20, with the SRD subclass of each, summarised.
 import { FEATS } from './feats.js'
 import { CASTER_CLASSES } from './casters.js'
+import { PHB_SUBCLASSES_1 } from './phb-subclasses-1.js'
+import { PHB_SUBCLASSES_2 } from './phb-subclasses-2.js'
+import { PHB_SUBCLASSES_3 } from './phb-subclasses-3.js'
+import { EXT_SUBCLASSES_1 } from './ext-subclasses-1.js'
+import { EXT_SUBCLASSES_2 } from './ext-subclasses-2.js'
+import { EXT_SUBCLASSES_3 } from './ext-subclasses-3.js'
+import { EXT_SUBCLASSES_4 } from './ext-subclasses-4.js'
 import { WEAPONS } from './basics.js'
 
 const ASI_LEVELS = [4, 8, 12, 16]
@@ -203,4 +210,12 @@ export const MONK = {
 
 export const CLASSES = [FIGHTER, ROGUE, MONK, ...CASTER_CLASSES]
 export const classById = (id) => CLASSES.find((c) => c.id === id) || null
+
+// Subclasses beyond the SRD: the 2024 Player's Handbook (and later the expansion books), mechanics in our own words
+for (const set of [PHB_SUBCLASSES_1, PHB_SUBCLASSES_2, PHB_SUBCLASSES_3, EXT_SUBCLASSES_1, EXT_SUBCLASSES_2, EXT_SUBCLASSES_3, EXT_SUBCLASSES_4]) {
+  for (const [classId, list] of Object.entries(set)) {
+    const cls = classById(classId)
+    for (const sub of list) if (!cls.subclasses.some((s) => s.id === sub.id)) cls.subclasses.push(sub)
+  }
+}
 export { ASI_LEVELS }

@@ -6,8 +6,9 @@ import { CLASSES, classById } from '../content/classes.js'
 import { SPECIES, speciesById } from '../content/species.js'
 import { BACKGROUNDS, backgroundById } from '../content/backgrounds.js'
 import { ABILITIES, ABILITY_NAMES, skillName, armorById, weaponById } from '../content/basics.js'
-import { OptionCards, AsiPicker, asiDone, Stepper, signed } from './common.jsx'
+import { OptionCards, AsiPicker, asiDone, Stepper, signed, GameIcon } from './common.jsx'
 import { shrinkImage } from './store.js'
+import { expansionsAllowed } from './sync.js'
 import { load3d } from './dice.jsx'
 
 const STANDARD = [15, 14, 13, 12, 10, 8]
@@ -111,7 +112,7 @@ function ClassStep({ ch, setCh }) {
   return (
     <section>
       <h1 className="wiz-title">Pick a class</h1>
-      <p className="lead">Your class is how you fight and what you're good at. More classes arrive with spells.</p>
+      <p className="lead">Your class is how you fight and what you're good at.</p>
       <details className="quiz">
         <summary>Not sure? Two quick questions</summary>
         {QUIZ.map((q, i) => (
@@ -122,7 +123,8 @@ function ClassStep({ ch, setCh }) {
       </details>
       <div className="cards">
         {CLASSES.map((c) => (
-          <button key={c.id} className={`card class-card cls-${c.id} ${ch.classId === c.id ? 'on' : ''}`} aria-pressed={ch.classId === c.id} onClick={() => choose(c.id)}>
+          <button key={c.id} className={`card class-card has-icon cls-${c.id} ${ch.classId === c.id ? 'on' : ''}`} aria-pressed={ch.classId === c.id} onClick={() => choose(c.id)}>
+            <GameIcon id={`class.${c.id}`} size={40} className="opt-icon" />
             <span className="opt-name">{c.name} {best === c.id && <span className="pill">Suggested</span>}{ch.classId === c.id && <span className="tick">✓</span>}</span>
             <span className="opt-sum">{c.blurb}</span>
             <span className="facts"><span>d{c.hitDie} hit die</span><span>{c.primary.join(' + ')}</span><span>{c.difficulty}</span></span>
@@ -141,7 +143,7 @@ function SpeciesStep({ ch, setCh, d }) {
       <p className="lead">Where your hero comes from: senses, speed and a gift or two.</p>
       <div className="cards cols-2">
         {SPECIES.map((s) => (
-          <button key={s.id} className={`card opt ${ch.speciesId === s.id ? 'on' : ''}`} aria-pressed={ch.speciesId === s.id} onClick={() => setCh({ ...ch, speciesId: s.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('species.'))) })}>
+          <button key={s.id} className={`card opt has-icon ${ch.speciesId === s.id ? 'on' : ''}`} aria-pressed={ch.speciesId === s.id} onClick={() => setCh({ ...ch, speciesId: s.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('species.'))) })}><GameIcon id={`species.${s.id}`} size={40} className="opt-icon" />
             <span className="opt-name">{s.name}{ch.speciesId === s.id && <span className="tick">✓</span>}</span>
             <span className="opt-sum">{s.blurb}</span>
             <span className="facts"><span>{s.size}</span><span>{s.speed} ft</span></span>
@@ -169,7 +171,7 @@ function BackgroundStep({ ch, setCh, d }) {
       <p className="lead">What you did before adventuring. It raises your ability scores and gives a feat, skills and a tool.</p>
       <div className="cards">
         {BACKGROUNDS.map((b) => (
-          <button key={b.id} className={`card opt ${ch.backgroundId === b.id ? 'on' : ''}`} aria-pressed={ch.backgroundId === b.id} onClick={() => setCh({ ...ch, backgroundId: b.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('background'))) })}>
+          <button key={b.id} className={`card opt has-icon ${ch.backgroundId === b.id ? 'on' : ''}`} aria-pressed={ch.backgroundId === b.id} onClick={() => setCh({ ...ch, backgroundId: b.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('background'))) })}><GameIcon id={`bg.${b.id}`} size={40} className="opt-icon" />
             <span className="opt-name">{b.name}{ch.backgroundId === b.id && <span className="tick">✓</span>}</span>
             <span className="opt-sum">{b.blurb}</span>
             <span className="facts"><span>{b.abilities.join(' · ').replace(/ · /g, ', ')}</span><span>{d.features.find((f) => f.source === 'background')?.name && ch.backgroundId === b.id ? d.features.find((f) => f.source === 'background').name : b.feat.replace(/-/g, ' ')}</span><span>{b.skills.map(skillName).join(', ')}</span></span>
@@ -309,12 +311,13 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
         <div key={c.key} className={`panel choice ${c.done ? 'done' : ''}`}>
           <h2>{c.featureName && c.featureName !== c.label ? `${c.featureName}: ` : ''}{c.label}{c.level > 1 ? <span className="muted small"> · level {c.level}</span> : null}</h2>
           {c.kind === 'asi' || c.kind === 'epic'
-            ? <AsiPicker value={drafts[c.key] || ch.choices[c.key]} epic={c.kind === 'epic'} level={ch.level} takenFeats={takenFeats} scores={Object.fromEntries(Object.entries(d.scores).map(([a, s]) => [a, s.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))]))}
+            ? <AsiPicker value={drafts[c.key] || ch.choices[c.key]} epic={c.kind === 'epic'} level={ch.level} takenFeats={takenFeats} caster={!!d.spellcasting} armor={d.cls?.armor || []} scores={Object.fromEntries(Object.entries(d.scores).map(([a, s]) => [a, s.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))]))}
                 onChange={(v) => { setDrafts({ ...drafts, [c.key]: v }); if (asiDone(v)) set(c.key, v); else if (ch.choices[c.key]) { const next = { ...ch.choices }; delete next[c.key]; setCh({ ...ch, choices: next }) } }} />
             : <>
                 <p className="muted small">{c.count > 1 ? `Choose ${c.count} (${c.picked.length} chosen).` : 'Choose one.'}</p>
+                {c.kind === 'subclass' && c.options.some((o) => o.expansion) && <p className="muted small">{expansionsAllowed(ch) ? 'Includes subclasses from the expansion books (tagged).' : `${c.options.filter((o) => o.expansion).length} more subclasses from the expansion books: ${ch.roomId ? 'the DM can allow them in the group settings' : 'allow them in Table settings'}.`}</p>}
                 <OptionCards columns={c.options.length > 6 ? 2 : 1} count={c.count} picked={c.picked} onChange={(v) => set(c.key, v)}
-                  options={c.options.map((o) => ({ ...o, summary: o.summary || (c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) ? 'Already proficient' : ''), disabled: c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) }))} />
+                  options={c.options.filter((o) => !o.expansion || expansionsAllowed(ch) || c.picked.includes(o.id)).map((o) => ({ ...o, icon: c.kind === 'subclass' ? `class.${ch.classId}` : c.kind === 'weapon' ? `w.${o.id}` : c.kind === 'feat' ? 'ui.feat' : undefined, summary: o.summary || (c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) ? 'Already proficient' : ''), disabled: c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) }))} />
               </>}
         </div>
       ))}
@@ -330,14 +333,14 @@ function GearStep({ ch, setCh, d }) {
       <h1 className="wiz-title">Gear</h1>
       <p className="lead">Take the {cls?.name} kit or gold to shop with. Your background adds 50 GP. You can change weapons and armor on the sheet.</p>
       <OptionCards count={1} picked={ch.equipment.pack ? [ch.equipment.pack] : []} onChange={([id]) => setPack(cls.packs.find((p) => p.id === id))}
-        options={(cls?.packs || []).map((p) => ({ id: p.id, name: p.name, summary: p.items }))} />
+        options={(cls?.packs || []).map((p) => ({ id: p.id, name: p.name, summary: p.items, icon: p.weapons?.length || p.armor ? 'ui.pack' : 'ui.gold' }))} />
       {cls?.armor.includes('shield') && (
         <label className="row toggle"><input type="checkbox" checked={!!ch.equipment.shield} onChange={(e) => setCh({ ...ch, equipment: { ...ch.equipment, shield: e.target.checked } })} /><span>Carry a shield (+2 AC)</span></label>
       )}
       <div className="panel">
         <div className="row"><span className="grow">AC</span><b className="mono">{d.ac.value}</b></div>
         <div className="row"><span className="grow">Armor</span><span>{armorById(ch.equipment.armor)?.name || 'None'}</span></div>
-        <div className="row"><span className="grow">Weapons</span><span>{(ch.equipment.weapons || []).map((w) => weaponById(w)?.name).join(', ') || 'None'}</span></div>
+        <div className="row"><span className="grow">Weapons</span><span className="gear-inline">{(ch.equipment.weapons || []).length ? ch.equipment.weapons.map((w, i) => <span key={i}><GameIcon id={`w.${w}`} size={20} />{weaponById(w)?.name}</span>) : 'None'}</span></div>
       </div>
     </section>
   )
@@ -370,7 +373,7 @@ export function Portrait({ ch, size = 48 }) {
   const p = ch.portrait
   return (
     <span className={`portrait cls-${ch.classId || 'none'}`} style={{ width: size, height: size, fontSize: size * 0.5 }}>
-      {p?.kind === 'photo' ? <img src={p.src} alt="" /> : p?.kind === 'icon' ? p.src : (ch.name || '?').slice(0, 1).toUpperCase()}
+      {p?.kind === 'photo' ? <img src={p.src} alt="" /> : p?.kind === 'icon' ? p.src : ch.classId ? <GameIcon id={`class.${ch.classId}`} size={Math.round(size * 0.6)} /> : (ch.name || '?').slice(0, 1).toUpperCase()}
     </span>
   )
 }
