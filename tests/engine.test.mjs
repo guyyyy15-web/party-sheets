@@ -178,3 +178,66 @@ test('new required choices: monk tool, human and tiefling size, lineage spellcas
   assert.ok(keys({ speciesId: 'elf' }).includes('species.elven-lineage.spellAbility'))
   assert.ok(keys({ speciesId: 'gnome' }).includes('species.gnomish-lineage.spellAbility'))
 })
+
+// ---- spellcasting (values from the SRD 5.2 class tables at level 5)
+import { spellRoll } from '../src/engine/spells.js'
+import { spellById } from '../src/content/spells.js'
+
+test('a level 5 wizard: DC, spell attack, slots, cantrip and upcast dice', () => {
+  const d = derive(make({ classId: 'wizard', level: 5, speciesId: 'human', scores: { STR: 8, DEX: 14, CON: 14, INT: 16, WIS: 12, CHA: 10 },
+    spells: { cantrips: ['fire-bolt', 'light'], prepared: ['magic-missile', 'fireball', 'shield'] } }))
+  const sc = d.spellcasting
+  assert.equal(sc.dc.value, 14) // 8 + INT 3 + prof 3
+  assert.deepEqual(sc.dc.parts.map((p) => p.value), [8, 3, 3])
+  assert.equal(sc.attack.value, 6)
+  assert.deepEqual(sc.slots.map((s) => s.max), [4, 3, 2])
+  assert.equal(sc.maxLevel, 3); assert.equal(sc.cantripsMax, 4); assert.equal(sc.preparedMax, 9)
+  assert.deepEqual(sc.prepared.map((s) => s.id), ['magic-missile', 'shield', 'fireball'])
+  const r = (id, castLevel) => spellRoll(spellById(id), { level: 5, castLevel, mod: 3, ability: 'INT' })
+  assert.equal(r('fire-bolt').expr, '2d10') // a cantrip at character level 5
+  assert.equal(r('fireball', 3).expr, '8d6')
+  assert.equal(r('fireball', 4).expr, '9d6') // +1d6 per slot level above 3
+  assert.equal(r('magic-missile', 1).expr, '1d4+1')
+})
+
+test('a level 5 Life cleric: always-prepared domain spells, healing adds WIS', () => {
+  const d = derive(make({ classId: 'cleric', level: 5, speciesId: 'dwarf', subclassId: 'life', scores: { STR: 14, DEX: 10, CON: 14, INT: 8, WIS: 16, CHA: 12 },
+    spells: { prepared: ['bless', 'guiding-bolt'] } }))
+  const sc = d.spellcasting
+  assert.equal(sc.dc.value, 14); assert.equal(sc.cantripsMax, 4); assert.equal(sc.preparedMax, 9)
+  for (const id of ['aid', 'bless', 'cure-wounds', 'lesser-restoration', 'mass-healing-word', 'revivify']) assert.ok(sc.always.has(id), id)
+  assert.equal(sc.preparedChosen, 1, 'Bless is always prepared, so only Guiding Bolt counts against the limit')
+  assert.equal(spellRoll(spellById('cure-wounds'), { level: 5, castLevel: 2, mod: 3, ability: 'WIS' }).expr, '4d8+3')
+})
+
+test('a level 5 warlock has Pact Magic; a level 5 paladin has half-caster slots and no cantrips', () => {
+  const w = derive(make({ classId: 'warlock', level: 5, speciesId: 'human', scores: { STR: 8, DEX: 14, CON: 14, INT: 10, WIS: 12, CHA: 16 } })).spellcasting
+  assert.deepEqual([w.pact.count, w.pact.level], [2, 3]); assert.equal(w.slots.length, 0); assert.equal(w.cantripsMax, 3); assert.equal(w.preparedMax, 6)
+  assert.equal(spellRoll(spellById('eldritch-blast'), { level: 5, mod: 3, ability: 'CHA' }).expr, '1d10', 'more beams, not more dice')
+  const p = derive(make({ classId: 'paladin', level: 5, speciesId: 'human', scores: { STR: 16, DEX: 10, CON: 14, INT: 8, WIS: 10, CHA: 14 } })).spellcasting
+  assert.deepEqual(p.slots.map((s) => s.max), [4, 2]); assert.equal(p.cantripsMax, 0); assert.equal(p.preparedMax, 6)
+  assert.ok(p.always.has('divine-smite'))
+  assert.equal(derive(make({ classId: 'fighter', level: 5 })).spellcasting, null)
+})
+
+test('spell slots come back on a long rest; pact slots on a short rest', () => {
+  const ch = make({ classId: 'warlock', level: 5, speciesId: 'human', state: { ...newCharacter().state, used: { 'pact-slots': 2 } } })
+  assert.equal(rest(ch, 'short').used['pact-slots'], 0)
+  const wz = make({ classId: 'wizard', level: 5, speciesId: 'human', state: { ...newCharacter().state, used: { 'slot-1': 3 } } })
+  assert.equal(rest(wz, 'short').used['slot-1'], 3)
+  assert.equal(rest(wz, 'long').used['slot-1'], 0)
+})
+
+test('spell damage: every damage part, and upcasting however the spell words it (audit fixes)', () => {
+  const r = (id, castLevel) => spellRoll(spellById(id), { level: 9, castLevel, mod: 4, ability: 'WIS' }).expr
+  assert.equal(r('flame-strike', 5), '5d6+5d6')
+  assert.equal(r('flame-strike', 6), '6d6+6d6')
+  assert.equal(r('ice-storm', 5), '3d10+4d6')
+  assert.equal(r('meteor-swarm', 9), '20d6+20d6')
+  assert.equal(r('acid-arrow', 3), '5d4')
+  assert.equal(r('searing-smite', 2), '2d6')
+  assert.equal(r('ice-knife', 2), '1d10+3d6')
+  assert.equal(r('vitriolic-sphere', 5), '12d4')
+  assert.equal(r('fireball', 5), '10d6')
+  assert.equal(r('cure-wounds', 3), '6d8+4')
+})

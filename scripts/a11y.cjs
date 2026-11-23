@@ -37,7 +37,15 @@ async function scan(p, name) {
   for (const t of ['Checks', 'Features', 'Gear', 'Notes']) { await p.click(`[role=tab]:has-text("${t}")`); await scan(p, `sheet: ${t}`) }
   await p.click('.cond-btn'); await scan(p, 'conditions'); await p.click('.sheet-head .icon-btn')
   await p.click('button:has-text("Short rest")'); await scan(p, 'short rest'); await p.click('.sheet-head .icon-btn')
-  await p.click('.fab'); await scan(p, 'dice tray')
+  await p.click('.fab'); await scan(p, 'dice tray'); await p.click('.sheet-head button[aria-label="Close"]')
+  // a level 5 wizard (imported): the Spells tab, the picker, casting
+  const { newCharacter } = await import('../src/engine/engine.js')
+  const wiz = { ...newCharacter(), name: 'Vex', classId: 'wizard', level: 5, speciesId: 'elf', backgroundId: 'sage', scores: { STR: 8, DEX: 14, CON: 14, INT: 16, WIS: 12, CHA: 10 }, spells: { cantrips: ['fire-bolt'], prepared: ['fireball'] } }
+  await p.click('button[aria-label="All characters"]')
+  await p.setInputFiles('input[aria-label="Backup file"]', { name: 'w.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ kind: 'party-sheets-backup', v: 1, characters: [wiz] })) })
+  await p.click('.char-card:has-text("Vex")'); await p.click('[role=tab]:has-text("Spells")'); await p.click('.spell-name:has-text("Fireball")'); await scan(p, 'sheet: Spells')
+  await p.click('button:has-text("Choose spells")'); await scan(p, 'spell picker'); await p.click('.sheet button:text-is("Done")')
+  await p.click('.spell:has-text("Fireball") button:text-is("Cast")'); await scan(p, 'cast a spell')
   await b.close(); server.close()
   console.log(bad ? `\n${bad} serious issue(s)` : '\nno serious accessibility issues')
   process.exit(bad ? 1 : 0)

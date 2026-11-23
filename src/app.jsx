@@ -9,7 +9,7 @@ import { DmView } from './ui/dm.jsx'
 import { DiceTray, performRoll, throwDefault, load3d, RollCard } from './ui/dice.jsx'
 import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
-import { Sheet } from './ui/common.jsx'
+import { Sheet, themeOf } from './ui/common.jsx'
 
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const standalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true
@@ -160,7 +160,7 @@ function Home({ chars, onOpen, onNew, onBring, onDm, joined, onExport, onImport,
   const card = (c) => {
     const d = derive(c)
     return (
-      <li key={c.id}><button className={`char-card theme-${c.theme || { fighter: 'red', rogue: 'violet', monk: 'gold' }[c.classId] || 'gold'}`} onClick={() => onOpen(c)}>
+      <li key={c.id}><button className={`char-card theme-${themeOf(c)}`} onClick={() => onOpen(c)}>
         <Portrait ch={c} size={52} />
         <span className="grow"><b>{c.name || 'Unnamed hero'}</b><span className="muted small">{c.draft ? 'Draft, tap to continue' : `${d.species?.name || ''} ${d.cls?.name || ''} ${c.level}`}</span></span>
         {!c.draft && <span className="mini"><span>AC {d.ac.value}</span><span>HP {c.state.hp ?? d.hp.value}/{d.hp.value}</span></span>}

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { derive } from '../engine/engine.js'
 import { CONDITIONS } from '../content/conditions.js'
 import { ABILITIES } from '../content/basics.js'
-import { signed, Num } from './common.jsx'
+import { signed, Num, themeOf } from './common.jsx'
 import { Portrait } from './wizard.jsx'
 import { HpSheet, ConditionsSheet } from './sheet.jsx'
 import { fetchRoom, dmPatch, inviteLink, dmLink } from './sync.js'
@@ -74,7 +74,7 @@ function DmCard({ c, onHp, onCond, act }) {
   const pct = Math.max(0, Math.min(100, (hp / d.hp.value) * 100))
   const tone = hp === 0 ? 'down' : pct <= 25 ? 'low' : pct <= 50 ? 'mid' : ''
   const conds = [...d.conditions.map((id) => CONDITIONS.find((x) => x.id === id)?.name).filter(Boolean), d.exhaustion ? `Exhaustion ${d.exhaustion}` : null].filter(Boolean)
-  const theme = ch.theme || { fighter: 'red', rogue: 'violet', monk: 'gold' }[ch.classId] || 'gold'
+  const theme = themeOf(ch)
   return (
     <li className={`dm-card theme-${theme}`}>
       <div className="dm-head">

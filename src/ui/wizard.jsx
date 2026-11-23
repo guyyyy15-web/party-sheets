@@ -95,8 +95,9 @@ function HeroStep({ ch, setCh }) {
 }
 
 const QUIZ = [
-  { q: 'In a fight, you want to…', a: [['Hit hard up close', ['fighter', 'monk']], ['Strike from the shadows', ['rogue']]] },
-  { q: 'You like…', a: [['Simple and sturdy', ['fighter']], ['Lots of options each turn', ['monk', 'rogue']]] },
+  { q: 'In a fight, you want to…', a: [['Hit hard up close', ['barbarian', 'fighter', 'monk', 'paladin']], ['Strike from afar or the shadows', ['rogue', 'ranger', 'warlock']], ['Cast big spells', ['wizard', 'sorcerer', 'druid']], ['Keep friends standing', ['cleric', 'bard', 'paladin', 'druid']]] },
+  { q: 'Your power comes from…', a: [['Training and grit', ['fighter', 'barbarian', 'rogue', 'monk']], ['Study and books', ['wizard']], ['Gods, oaths or nature', ['cleric', 'paladin', 'druid', 'ranger']], ['Your blood, a patron or a song', ['sorcerer', 'warlock', 'bard']]] },
+  { q: 'You like…', a: [['Simple and sturdy', ['fighter', 'barbarian', 'paladin']], ['Lots of options each turn', ['monk', 'rogue', 'bard', 'ranger']], ['A big book of spells', ['wizard', 'cleric', 'druid']], ['Few spells, used well', ['warlock', 'sorcerer']]] },
 ]
 
 function ClassStep({ ch, setCh }) {
@@ -105,7 +106,7 @@ function ClassStep({ ch, setCh }) {
   const best = answers.length === QUIZ.length ? CLASSES.reduce((b, c) => (score(c.id) > score(b.id) ? c : b)).id : null
   const choose = (id) => {
     const cls = classById(id)
-    setCh({ ...ch, classId: id, subclassId: ch.classId === id ? ch.subclassId : null, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('class.') && !/^(asi|fighting|fighter|rogue|expertise|monk|epic)/.test(k))), equipment: { ...ch.equipment, pack: null, armor: null, shield: false, weapons: [] }, theme: ch.theme || null, hpRolls: {}, _cls: cls.id })
+    setCh({ ...ch, classId: id, subclassId: ch.classId === id ? ch.subclassId : null, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => k.startsWith('species.') || k.startsWith('background'))), spells: { cantrips: [], prepared: [] }, equipment: { ...ch.equipment, pack: null, armor: null, shield: false, weapons: [] }, theme: ch.theme || null, hpRolls: {}, _cls: cls.id })
   }
   return (
     <section>

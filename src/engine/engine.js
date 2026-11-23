@@ -1,5 +1,6 @@
 // The rules engine: a character is only its choices and its current state; everything on the sheet is derived here.
 // Pure (no DOM), tested in tests/engine.test.mjs.
+import { spellcastingOf } from './spells.js'
 import { ABILITIES, SKILLS, armorById, weaponById, isRanged, MASTERY } from '../content/basics.js'
 import { classById } from '../content/classes.js'
 import { speciesById } from '../content/species.js'
@@ -283,6 +284,7 @@ export function derive(input) {
     damage: monkWeapons && maDie ? `1${maDie}${signed(mod[unarmedAbility])}` : `${Math.max(0, 1 + mod.STR)}`, type: 'bludgeoning', props: [], crit,
     note: `Or Grapple / Shove (DC ${8 + (monkWeapons ? Math.max(mod.STR, mod.DEX) : mod.STR) + prof})`,
   })
+  const spellcasting = spellcastingOf({ ch, cls, features, ctx, level, mod, prof, d20Pen, penSource })
   const attacksPerAction = Math.max(1, ...active.filter((e) => e.type === 'attacks').map((e) => e.value(ctx)))
 
   // actions for "My Turn"
@@ -298,7 +300,7 @@ export function derive(input) {
 
   return {
     name: ch.name, level, cls, species: sp, background: bg, subclass: cls?.subclasses.find((s) => s.id === ch.subclassId) || null,
-    scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, resources, attacks, attacksPerAction, actions,
+    scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, spellcasting, resources, attacks, attacksPerAction, actions,
     exhaustion, d20Pen, inspiration: !!ch.state?.inspiration, conditions: ch.state?.conditions || [],
     senses, resistances, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
     choices, pending: choices.filter((c) => !c.done), armor, shield, crit,

@@ -15,6 +15,9 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - A new class or rule needs a sample character in `tests/engine.test.mjs` with numbers checked against the SRD.
 - Before pushing: `npm test`, `npm run smoke`, `npm run smoke:rooms` and `npm run a11y`, and look at screenshots/ after UI changes. After a
   release: `node scripts/live.cjs` (the real site, iPhone 13 and SE).
+- Spellcasting: class data in `src/content/casters.js`, spells in `src/content/spells.js` (SRD only, own words),
+  the math in `src/engine/spells.js` (`spellcastingOf`, `spellRoll`). A character stores `spells: { cantrips, prepared }`
+  and `state.concentration`; slots are resources `slot-N` / `pact-slots` in `state.used`.
 - Accuracy: rules were audited against the SRD 5.2 PDF on 2026-11-23. When adding content, check the PDF, not memory.
 
 ## Groups (rooms) — server in `server/`
