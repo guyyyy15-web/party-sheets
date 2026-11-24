@@ -7,6 +7,7 @@ import { joinRoom, listRooms, roomById, restoreRooms, shareCharacter, unshareCha
 import { RoomsSection } from './ui/rooms.jsx'
 import { DmView } from './ui/dm.jsx'
 import { AdminView } from './ui/admin.jsx'
+import { GlossaryView } from './ui/glossary.jsx'
 import { AccountSheet, AccountChip, SaveAccountNudge } from './ui/account.jsx'
 import { refreshAccount, signOutLocal } from './ui/account.js'
 import { ownerKey } from './ui/sync.js'
@@ -181,13 +182,16 @@ function App() {
     screen = <CharacterSheet ch={current} setCh={update} roll={roll} mode={mode} setMode={setMode} onBack={() => setView({ name: 'home' })}
       group={current.roomId ? { name: room?.name || 'Group', onLeave: () => leave(current) } : null}
       onSaveNow={() => saveNow(current.id)}
+      onGlossary={() => setView({ name: 'glossary', id: current.id, back: 'sheet' })}
       onDelete={async () => { await remove(current); setView({ name: 'home' }) }} />
+  } else if (view.name === 'glossary') {
+    screen = <GlossaryView ch={current && !current.draft ? current : null} onBack={() => setView(view.back === 'sheet' && current ? { name: 'sheet', id: current.id } : { name: 'home' })} />
   } else if (view.name === 'admin') {
     screen = <AdminView onBack={() => { history.replaceState(null, '', location.pathname); setView({ name: 'home' }) }} />
   } else if (view.name === 'dm' && roomById(view.roomId)) {
     screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} />
   } else {
-    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
+    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onGlossary={() => setView({ name: 'glossary' })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
   }
 
   return (
@@ -203,7 +207,7 @@ function App() {
   )
 }
 
-function Home({ chars, onOpen, onAccount, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
+function Home({ chars, onOpen, onAccount, onGlossary, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
   const file = useRef(null)
   const [table, setTable] = useState(false)
   const last = getSetting('lastBackupAt', null)
@@ -250,6 +254,7 @@ function Home({ chars, onOpen, onAccount, onNew, onSaveAll, onBring, onDm, joine
             <p className="muted small">Opens your characters on another phone. Keep it private.</p>
             <CloudKey />
           </div>
+          <button className="btn ghost wide" onClick={() => { setTable(false); onGlossary() }}>📖 Rules glossary</button>
           <div className="panel">
             <b>Backup file</b>
             <p className="muted small">{last ? `Last one ${Math.round((Date.now() - last) / 86400e3)} days ago.` : 'None yet.'}</p>

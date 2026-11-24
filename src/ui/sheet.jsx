@@ -9,16 +9,21 @@ import { SyncBadge } from './rooms.jsx'
 import { SpellsTab } from './spells.jsx'
 import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
 import { levelDiff } from '../engine/levelup.js'
+import { pathsFor } from '../engine/advice.js'
+import { TermCard, TermButton, TITLE_TERM } from './glossary.jsx'
+import { termById } from '../content/glossary.js'
 
 const KIND = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction', free: 'Free / on a hit', info: 'Good to know' }
 const THEMES = ['gold', 'red', 'jade', 'blue', 'violet', 'rose']
 
-export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete, group, onSaveNow }) {
+export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete, group, onSaveNow, onGlossary }) {
   const d = useMemo(() => derive(ch), [ch])
   const [tab, setTab] = useState('turn')
   const [sources, setSources] = useState(null)
   const [hpOpen, setHpOpen] = useState(false)
   const [levelUp, setLevelUp] = useState(false)
+  const [spellPick, setSpellPick] = useState(false)
+  const [term, setTerm] = useState(null) // a glossary card
   const [peek, setPeek] = useState(null) // { diff, preview }: the next level, or what the last one gave
   const recent = ch.state.leveledAt && Date.now() - ch.state.leveledAt < 864e5 && ch.level > 1
   const [settings, setSettings] = useState(false)
@@ -39,6 +44,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
         <button className="icon-btn" onClick={onBack} aria-label="All characters">‹</button>
         <Portrait ch={ch} size={44} />
         <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}{recent && <> · <button className="linkish" onClick={() => setPeek({ diff: lastLevelDiff(ch), preview: false })}>What's new</button></>}</p><SyncBadge id={ch.id} roomName={group?.name} onSaveNow={onSaveNow} /></div>
+        {onGlossary && <button className="icon-btn" onClick={onGlossary} aria-label="Rules glossary">📖</button>}
         <button className="icon-btn" onClick={() => setSettings(true)} aria-label="Character settings">⚙</button>
       </header>
 
@@ -110,20 +116,21 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       <div className="seg mode">{[['dis', 'Disadvantage'], ['normal', 'Normal'], ['adv', 'Advantage']].map(([m, l]) => <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}>{l}</button>)}</div>
 
-      {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} used={used} spend={spend} setState={setState} hp={hp} show={show} />}
-      {tab === 'spells' && d.spellcasting && <SpellsTab d={d} ch={ch} setCh={setCh} setState={setState} roll={roll} mode={mode} show={show} />}
+      {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} used={used} spend={spend} setState={setState} hp={hp} show={show} setTerm={setTerm} />}
+      {tab === 'spells' && d.spellcasting && <SpellsTab key={spellPick ? 'pick' : 'tab'} openPicker={spellPick} onPickerClosed={() => setSpellPick(false)} d={d} ch={ch} setCh={setCh} setState={setState} roll={roll} mode={mode} show={show} />}
       {tab === 'checks' && <ChecksTab d={d} roll={roll} mode={mode} show={show} />}
       {tab === 'features' && <FeaturesTab d={d} />}
-      {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} />}
+      {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} onTerm={setTerm} />}
       {tab === 'notes' && <textarea className="input notes" value={ch.notes} placeholder="Backstory, NPCs, loot, plans…" onChange={(e) => setCh({ ...ch, notes: e.target.value })} aria-label="Notes" />}
       </div>
       </div>
 
-      {sources && <SourcesSheet {...sources} onClose={() => setSources(null)} />}
+      {sources && <SourcesSheet {...sources} onClose={() => setSources(null)}>{TITLE_TERM[sources.title] && termById(TITLE_TERM[sources.title]) && <p className="term-text small">{termById(TITLE_TERM[sources.title]).text} <button className="linkish" onClick={() => { const t = TITLE_TERM[sources.title]; setSources(null); setTerm(t) }}>More</button></p>}</SourcesSheet>}
+      {term && <TermCard id={term} ch={ch} onClose={() => setTerm(null)} onOpen={setTerm} onWear={(armor) => setCh({ ...ch, equipment: { ...ch.equipment, armor } })} />}
       {shortRest && <ShortRest ch={ch} setCh={setCh} roll={roll} onClose={() => setShortRest(false)} />}
-      {condOpen && <ConditionsSheet d={d} ch={ch} setState={setState} onClose={() => setCondOpen(false)} />}
+      {condOpen && <ConditionsSheet d={d} ch={ch} setState={setState} onClose={() => setCondOpen(false)} onTerm={(id) => { setCondOpen(false); setTerm(id) }} />}
       {hpOpen && <HpSheet d={d} ch={ch} hp={hp} setState={setState} onClose={() => setHpOpen(false)} />}
-      {levelUp && <LevelUp ch={ch} setCh={setCh} start={levelUp} roll={roll} onClose={() => setLevelUp(false)} />}
+      {levelUp && <LevelUp ch={ch} setCh={setCh} start={levelUp} roll={roll} onClose={() => setLevelUp(false)} onSpells={() => { setLevelUp(false); setTab('spells'); setSpellPick(true) }} />}
       {peek && (
         <Sheet title={peek.preview ? `At level ${peek.diff.level}` : `Level ${peek.diff.level}: what's new`} onClose={() => setPeek(null)}>
           <LevelSummary diff={peek.diff} preview={peek.preview} roll={roll} />
@@ -135,6 +142,14 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
           <span className="field-label">Color</span>
           <div className="themes">{THEMES.map((t) => <button key={t} className={`swatch theme-${t} ${theme === t ? 'on' : ''}`} aria-label={t} onClick={() => setCh({ ...ch, theme: t })} />)}</div>
           <label className="field"><span>Name</span><input className="input" value={ch.name} onChange={(e) => setCh({ ...ch, name: e.target.value.slice(0, 40) })} /></label>
+          {pathsFor(ch.classId).length > 0 && (
+            <label className="field"><span>Play style (steers the recommendations)</span>
+              <select className="input" value={ch.build || ''} onChange={(e) => setCh({ ...ch, build: e.target.value || null })}>
+                <option value="">Not chosen (general advice)</option>
+                {pathsFor(ch.classId).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
+          )}
           {group && (
             <div className="panel">
               <b>Group: {group.name}</b>
@@ -149,7 +164,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   )
 }
 
-function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
+function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show, setTerm }) {
   const atk = d.attacks
   const pinned = new Set(ch.pinned || [])
   const groups = ['action', 'bonus', 'reaction', 'free', 'info']
@@ -170,8 +185,8 @@ function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show }) {
             <b>{a.name}</b>
             <span className="atk-math"><span className="am-line"><span className="am-lbl">To hit</span><span className="num k-dice">d20</span><Breakdown parts={a.toHitSources} label="To hit" /></span>
               <span className="am-line"><span className="am-lbl">Damage</span><span className="num k-dice">{a.damageDie || a.damage.split(/[+-]/)[0]}</span><Breakdown parts={a.damageParts} label="Damage" /></span></span>
-            <span className="muted small">{a.type}{a.range ? `, ${a.range} ft` : ''}{a.props?.length ? `, ${a.props.join(', ')}` : ''}{a.note ? `. ${a.note}` : ''}</span>
-            {a.mastery && <details className="mastery"><summary>Mastery: {a.mastery.name}</summary>{a.mastery.text}</details>}
+            <span className="muted small">{a.type}{a.range ? `, ${a.range} ft` : ''}{(a.props || []).map((p) => { const id = p.split(' ')[0]; return <React.Fragment key={p}>, {termById(id) ? <button className="linkish term-word" onClick={() => setTerm(id)}>{p}</button> : p}</React.Fragment> })}{a.note ? `. ${a.note}` : ''}</span>
+            {a.mastery && <details className="mastery"><summary>Mastery: {a.mastery.name}</summary>{a.mastery.text} {termById(a.mastery.name.toLowerCase()) && <button className="linkish" onClick={() => setTerm(a.mastery.name.toLowerCase())}>More</button>}</details>}
           </div>
           <button className="roll-btn" aria-label={`${a.name}: roll to hit, ${signed(a.toHit)}`} onClick={() => roll({ kind: 'd20', label: `${a.name} to hit`, bonus: a.toHit, mode, attack: true, critOn: d.crit, parts: a.toHitSources, rule: 'attack' })}>{signed(a.toHit)}<small>to hit</small></button>
           <button className="roll-btn" aria-label={`${a.name}: roll damage, ${a.damage}`} onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, parts: a.damageParts, dieWhy: a.dieWhy, rule: 'damage' })}>{a.damage}<small>damage</small></button>
@@ -243,7 +258,7 @@ function FeaturesTab({ d }) {
   )
 }
 
-function GearTab({ d, ch, setCh }) {
+function GearTab({ d, ch, setCh, onTerm }) {
   const eq = ch.equipment
   const setEq = (patch) => setCh({ ...ch, equipment: { ...eq, ...patch } })
   const [adding, setAdding] = useState(false)
@@ -254,10 +269,10 @@ function GearTab({ d, ch, setCh }) {
         {[{ id: '', name: 'No armor', type: 'unarmored', base: null }, ...ARMOR].map((a) => {
           const on = (eq.armor || '') === a.id
           return (
-            <button key={a.id || 'none'} role="radio" aria-checked={on} className={`gear-card ${on ? 'on' : ''}`} onClick={() => setEq({ armor: a.id || null })}>
+            <div key={a.id || 'none'} className="gear-cell">{a.id && <TermButton id={a.id} label={a.name} onOpen={onTerm} />}<button role="radio" aria-checked={on} className={`gear-card ${on ? 'on' : ''}`} onClick={() => setEq({ armor: a.id || null })}>
               <GameIcon id={a.id ? `a.${a.id}` : 'a.none'} size={36} />
               <b>{a.name}</b><span className="muted small">{a.base != null ? `${a.type}, AC ${a.base}${a.dex === false || a.type === 'heavy' ? '' : a.type === 'medium' ? ' + DEX (max 2)' : ' + DEX'}` : '10 + DEX'}</span>
-            </button>
+            </button></div>
           )
         })}
       </div>
@@ -301,7 +316,7 @@ export function HpSheet({ d, ch, hp, setState, onClose }) {
 }
 
 /** Level up: what you get, hit points (average or a thrown die), then the new choices. */
-function LevelUp({ ch, setCh, start, roll, onClose }) {
+function LevelUp({ ch, setCh, start, roll, onClose, onSpells }) {
   const [stage, setStage] = useState(start === 'choices' ? 'choices' : 'preview')
   const [next, setNext] = useState(start === 'choices' ? ch : { ...ch, level: ch.level + 1 })
   const before = derive(ch), after = derive(next)
@@ -324,7 +339,8 @@ function LevelUp({ ch, setCh, start, roll, onClose }) {
       {stage === 'summary' && (
         <>
           <LevelSummary diff={summary} roll={roll} />
-          <button className="btn primary wide" onClick={onClose}>Done</button>
+          {summary.lines.some((l) => /^(Cantrips known|Prepared spells)$/.test(l.label)) && <button className="btn primary wide" onClick={onSpells}>Choose new spells</button>}
+          <button className={`btn wide ${summary.lines.some((l) => /^(Cantrips known|Prepared spells)$/.test(l.label)) ? 'ghost' : 'primary'}`} onClick={onClose}>Done</button>
         </>
       )}
       {stage === 'preview' && (
@@ -383,7 +399,7 @@ function ShortRest({ ch, setCh, roll, onClose }) {
 }
 
 /** Conditions on or off, and Exhaustion levels. */
-export function ConditionsSheet({ d, ch, setState, onClose }) {
+export function ConditionsSheet({ d, ch, setState, onClose, onTerm }) {
   const on = new Set(d.conditions)
   const toggle = (id) => setState({ conditions: on.has(id) ? d.conditions.filter((x) => x !== id) : [...d.conditions, id] })
   return (
@@ -401,6 +417,7 @@ export function ConditionsSheet({ d, ch, setState, onClose }) {
               <GameIcon id={`cond.${c.id}`} size={30} className="cond-icon" />
               <span><b>{c.name}</b><span className="muted small">{c.summary}</span></span>
             </label>
+            <TermButton id={c.id} label={c.name} onOpen={onTerm} />
           </li>
         ))}
       </ul>

@@ -2,6 +2,7 @@
 // spells, casting with a chosen slot, and a picker for the spells you prepare.
 import React, { useState, useMemo } from 'react'
 import { spellRoll } from '../engine/spells.js'
+import { recommendSpells } from '../engine/advice.js'
 import { Sheet, Num, Breakdown, signed, GameIcon } from './common.jsx'
 
 const LEVEL = (n) => (n === 0 ? 'Cantrip' : `Level ${n}`)
@@ -16,9 +17,9 @@ export const SPELL_RULES = {
   ritual: 'Ritual: cast it in 10 minutes longer without using a slot (it must be prepared).',
 }
 
-export function SpellsTab({ d, ch, setCh, setState, roll, mode, show }) {
+export function SpellsTab({ d, ch, setCh, setState, roll, mode, show, openPicker, onPickerClosed }) {
   const sc = d.spellcasting
-  const [picker, setPicker] = useState(false)
+  const [picker, setPicker] = useState(!!openPicker)
   const [casting, setCasting] = useState(null)
   const [open, setOpen] = useState(null)
   const used = (id) => ch.state.used?.[id] || 0
@@ -81,7 +82,7 @@ export function SpellsTab({ d, ch, setCh, setState, roll, mode, show }) {
       ))}
       <button className="btn ghost wide" onClick={() => setPicker(true)}>✎ Choose spells</button>
       {casting && <CastSheet s={casting} sc={sc} used={used} onClose={() => setCasting(null)} cast={cast} attack={attack} effect={effect} />}
-      {picker && <SpellPicker sc={sc} ch={ch} setCh={setCh} onClose={() => setPicker(false)} />}
+      {picker && <SpellPicker sc={sc} d={d} ch={ch} setCh={setCh} onClose={() => { setPicker(false); onPickerClosed?.() }} />}
     </section>
   )
 }
@@ -174,12 +175,13 @@ function CastSheet({ s, sc, used, onClose, cast, attack, effect }) {
 }
 
 /** Choose cantrips and prepared spells, with counters and a search. */
-function SpellPicker({ sc, ch, setCh, onClose }) {
+function SpellPicker({ sc, d, ch, setCh, onClose }) {
   const [tab, setTab] = useState(sc.cantripsMax ? 0 : 1)
   const [q, setQ] = useState('')
   const cur = { cantrips: ch.spells?.cantrips || [], prepared: ch.spells?.prepared || [] }
   const levels = [...(sc.cantripsMax ? [0] : []), ...Array.from({ length: sc.maxLevel }, (_, i) => i + 1)]
-  const list = (tab === 0 ? sc.cantripOptions : sc.spellOptions.filter((s) => s.level === tab)).filter((s) => !q || s.name.toLowerCase().includes(q.toLowerCase()))
+  const recs = React.useMemo(() => ({ ...recommendSpells(ch, d, { cantrips: true }), ...recommendSpells(ch, d) }), [ch, d])
+  const list = (tab === 0 ? sc.cantripOptions : sc.spellOptions.filter((s) => s.level === tab)).filter((s) => !q || s.name.toLowerCase().includes(q.toLowerCase())).sort((a, b) => (recs[b.id] ? 1 : 0) - (recs[a.id] ? 1 : 0))
   const key = tab === 0 ? 'cantrips' : 'prepared'
   const count = tab === 0 ? sc.cantripsChosen : sc.preparedChosen
   const max = tab === 0 ? sc.cantripsMax : sc.preparedMax
@@ -206,7 +208,7 @@ function SpellPicker({ sc, ch, setCh, onClose }) {
               <label className={`pick ${on ? 'on' : ''} ${!on && count >= max ? 'off' : ''}`}>
                 <input type="checkbox" checked={on} disabled={!!always || (!on && count >= max)} onChange={() => toggle(s.id)} />
                 <GameIcon id={`school.${s.school.toLowerCase()}`} size={28} className="sp-icon" />
-                <span><b>{s.name}</b><Tags s={s} sc={sc} always={always} /><span className="muted small">{s.summary}</span></span>
+                <span><b>{s.name}</b>{recs[s.id] && <span className="rec-line"><span className="rec-tag">Recommended</span>{recs[s.id]}</span>}<Tags s={s} sc={sc} always={always} /><span className="muted small">{s.summary}</span></span>
               </label>
             </li>
           )

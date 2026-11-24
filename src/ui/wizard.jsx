@@ -9,6 +9,7 @@ import { ABILITIES, ABILITY_NAMES, skillName, armorById, weaponById } from '../c
 import { OptionCards, AsiPicker, asiDone, Stepper, signed, GameIcon } from './common.jsx'
 import { shrinkImage } from './store.js'
 import { expansionsAllowed } from './sync.js'
+import { pathsFor, pathOf, abilityOrder, recommend, recommendAsi } from '../engine/advice.js'
 import { load3d } from './dice.jsx'
 
 const STANDARD = [15, 14, 13, 12, 10, 8]
@@ -17,9 +18,10 @@ const STEPS = ['Hero', 'Class', 'Species', 'Background', 'Abilities', 'Choices',
 const ICONS = ['⚔️', '🗡️', '🥋', '🛡️', '🏹', '🐉', '🦉', '🌙', '🔥', '🍀', '💀', '👑']
 
 /** Suggested score order for a class (primary first, CON next). */
-function suggested(cls) {
-  const order = [...(cls?.primary || []), 'CON', ...ABILITIES].filter((a, i, l) => l.indexOf(a) === i)
-  return order
+/** The order to put the best scores in: the play style's (bow fighter: DEX first), else the class's. */
+function suggested(cls, ch) {
+  if (ch?.classId) return abilityOrder(ch)
+  return [...(cls?.primary || []), 'CON', ...ABILITIES].filter((a, i, l) => l.indexOf(a) === i)
 }
 
 export function Wizard({ ch, setCh, onDone, onCancel, settings, throwOn }) {
@@ -106,7 +108,7 @@ function ClassStep({ ch, setCh }) {
   const best = answers.length === QUIZ.length ? CLASSES.reduce((b, c) => (score(c.id) > score(b.id) ? c : b)).id : null
   const choose = (id) => {
     const cls = classById(id)
-    setCh({ ...ch, classId: id, subclassId: ch.classId === id ? ch.subclassId : null, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => k.startsWith('species.') || k.startsWith('background'))), spells: { cantrips: [], prepared: [] }, equipment: { ...ch.equipment, pack: null, armor: null, shield: false, weapons: [] }, theme: ch.theme || null, hpRolls: {}, _cls: cls.id })
+    setCh({ ...ch, classId: id, build: ch.classId === id ? ch.build : null, subclassId: ch.classId === id ? ch.subclassId : null, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => k.startsWith('species.') || k.startsWith('background'))), spells: { cantrips: [], prepared: [] }, equipment: { ...ch.equipment, pack: null, armor: null, shield: false, weapons: [] }, theme: ch.theme || null, hpRolls: {}, _cls: cls.id })
   }
   return (
     <section>
@@ -129,6 +131,14 @@ function ClassStep({ ch, setCh }) {
           </button>
         ))}
       </div>
+      {ch.classId && pathsFor(ch.classId).length > 0 && (
+        <div className="panel play-style" id="play-style">
+          <h2>How do you want to play?</h2>
+          <p className="muted small">Your answer shapes the advice at every level. You can change it later.</p>
+          <OptionCards count={1} picked={ch.build ? [ch.build] : []} onChange={([id]) => setCh({ ...ch, build: id || null })}
+            options={pathsFor(ch.classId).map((p) => ({ id: p.id, name: p.label, summary: p.blurb }))} />
+        </div>
+      )}
     </section>
   )
 }
@@ -212,7 +222,7 @@ function AbilityStep({ ch, setCh, d, settings, throwOn }) {
     setCh({ ...ch, assign: next, rolled, scores: Object.fromEntries(ABILITIES.map((a) => [a, next[a] != null ? list[next[a]] : 10])), scoreMethod: full ? method : null, _method: method })
   }
   const auto = (list = pool) => {
-    const order = suggested(cls)
+    const order = suggested(cls, ch)
     const idx = list.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]).map(([, i]) => i)
     applyAssign(Object.fromEntries(order.map((a, i) => [a, idx[i]])), list)
   }
@@ -238,7 +248,7 @@ function AbilityStep({ ch, setCh, d, settings, throwOn }) {
   return (
     <section>
       <h1 className="wiz-title">Ability scores</h1>
-      {cls && <p className="lead">A {cls.name} wants high {cls.primary.join(' and ')}.</p>}
+      {cls && <p className="lead">{pathOf(ch) ? `Your style (${pathOf(ch).label.toLowerCase()}) wants high ${abilityOrder(ch).slice(0, 2).join(', then ')}.` : `A ${cls.name} wants high ${cls.primary.join(' and ')}.`}</p>}
       <div className="seg">{methods.map(([m, l]) => <button key={m} aria-pressed={method === m} onClick={() => setMethod(m)}>{l}</button>)}</div>
       {method === 'roll' && (
         <div className="panel">
@@ -248,7 +258,7 @@ function AbilityStep({ ch, setCh, d, settings, throwOn }) {
       )}
       {(method === 'standard' || (method === 'roll' && rolled.length === 6)) && (
         <>
-          <div className="row"><span className="muted small grow">Give each value to one ability.</span><button className="btn ghost small" onClick={() => auto()}>Suggest for {cls?.name || 'me'}</button></div>
+          <div className="row"><span className="muted small grow">Give each value to one ability.</span><button className="btn ghost small" onClick={() => auto()}>Suggest for {pathOf(ch) ? 'my style' : cls?.name || 'me'}</button></div>
           <div className="assign">
             {ABILITIES.map((a) => (
               <div key={a} className="assign-row">
@@ -307,13 +317,13 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
         <div key={c.key} className={`panel choice ${c.done ? 'done' : ''}`}>
           <h2>{c.featureName && c.featureName !== c.label ? `${c.featureName}: ` : ''}{c.label}{c.level > 1 ? <span className="muted small"> · level {c.level}</span> : null}</h2>
           {c.kind === 'asi' || c.kind === 'epic'
-            ? <AsiPicker value={drafts[c.key] || ch.choices[c.key]} epic={c.kind === 'epic'} level={ch.level} takenFeats={takenFeats} caster={!!d.spellcasting} armor={d.cls?.armor || []} scores={Object.fromEntries(Object.entries(d.scores).map(([a, s]) => [a, s.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))]))}
+            ? <AsiPicker rec={recommendAsi(ch, d, { epic: c.kind === 'epic', takenFeats, scores: Object.fromEntries(Object.entries(d.scores).map(([a, sc]) => [a, sc.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))])) })} value={drafts[c.key] || ch.choices[c.key]} epic={c.kind === 'epic'} level={ch.level} takenFeats={takenFeats} caster={!!d.spellcasting} armor={d.cls?.armor || []} scores={Object.fromEntries(Object.entries(d.scores).map(([a, s]) => [a, s.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))]))}
                 onChange={(v) => { setDrafts({ ...drafts, [c.key]: v }); if (asiDone(v)) set(c.key, v); else if (ch.choices[c.key]) { const next = { ...ch.choices }; delete next[c.key]; setCh({ ...ch, choices: next }) } }} />
             : <>
                 <p className="muted small">{c.count > 1 ? `Choose ${c.count} (${c.picked.length} chosen).` : 'Choose one.'}</p>
                 {c.kind === 'subclass' && c.options.some((o) => o.expansion) && <p className="muted small">{expansionsAllowed(ch) ? 'Includes subclasses from the expansion books (tagged).' : `${c.options.filter((o) => o.expansion).length} more subclasses from the expansion books: ${ch.roomId ? 'the DM can allow them in the group settings' : 'allow them in Table settings'}.`}</p>}
                 <OptionCards columns={c.options.length > 6 ? 2 : 1} count={c.count} picked={c.picked} onChange={(v) => set(c.key, v)}
-                  options={c.options.filter((o) => !o.expansion || expansionsAllowed(ch) || c.picked.includes(o.id)).map((o) => ({ ...o, icon: c.kind === 'subclass' ? `class.${ch.classId}` : c.kind === 'weapon' ? `w.${o.id}` : c.kind === 'feat' ? 'ui.feat' : undefined, summary: o.summary || (c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) ? 'Already proficient' : ''), disabled: c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) }))} />
+                  options={c.options.filter((o) => !o.expansion || expansionsAllowed(ch) || c.picked.includes(o.id)).map((o, _i, shown, rec = recommend(ch, d, { ...c, options: shown })) => ({ ...o, rec: rec[o.id], icon: c.kind === 'subclass' ? `class.${ch.classId}` : c.kind === 'weapon' ? `w.${o.id}` : c.kind === 'feat' ? 'ui.feat' : undefined, summary: o.summary || (c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) ? 'Already proficient' : ''), disabled: c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) }))} />
               </>}
         </div>
       ))}

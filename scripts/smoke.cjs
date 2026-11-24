@@ -213,6 +213,37 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   ok((await p.$$('.char-card')).length === 4, 'home lists 4 heroes')
   await p.screenshot({ path: `${shots}/07-home.png` })
 
+  // play style: a bow fighter is steered to DEX and Archery
+  await p.click('text=+ New character')
+  await p.fill('input[placeholder="e.g. Katsebushi"]', 'Arrow'); await p.click('.wiz-foot button')
+  await p.click('.class-card:has-text("Fighter")')
+  ok(await p.isVisible('.play-style:has-text("How do you want to play?")'), 'play style: the question appears after picking a class')
+  await p.click('.play-style .card:has-text("bow")')
+  await p.screenshot({ path: `${shots}/10-play-style.png`, fullPage: true })
+  await p.click('.wiz-foot button'); await p.click('.card:has-text("Dwarf")'); await p.click('.wiz-foot button')
+  await p.click('.card:has-text("Soldier")'); await p.click('button:has-text("+2 and +1")'); await p.click('.wiz-foot button')
+  ok(await p.isVisible('.lead:has-text("DEX, then")'), 'play style: the ability step says DEX first')
+  await p.click('button:has-text("Suggest for")')
+  const dex = Number((await p.textContent('.assign-row:has-text("DEX") .mono, .abil-row:has-text("DEX") .mono, tr:has-text("DEX") .mono').catch(() => '0')).replace(/\D/g, '') || 0)
+  await p.click('.wiz-foot button')
+  ok(await p.isVisible('.panel.choice:has-text("Fighting Style") .card.rec:has-text("Archery")'), 'play style: Archery is recommended for the bow fighter')
+  ok(await p.isVisible('.panel.choice:has-text("Fighting Style") .rec-line:has-text("+2 to hit")'), 'play style: with its reason')
+  await p.screenshot({ path: `${shots}/11-recommended.png`, fullPage: true })
+  await p.click('button[aria-label="Cancel"]').catch(() => {})
+  if (await p.isVisible('.wiz-foot')) await p.goto(URL)
+  // the glossary: from Table settings, search, a card
+  await p.click('button[aria-label="Table settings"]'); await p.click('text=📖 Rules glossary')
+  await p.fill('input[aria-label="Search the glossary"]', 'concentr')
+  await p.click('.gl-list button:has-text("Concentration")')
+  ok(await p.isVisible('.sheet:has-text("CON save")'), 'glossary: the Concentration card')
+  await p.click('.sheet button[aria-label="Close"]'); await p.click('button[aria-label="Back"]')
+  // on a sheet: the armor card says what it does for this character
+  await p.click('.char-card:has-text("Brakka")'); await p.click('[role=tab]:has-text("Gear")')
+  await p.click('.gear-cell:has-text("Chain Mail") .term-i')
+  ok(await p.isVisible('.sheet .for-you:has-text("AC would be")') && await p.isVisible('.sheet .term-table'), 'term card: Chain Mail shows your AC and the armor table')
+  await p.screenshot({ path: `${shots}/12-term-card.png`, fullPage: true })
+  await p.click('.sheet button[aria-label="Close"]'); await p.click('button[aria-label="All characters"]')
+
   // backup round trip
   await p.click('button[aria-label="Table settings"]')
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('text=Export all')])
