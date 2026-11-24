@@ -35,7 +35,7 @@ button:disabled { cursor: default; opacity: .45; }
 .chip.used { opacity: .4; }
 .pill { font: 600 11px var(--font); background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
 .seg { display: flex; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
-.seg button { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font-size: 14px; padding: 0 8px; }
+.seg button { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 14px; padding: 0 8px; }
 .seg button[aria-pressed='true'] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .input { width: 100%; min-height: 48px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: 16px var(--font); }
 .input.big { font: 28px var(--mono); text-align: center; }

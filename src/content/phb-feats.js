@@ -111,7 +111,7 @@ export const PHB_FEATS = [
   }),
   general({
     id: 'fey-touched', name: 'Fey Touched', ability: MENTAL,
-    summary: '+1 INT, WIS or CHA. Misty Step and one level 1 Divination or Enchantment spell, always prepared. Cast each once per long rest without a slot (or with slots). They use the ability you raised. (Spells arrive in phase 2: note them for now.)',
+    summary: '+1 INT, WIS or CHA. Misty Step and one level 1 Divination or Enchantment spell, always prepared. Cast each once per long rest without a slot (or with slots). They use the ability you raised. (Write the spells you pick in your notes.)',
     effects: [
       { type: 'resource', id: 'fey-touched-misty-step', name: 'Misty Step (Fey Touched)', max: () => 1, reset: 'long' },
       { type: 'resource', id: 'fey-touched-spell', name: 'Fey Touched spell', max: () => 1, reset: 'long' },
@@ -201,7 +201,7 @@ export const PHB_FEATS = [
   }),
   general({
     id: 'ritual-caster', name: 'Ritual Caster', prereq: { scores: { INT: 13, WIS: 13, CHA: 13 }, any: true }, ability: MENTAL,
-    summary: '+1 INT, WIS or CHA. Level 1 Ritual spells, as many as your proficiency bonus (one more each time it rises), always prepared; they use the ability you raised. Once per long rest, cast one of them at its normal casting time without a slot. (Spells arrive in phase 2: note them for now.)',
+    summary: '+1 INT, WIS or CHA. Level 1 Ritual spells, as many as your proficiency bonus (one more each time it rises), always prepared; they use the ability you raised. Once per long rest, cast one of them at its normal casting time without a slot. (Write the spells you pick in your notes.)',
     effects: [{ type: 'resource', id: 'quick-ritual', name: 'Quick Ritual', max: () => 1, reset: 'long' }],
   }),
   general({
@@ -210,7 +210,7 @@ export const PHB_FEATS = [
   }),
   general({
     id: 'shadow-touched', name: 'Shadow Touched', ability: MENTAL,
-    summary: '+1 INT, WIS or CHA. Invisibility and one level 1 Illusion or Necromancy spell, always prepared. Cast each once per long rest without a slot (or with slots). They use the ability you raised. (Spells arrive in phase 2: note them for now.)',
+    summary: '+1 INT, WIS or CHA. Invisibility and one level 1 Illusion or Necromancy spell, always prepared. Cast each once per long rest without a slot (or with slots). They use the ability you raised. (Write the spells you pick in your notes.)',
     effects: [
       { type: 'resource', id: 'shadow-touched-invisibility', name: 'Invisibility (Shadow Touched)', max: () => 1, reset: 'long' },
       { type: 'resource', id: 'shadow-touched-spell', name: 'Shadow Touched spell', max: () => 1, reset: 'long' },

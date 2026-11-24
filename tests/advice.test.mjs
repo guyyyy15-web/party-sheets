@@ -137,3 +137,24 @@ test('a path whose subclass is an expansion falls back to a core one when expans
   assert.equal(Object.keys(rec).length, 1)
   assert.ok(!classById(c).subclasses.find((s) => s.id === Object.keys(rec)[0]).expansion)
 })
+
+test('backgrounds: all 16 of the 2024 rules, each with 3 abilities, a real origin feat, 2 real skills, a tool, an icon', async () => {
+  const { BACKGROUNDS } = await import('../src/content/backgrounds.js')
+  const { ICONS } = await import('../src/content/icons-data.js')
+  assert.equal(BACKGROUNDS.length, 16)
+  for (const b of BACKGROUNDS) {
+    assert.equal(b.abilities.length, 3, b.id); assert.ok(b.abilities.every((a) => ABIL.includes(a)), b.id)
+    assert.equal(featById(b.feat)?.category, 'origin', `${b.id}: feat ${b.feat}`)
+    assert.equal(b.skills.length, 2); assert.ok(b.skills.every((s) => SKILLS.some((x) => x.id === s)), `${b.id}: skills`)
+    assert.ok(b.tool && b.blurb, b.id); assert.ok(ICONS[`bg.${b.id}`], `${b.id}: icon`)
+    // a level 1 character with it derives with no error and gets both skills
+    const d = derive({ ...newCharacter(), classId: 'fighter', speciesId: 'dwarf', backgroundId: b.id, level: 1, scores: { STR: 15, DEX: 14, CON: 13, INT: 12, WIS: 10, CHA: 8 } })
+    for (const s of b.skills) assert.ok(d.skills.find((x) => x.id === s).prof, `${b.id}: ${s}`)
+  }
+})
+
+test('a picked subclass stays in the choice list (done), so the picker does not vanish', () => {
+  const ch = { ...newCharacter(), classId: 'bard', speciesId: 'dwarf', backgroundId: 'sage', level: 3, choices: { subclass: ['lore'] } }
+  const c = derive(ch).choices.find((x) => x.kind === 'subclass')
+  assert.ok(c && c.done && c.picked[0] === derive(ch).subclass?.id)
+})

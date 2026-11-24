@@ -8,7 +8,7 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - Rules are data in `src/content/`, applied by `src/engine/engine.js` (pure, no DOM). A character stores only its
   choices and state; never store a derived number. Every derived number keeps its `sources`.
 - Content: the SRD 5.2 (CC-BY-4.0) plus, by Guy's decision (2026-11-23, a private app for his groups), the 2024
-  Player's Handbook subclasses and feats as **mechanics in our own words** (`source: 'PHB 2024'`, shown with a PHB
+  Player's Handbook subclasses, feats and backgrounds (all 16, `src/content/backgrounds.js`) as **mechanics in our own words** (`source: 'PHB 2024'`, shown with a PHB
   tag), and every official expansion subclass (`src/content/ext-subclasses-*.js`, `expansion: true`, tagged with its
   book; older ones follow the 2024 rule: features below level 3 arrive at 3). Never paste book text or flavor text;
   summaries say what it does, with the numbers.

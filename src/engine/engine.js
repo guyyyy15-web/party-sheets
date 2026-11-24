@@ -108,8 +108,10 @@ function openChoices(ch, features, ctx) {
   const list = []
   const cls = classById(ch.classId)
   const bg = backgroundById(ch.backgroundId)
-  if (cls && ch.level >= cls.subclassLevel && !cls.subclasses.some((s) => s.id === ch.subclassId)) {
-    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary, source: s.source, expansion: !!s.expansion })), picked: [], source: 'class', level: cls.subclassLevel })
+  // stays in the list once picked (done), so the picker doesn't vanish under the player's finger
+  if (cls && ch.level >= cls.subclassLevel) {
+    const has = cls.subclasses.some((s) => s.id === ch.subclassId)
+    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary, source: s.source, expansion: !!s.expansion })), picked: has ? [ch.subclassId] : [], source: 'class', level: cls.subclassLevel })
   }
   if (cls) {
     const picked = ch.choices['class.skills'] || []

@@ -13,7 +13,7 @@ const SRD_FEATS = [
   },
   {
     id: 'magic-initiate', name: 'Magic Initiate', category: 'origin',
-    summary: 'Two cantrips and one level 1 spell from the Cleric, Druid or Wizard list. Cast the spell once per long rest without a slot. (Spells arrive in phase 2: note them for now.)',
+    summary: 'Two cantrips and one level 1 spell from the Cleric, Druid or Wizard list. Cast the spell once per long rest without a slot. (Write the spells you pick in your notes.)',
     choices: [{ key: 'list', label: 'Spell list', count: 1, options: () => [{ id: 'cleric', name: 'Cleric' }, { id: 'druid', name: 'Druid' }, { id: 'wizard', name: 'Wizard' }] }],
     effects: [{ type: 'resource', id: 'magic-initiate', name: 'Magic Initiate spell', max: () => 1, reset: 'long' }],
   },

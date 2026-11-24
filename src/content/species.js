@@ -1,10 +1,10 @@
-// The nine species of the SRD 5.2 (CC-BY-4.0), summarised. Spells they grant are listed as notes until phase 2.
+// The nine species of the SRD 5.2 (CC-BY-4.0), summarised. Spells they grant are listed as notes.
 import { FEATS } from './feats.js'
 
 const darkvision = (range) => ({ type: 'sense', name: 'Darkvision', range })
 const opts = (list) => () => list
 const giant = (kind, extra) => ({ type: 'action', id: 'giant-ancestry', name: extra.name, kind, cost: { resource: 'giant-ancestry', amount: 1 }, summary: extra.summary, ...(extra.roll ? { roll: extra.roll } : {}), ...(extra.save ? { save: extra.save } : {}) })
-/** A spell a lineage gives at `level`: cast once per long rest without a slot (more with slots from phase 2). */
+/** A spell a lineage gives at `level`: cast once per long rest without a slot (more with slots). */
 const lineageSpell = (id, name, level, abilityNote) => ([
   { type: 'resource', id: `spell-${id}`, name, max: () => 1, reset: 'long', when: (c) => c.total >= level },
   { type: 'action', id: `spell-${id}`, name, kind: 'action', cost: { resource: `spell-${id}`, amount: 1 }, summary: `Cast ${name} without a spell slot (${abilityNote}).`, when: (c) => c.total >= level },

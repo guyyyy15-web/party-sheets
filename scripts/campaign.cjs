@@ -27,7 +27,7 @@ async function choose(p, scope) {
     if (await panel.locator('button:has-text("+2 to one")').count()) {
       await panel.locator('button:has-text("+2 to one")').click()
       await panel.locator('.abil-grid .chip:not([disabled])').first().click()
-    } else if (await panel.locator('button:has-text("A feat")').count() === 0 && await panel.locator('.abil-grid .chip').count()) {
+    } else if (await panel.locator('button:has-text("Take a feat")').count() === 0 && await panel.locator('.abil-grid .chip').count()) {
       await panel.locator('.abil-grid .chip:not([disabled])').first().click() // an epic boon's +1
     } else {
       const card = panel.locator('.card.opt:not(.on):not([disabled])').first()
