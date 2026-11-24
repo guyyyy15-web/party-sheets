@@ -16,6 +16,9 @@ const WANT = {
   'species.goliath': ['giant', 'muscle-up'], 'species.halfling': ['footprint', 'barefoot'], 'species.human': ['person', 'character'], 'species.orc': ['orc-head', 'tusks-flag'], 'species.tiefling': ['devil-mask', 'horned-helm'],
   // backgrounds
   'bg.acolyte': ['prayer', 'candle-holder'], 'bg.criminal': ['lockpicks', 'hood'], 'bg.sage': ['scroll-unfurled', 'book-cover'], 'bg.soldier': ['spartan-helmet', 'visored-helm'],
+  'bg.artisan': ['anvil-impact', 'hammer-nails'], 'bg.charlatan': ['domino-mask', 'drama-masks'], 'bg.entertainer': ['juggler', 'theater'], 'bg.farmer': ['pitchfork', 'wheat'],
+  'bg.guard': ['guards', 'barbute'], 'bg.guide': ['compass', 'direction-signs'], 'bg.hermit': ['meditation', 'candle-light'], 'bg.merchant': ['scales', 'coins'],
+  'bg.noble': ['crown', 'tiara'], 'bg.sailor': ['anchor', 'sailboat'], 'bg.scribe': ['quill-ink', 'quill'], 'bg.wayfarer': ['bindle', 'walking-boot'],
   // weapons
   'w.club': ['wood-club', 'spiked-bat'], 'w.dagger': ['plain-dagger'], 'w.greatclub': ['wood-club'], 'w.handaxe': ['hatchet', 'wood-axe'], 'w.javelin': ['thrown-spear', 'spear-hook'],
   'w.light-hammer': ['claw-hammer', 'thor-hammer'], 'w.mace': ['mace-head', 'flanged-mace'], 'w.quarterstaff': ['bo', 'wizard-staff'], 'w.sickle': ['sickle'], 'w.spear': ['barbed-spear', 'spears'],

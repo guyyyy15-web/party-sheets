@@ -137,10 +137,11 @@ function SpellRow({ s, sc, level, open, onToggle, attack, effect, onCast }) {
 }
 
 /** Pick a slot (or a ritual), then roll what the spell needs. */
-function CastSheet({ s, sc, used, onClose, cast, attack, effect }) {
+function CastSheet({ s, sc, used, onClose, cast, attack, effect, free }) {
   const [done, setDone] = useState(null) // the slot level it was cast with
   const options = [
-    ...sc.slots.filter((x) => x.level >= s.level).map((x) => ({ key: x.id, level: x.level, id: x.id, left: x.max - Math.min(x.max, used(x.id)), label: `${ORD[x.level]}-level slot` })),
+    ...(free ? [{ key: 'free', level: s.level, id: free.id, left: free.left, label: `Free cast (${free.from}, once per long rest)` }] : []),
+    ...(sc.slots || []).filter((x) => x.level >= s.level).map((x) => ({ key: x.id, level: x.level, id: x.id, left: x.max - Math.min(x.max, used(x.id)), label: `${ORD[x.level]}-level slot` })),
     ...(sc.pact && sc.pact.level >= s.level ? [{ key: 'pact', level: sc.pact.level, id: 'pact-slots', left: sc.pact.count - Math.min(sc.pact.count, used('pact-slots')), label: `Pact slot (${ORD[sc.pact.level]} level)` }] : []),
   ]
   const r = done && spellRoll(s, { level: 0, castLevel: done, mod: sc.mod, ability: sc.ability })
@@ -156,7 +157,7 @@ function CastSheet({ s, sc, used, onClose, cast, attack, effect }) {
             ))}
             {s.ritual && sc.ritual && <button className="btn wide ghost" onClick={() => { cast(s, s.level, null); setDone(s.level) }}>As a ritual (10 minutes longer, no slot)</button>}
           </div>
-          {!options.some((o) => o.left > 0) && !s.ritual && <p className="warn-line">No slots left for this spell. They come back on a {sc.pact ? 'short or ' : ''}long rest.</p>}
+          {!options.some((o) => o.left > 0) && !(s.ritual && sc.ritual) && <p className="warn-line">{options.length ? `Nothing left to cast it with. It comes back on a ${sc.pact ? 'short or ' : ''}long rest.` : 'You need a spell slot for this one.'}</p>}
         </>
       ) : (
         <>
@@ -216,5 +217,48 @@ function SpellPicker({ sc, d, ch, setCh, onClose }) {
       </ul>
       <button className="btn primary wide" onClick={onClose}>Done</button>
     </Sheet>
+  )
+}
+
+/**
+ * Spells from feats (Magic Initiate, Fey Touched…): each with its feat's own ability, DC and attack, and its free
+ * cast once per long rest. Shown on the Spells tab under the class's spells, or alone for a character without
+ * Spellcasting.
+ */
+export function FeatSpells({ d, ch, setState, roll, mode }) {
+  const [open, setOpen] = useState(null)
+  const [casting, setCasting] = useState(null)
+  const used = (id) => ch.state.used?.[id] || 0
+  const sc0 = d.spellcasting
+  const res = (id) => d.resources.find((r) => r.id === id)
+  const scOf = (fs) => ({ mod: fs.mod, ability: fs.ability, dc: fs.dc, attack: fs.attack, ritual: fs.ritual || !!sc0?.ritual, always: new Map([[fs.spell.id, fs.from]]), slots: sc0?.slots || [], pact: sc0?.pact || null })
+  const attack = (fs) => (s) => roll({ kind: 'd20', label: `${s.name}: spell attack`, bonus: fs.attack.value, mode, attack: true, parts: fs.attack.parts, rule: SPELL_RULES.spellAttack })
+  const effect = (fs) => (s, castLevel) => {
+    const r = spellRoll(s, { level: ch.level, castLevel, mod: fs.mod, ability: fs.ability })
+    return r && roll({ kind: 'expr', label: `${s.name}: ${r.heal ? 'healing' : `${r.type} damage`}`, expr: r.expr, parts: r.parts, rule: r.why || (r.heal ? 'Healing: roll the dice and add any bonus.' : 'Damage: roll the spell\'s dice and add any bonus.') })
+  }
+  const cast = (s, _lvl, slotId) => {
+    const patch = {}
+    if (slotId) patch.used = { ...ch.state.used, [slotId]: used(slotId) + 1 }
+    if (s.concentration) patch.concentration = s.id
+    if (Object.keys(patch).length) setState(patch)
+  }
+  return (
+    <section className="spells feat-spells">
+      <h2 className="sp-level">From feats <span className="muted small">their own ability and DC</span></h2>
+      <ul className="spell-list">
+        {d.featSpells.map((fs) => {
+          const r = fs.free && res(fs.free)
+          return (
+            <React.Fragment key={fs.id}>
+              <SpellRow s={fs.spell} sc={scOf(fs)} level={ch.level} open={open === fs.id} onToggle={() => setOpen(open === fs.id ? null : fs.id)} attack={attack(fs)} effect={effect(fs)} onCast={() => setCasting(fs)} />
+              <li className="muted small fs-note">{fs.from}: {fs.ability} · DC {fs.dc.value} · attack {signed(fs.attack.value)}{r ? ` · free cast ${r.max - Math.min(r.max, used(fs.free))} of ${r.max} left` : ''}</li>
+            </React.Fragment>
+          )
+        })}
+      </ul>
+      {casting && <CastSheet s={casting.spell} sc={scOf(casting)} used={used} onClose={() => setCasting(null)} cast={cast} attack={attack(casting)} effect={effect(casting)}
+        free={casting.free && res(casting.free) ? { id: casting.free, from: casting.from, left: res(casting.free).max - Math.min(res(casting.free).max, used(casting.free)) } : null} />}
+    </section>
   )
 }

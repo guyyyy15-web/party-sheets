@@ -118,9 +118,10 @@ export function AsiPicker({ value, onChange, scores, epic, level, takenFeats, ca
   return (
     <div className="asi">
       {rec && <div className="rec-box"><span className="rec-tag">Recommended</span><span className="grow">{rec.reason}</span>{JSON.stringify(rec.value) !== JSON.stringify(value) && <button className="btn small primary" onClick={() => onChange(rec.value)}>Use this</button>}</div>}
+      {!epic && <p className="muted small">Your choice: raise your abilities, or take a feat instead.</p>}
       {!epic && (
         <div className="seg">
-          {[['plus2', '+2 to one'], ['plus1', '+1 to two'], ['feat', 'A feat']].map(([t, l]) => (
+          {[['plus2', '+2 to one ability'], ['plus1', '+1 to two abilities'], ['feat', 'Take a feat']].map(([t, l]) => (
             <button key={t} aria-pressed={v.type === t} onClick={() => onChange({ type: t })}>{l}</button>
           ))}
         </div>

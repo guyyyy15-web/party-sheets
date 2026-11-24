@@ -27,7 +27,7 @@ async function choose(p, scope) {
     if (await panel.locator('button:has-text("+2 to one")').count()) {
       await panel.locator('button:has-text("+2 to one")').click()
       await panel.locator('.abil-grid .chip:not([disabled])').first().click()
-    } else if (await panel.locator('button:has-text("A feat")').count() === 0 && await panel.locator('.abil-grid .chip').count()) {
+    } else if (await panel.locator('button:has-text("Take a feat")').count() === 0 && await panel.locator('.abil-grid .chip').count()) {
       await panel.locator('.abil-grid .chip:not([disabled])').first().click() // an epic boon's +1
     } else {
       const card = panel.locator('.card.opt:not(.on):not([disabled])').first()
@@ -59,7 +59,7 @@ async function choose(p, scope) {
     await p.click('.wiz-foot button')
     await p.click(`.class-card:has-text("${cls}")`); await p.click('.wiz-foot button')
     await p.click(`.card:has-text("${species}")`); await choose(p, '.wizard'); await p.click('.wiz-foot button')
-    await p.click(`.card:has-text("${bg}")`); await p.click('button:has-text("+2 and +1")'); await p.click('.wiz-foot button')
+    await p.click(`.card:has-text("${bg}")`); await choose(p, '.wizard'); await p.click('button:has-text("+2 and +1")'); await p.click('.wiz-foot button')
     await p.click('button:has-text("Suggest for")'); await p.click('.wiz-foot button')
     await choose(p, '.wizard'); await p.click('.wiz-foot button')
     await p.click('.card.opt >> nth=0'); await p.click('.wiz-foot button')

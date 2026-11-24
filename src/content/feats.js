@@ -1,6 +1,7 @@
 // Feats from the SRD 5.2 (CC-BY-4.0), summarised. A feat is a feature: effects + choices.
 import { SKILLS } from './basics.js'
 import { PHB_FEATS } from './phb-feats.js'
+import { spellChoice, listOf } from './feat-spells.js'
 
 const skillOptions = () => SKILLS.map((s) => ({ id: s.id, name: s.name }))
 
@@ -13,8 +14,14 @@ const SRD_FEATS = [
   },
   {
     id: 'magic-initiate', name: 'Magic Initiate', category: 'origin',
-    summary: 'Two cantrips and one level 1 spell from the Cleric, Druid or Wizard list. Cast the spell once per long rest without a slot. (Spells arrive in phase 2: note them for now.)',
-    choices: [{ key: 'list', label: 'Spell list', count: 1, options: () => [{ id: 'cleric', name: 'Cleric' }, { id: 'druid', name: 'Druid' }, { id: 'wizard', name: 'Wizard' }] }],
+    summary: 'Two cantrips and one level 1 spell from the Cleric, Druid or Wizard list, cast with INT, WIS or CHA (your pick). Cast the level 1 spell once per long rest without a slot, or with your slots.',
+    choices: [
+      { key: 'list', label: 'Spell list', count: 1, options: () => [{ id: 'cleric', name: 'Cleric' }, { id: 'druid', name: 'Druid' }, { id: 'wizard', name: 'Wizard' }] },
+      { key: 'ability', label: 'Spellcasting ability', count: 1, kind: 'pick', options: () => [{ id: 'INT', name: 'Intelligence' }, { id: 'WIS', name: 'Wisdom' }, { id: 'CHA', name: 'Charisma' }] },
+      spellChoice('cantrips', 'Two cantrips', 2, (s, c) => s.level === 0 && s.classes.includes(listOf(c))),
+      spellChoice('spell', 'A level 1 spell', 1, (s, c) => s.level === 1 && s.classes.includes(listOf(c))),
+    ],
+    spellGrant: { ability: 'ability', picks: [['cantrips', null], ['spell', 'magic-initiate']] },
     effects: [{ type: 'resource', id: 'magic-initiate', name: 'Magic Initiate spell', max: () => 1, reset: 'long' }],
   },
   {

@@ -4,6 +4,8 @@
 // fightingStyle (needs the Fighting Style feature). spellcasting: true means Spellcasting or Pact Magic.
 import { SKILLS, ABILITIES, ABILITY_NAMES, WEAPONS } from './basics.js'
 
+import { spellChoice } from './feat-spells.js'
+
 const SRC = 'PHB 2024'
 const skillOpts = (ids) => SKILLS.filter((s) => !ids || ids.includes(s.id)).map((s) => ({ id: s.id, name: s.name }))
 const opts = (list) => list.map(([id, name]) => ({ id, name }))
@@ -111,7 +113,9 @@ export const PHB_FEATS = [
   }),
   general({
     id: 'fey-touched', name: 'Fey Touched', ability: MENTAL,
-    summary: '+1 INT, WIS or CHA. Misty Step and one level 1 Divination or Enchantment spell, always prepared. Cast each once per long rest without a slot (or with slots). They use the ability you raised. (Spells arrive in phase 2: note them for now.)',
+    summary: '+1 INT, WIS or CHA. Misty Step and one level 1 Divination or Enchantment spell, always prepared. Cast each once per long rest without a slot (or with slots). They use the ability you raised.',
+    choices: [spellChoice('spell', 'A level 1 Divination or Enchantment spell', 1, (s) => s.level === 1 && ['Divination', 'Enchantment'].includes(s.school))],
+    spellGrant: { ability: 'raised', fixed: [['misty-step', 'fey-touched-misty-step']], picks: [['spell', 'fey-touched-spell']] },
     effects: [
       { type: 'resource', id: 'fey-touched-misty-step', name: 'Misty Step (Fey Touched)', max: () => 1, reset: 'long' },
       { type: 'resource', id: 'fey-touched-spell', name: 'Fey Touched spell', max: () => 1, reset: 'long' },
@@ -201,7 +205,9 @@ export const PHB_FEATS = [
   }),
   general({
     id: 'ritual-caster', name: 'Ritual Caster', prereq: { scores: { INT: 13, WIS: 13, CHA: 13 }, any: true }, ability: MENTAL,
-    summary: '+1 INT, WIS or CHA. Level 1 Ritual spells, as many as your proficiency bonus (one more each time it rises), always prepared; they use the ability you raised. Once per long rest, cast one of them at its normal casting time without a slot. (Spells arrive in phase 2: note them for now.)',
+    summary: '+1 INT, WIS or CHA. Level 1 Ritual spells, as many as your proficiency bonus (one more each time it rises), always prepared; they use the ability you raised. Once per long rest, cast one of them at its normal casting time without a slot.',
+    choices: [spellChoice('rituals', 'Level 1 ritual spells (one per proficiency bonus)', (c) => c.prof, (s) => s.level === 1 && s.ritual)],
+    spellGrant: { ability: 'raised', picks: [['rituals', 'quick-ritual']], ritual: true },
     effects: [{ type: 'resource', id: 'quick-ritual', name: 'Quick Ritual', max: () => 1, reset: 'long' }],
   }),
   general({
@@ -210,7 +216,9 @@ export const PHB_FEATS = [
   }),
   general({
     id: 'shadow-touched', name: 'Shadow Touched', ability: MENTAL,
-    summary: '+1 INT, WIS or CHA. Invisibility and one level 1 Illusion or Necromancy spell, always prepared. Cast each once per long rest without a slot (or with slots). They use the ability you raised. (Spells arrive in phase 2: note them for now.)',
+    summary: '+1 INT, WIS or CHA. Invisibility and one level 1 Illusion or Necromancy spell, always prepared. Cast each once per long rest without a slot (or with slots). They use the ability you raised.',
+    choices: [spellChoice('spell', 'A level 1 Illusion or Necromancy spell', 1, (s) => s.level === 1 && ['Illusion', 'Necromancy'].includes(s.school))],
+    spellGrant: { ability: 'raised', fixed: [['invisibility', 'shadow-touched-invisibility']], picks: [['spell', 'shadow-touched-spell']] },
     effects: [
       { type: 'resource', id: 'shadow-touched-invisibility', name: 'Invisibility (Shadow Touched)', max: () => 1, reset: 'long' },
       { type: 'resource', id: 'shadow-touched-spell', name: 'Shadow Touched spell', max: () => 1, reset: 'long' },
@@ -258,12 +266,14 @@ export const PHB_FEATS = [
     id: 'telekinetic', name: 'Telekinetic', ability: MENTAL,
     summary: '+1 INT, WIS or CHA. You learn Mage Hand (no Verbal or Somatic components, can be invisible; +30 ft range if you knew it). Bonus action: shove a creature within 30 ft 5 ft toward or away from you unless it passes a STR save.',
     choices: [{ key: 'ability', label: 'Ability you raised (sets the DC)', count: 1, kind: 'pick', options: () => MENTAL.map((a) => ({ id: a, name: ABILITY_NAMES[a] })) }],
+    spellGrant: { ability: 'ability', fixed: [['mage-hand', null]] },
     effects: [{ type: 'action', id: 'telekinetic-shove', name: 'Telekinetic Shove', kind: 'bonus', summary: 'A creature within 30 ft: STR save or move 5 ft toward or away from you.',
       save: { ability: 'STR', dc: (c) => 8 + c.prof + (c.mod[c.pick('telekinetic', 'ability')] ?? Math.max(c.mod.INT, c.mod.WIS, c.mod.CHA)) } }],
   }),
   general({
     id: 'telepathic', name: 'Telepathic', ability: MENTAL,
     summary: '+1 INT, WIS or CHA. Speak telepathically to a creature you can see within 60 ft (in a language you know; it cannot answer that way). Detect Thoughts always prepared: once per long rest without a slot or components (or with slots), using the ability you raised.',
+    spellGrant: { ability: 'raised', fixed: [['detect-thoughts', 'telepathic-detect-thoughts']] },
     effects: [
       { type: 'sense', name: 'Telepathy (one-way)', range: 60 },
       { type: 'resource', id: 'telepathic-detect-thoughts', name: 'Detect Thoughts (Telepathic)', max: () => 1, reset: 'long' },

@@ -8,7 +8,7 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - Rules are data in `src/content/`, applied by `src/engine/engine.js` (pure, no DOM). A character stores only its
   choices and state; never store a derived number. Every derived number keeps its `sources`.
 - Content: the SRD 5.2 (CC-BY-4.0) plus, by Guy's decision (2026-11-23, a private app for his groups), the 2024
-  Player's Handbook subclasses and feats as **mechanics in our own words** (`source: 'PHB 2024'`, shown with a PHB
+  Player's Handbook subclasses, feats and backgrounds (all 16, `src/content/backgrounds.js`) as **mechanics in our own words** (`source: 'PHB 2024'`, shown with a PHB
   tag), and every official expansion subclass (`src/content/ext-subclasses-*.js`, `expansion: true`, tagged with its
   book; older ones follow the 2024 rule: features below level 3 arrive at 3). Never paste book text or flavor text;
   summaries say what it does, with the numbers.
@@ -37,6 +37,15 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   (5 points), Start / Sign in / Share; once (`ps.seenLanding`), never on invite, DM or restore links; "About Party
   Sheets" in Table settings reopens it. Link preview: `og.png` (`node scripts/og.cjs`) and the og: tags in index.html.
   Test scripts set `ps.seenLanding` except smoke, which checks the landing page.
+- Feat spells (`src/content/feat-spells.js`, `featSpellsOf` in `src/engine/spells.js`): Magic Initiate, Fey/Shadow
+  Touched, Ritual Caster, Telepathic, Telekinetic pick real spells (choices of kind `spell`; options read the feature's
+  own picks via `c.own(key)`, a background's `featChoice` fixes Magic Initiate's list). `d.featSpells` carry their own
+  ability, DC, attack and free-cast resource; the Spells tab shows them under "From feats" (also for non-casters).
+- Advantage is tracked per character (`state.edge`: + advantage, − disadvantage, the sheet's tracker). While it isn't
+  0, every d20 roll first asks whether it applies (app.jsx `askEdge`); there is no global Advantage switch.
+- "Start my turn" (`src/ui/turn.jsx`): move → pick an attack or cantrip → roll to hit → Hit/Miss (crit/NAT 1 handled)
+  → damage → next attack (Extra Attack) → bonus action → done. Same roll() as the sheet. 3D dice are on by default
+  wherever WebGL works (Reduce motion doesn't turn them off; the tray can).
 - Spellcasting: class data in `src/content/casters.js`, spells in `src/content/spells.js` (SRD only, own words),
   the math in `src/engine/spells.js` (`spellcastingOf`, `spellRoll`). A character stores `spells: { cantrips, prepared }`
   and `state.concentration`; slots are resources `slot-N` / `pact-slots` in `state.used`.

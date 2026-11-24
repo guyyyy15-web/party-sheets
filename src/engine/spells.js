@@ -110,3 +110,30 @@ export function spellcastingOf({ ch, cls, features, ctx, level, mod, prof, d20Pe
     cantrips, prepared, always, cantripOptions, spellOptions, concentration: conc,
   }
 }
+
+/**
+ * Spells that feats give (a feature's `spellGrant`): fixed ones and the ones picked in its 'spell' choices, each cast
+ * with the feat's own ability: the one its choice names ('ability'), or the one the feat raised ('raised', from the
+ * ASI pick). Without either yet, the best of INT, WIS and CHA. Each carries its own DC and attack, and the resource
+ * for its free cast (null = only with slots, or a cantrip).
+ */
+export function featSpellsOf({ features, ctx, mod, prof, d20Pen, penSource }) {
+  const out = []
+  for (const f of features) {
+    const g = f.spellGrant
+    if (!g) continue
+    const own = ctx.ownOf(f)
+    const picked = g.ability === 'raised' ? f.raised : own(g.ability)[0]
+    const ab = ['INT', 'WIS', 'CHA'].includes(picked) ? picked : ['INT', 'WIS', 'CHA'].reduce((b, a) => (mod[a] > mod[b] ? a : b))
+    const abilityPart = { label: `${ab} modifier (${f.name}${picked ? '' : ': the best of INT, WIS, CHA until you pick'})`, value: mod[ab], kind: 'ability' }
+    const profPart = { label: 'Proficiency bonus', value: prof, kind: 'prof' }
+    const dc = { value: 8 + mod[ab] + prof, parts: [{ label: 'Base', value: 8, kind: 'base' }, abilityPart, profPart] }
+    const attack = { value: mod[ab] + prof - d20Pen, parts: [abilityPart, profPart, ...penSource] }
+    const entries = [...(g.fixed || []).map(([id, free]) => [id, free]), ...(g.picks || []).flatMap(([key, free]) => own(key).map((id) => [id, free]))]
+    for (const [id, free] of entries) {
+      const s = spellById(id)
+      if (s) out.push({ id: `${f.key}:${id}`, spell: s, from: f.name, ability: ab, mod: mod[ab], dc, attack, free: s.level > 0 ? free : null, ritual: !!g.ritual })
+    }
+  }
+  return out
+}

@@ -27,6 +27,7 @@ function App() {
   const [poolMod, setPoolMod] = useState(0)
   const [log, setLog] = useState([])
   const [mode, setMode] = useState('normal')
+  const [edgeAsk, setEdgeAsk] = useState(null)
   const [throwOn, setThrowOnState] = useState(() => getSetting('throwOnScreen', throwDefault()))
   const [settings, setSettingsState] = useState(() => getSetting('table', { allowRoll: true }))
   const [toast, setToast] = useState(null)
@@ -137,8 +138,18 @@ function App() {
     setChars([]); setAcct(false); setView({ name: 'home' })
     say('Signed out on this phone. Your characters are saved in your account.')
   }
-  const roll = async (req) => {
-    if (busy.current) return null
+  // Advantage is tracked on the character (state.edge: + advantage, − disadvantage). While it isn't 0, a d20 roll
+  // first asks whether it applies to this roll; the roll's own `mode` is never decided by a global switch.
+  const askEdge = (edge, label) => new Promise((resolve) => setEdgeAsk({ edge, label, resolve: (m) => { setEdgeAsk(null); resolve(m) } }))
+  const roll = async (req0) => {
+    if (busy.current || edgeAsk) return null
+    let req = req0
+    if (req.kind === 'd20') {
+      const edge = (view.name === 'sheet' && current?.state?.edge) || 0
+      const m = edge ? await askEdge(edge, req.label) : 'normal'
+      if (!m) return null
+      req = { ...req, mode: m }
+    }
     busy.current = true
     try {
       const showMath = settings.showMath !== false
@@ -208,6 +219,15 @@ function App() {
       {tray && <DiceTray pool={pool} setPool={setPool} mod={poolMod} setMod={setPoolMod} throwOn={throwOn} setThrowOn={setThrowOn} last={log[0]}
         onClose={() => setTray(false)} onThrow={() => { setTray(false); roll({ kind: 'pool', pool, mod: poolMod }) }} />}
       {shown && <RollCard e={shown} onClose={() => setShown(null)} />}
+      {edgeAsk && (
+        <Sheet title={edgeAsk.edge > 0 ? 'You have advantage' : 'You have disadvantage'} onClose={() => edgeAsk.resolve(null)}>
+          <p className="guide-line"><b>{edgeAsk.label}</b>: does your {edgeAsk.edge > 0 ? 'advantage' : 'disadvantage'} apply to this roll?</p>
+          <div className="guide-options">
+            <button className="btn primary wide big-btn" onClick={() => edgeAsk.resolve(edgeAsk.edge > 0 ? 'adv' : 'dis')}>Yes: roll two d20, keep the {edgeAsk.edge > 0 ? 'higher' : 'lower'}</button>
+            <button className="btn ghost wide big-btn" onClick={() => edgeAsk.resolve('normal')}>No: roll one d20</button>
+          </div>
+        </Sheet>
+      )}
       {acct && <AccountSheet onClose={() => setAcct(false)} hasCharacters={(chars || []).some((c) => !c.draft)} onSignedIn={(b) => onSignedIn(b, prevOwnerRef.current)} onSignOut={onSignOut} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </>

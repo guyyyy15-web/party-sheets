@@ -1,6 +1,6 @@
 // The rules engine: a character is only its choices and its current state; everything on the sheet is derived here.
 // Pure (no DOM), tested in tests/engine.test.mjs.
-import { spellcastingOf } from './spells.js'
+import { featSpellsOf, spellcastingOf } from './spells.js'
 import { ABILITIES, SKILLS, armorById, weaponById, isRanged, MASTERY } from '../content/basics.js'
 import { classById } from '../content/classes.js'
 import { speciesById } from '../content/species.js'
@@ -65,7 +65,7 @@ function collectFeatures(ch) {
   if (cls) for (const f of cls.features) {
     if (!f.asi || f.level > ch.level) continue
     const pick = ch.choices[`${f.id}.asi`]
-    if (pick?.type === 'feat' && featById(pick.feat)) add(featById(pick.feat), 'feat', `${f.id}.asi>${pick.feat}`)
+    if (pick?.type === 'feat' && featById(pick.feat)) add({ ...featById(pick.feat), raised: pick.ability || null }, 'feat', `${f.id}.asi>${pick.feat}`)
   }
   return out
 }
@@ -108,8 +108,10 @@ function openChoices(ch, features, ctx) {
   const list = []
   const cls = classById(ch.classId)
   const bg = backgroundById(ch.backgroundId)
-  if (cls && ch.level >= cls.subclassLevel && !cls.subclasses.some((s) => s.id === ch.subclassId)) {
-    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary, source: s.source, expansion: !!s.expansion })), picked: [], source: 'class', level: cls.subclassLevel })
+  // stays in the list once picked (done), so the picker doesn't vanish under the player's finger
+  if (cls && ch.level >= cls.subclassLevel) {
+    const has = cls.subclasses.some((s) => s.id === ch.subclassId)
+    list.push({ key: 'subclass', label: `${cls.name} subclass`, count: 1, kind: 'subclass', options: cls.subclasses.map((s) => ({ id: s.id, name: s.name, summary: s.summary, source: s.source, expansion: !!s.expansion })), picked: has ? [ch.subclassId] : [], source: 'class', level: cls.subclassLevel })
   }
   if (cls) {
     const picked = ch.choices['class.skills'] || []
@@ -121,7 +123,7 @@ function openChoices(ch, features, ctx) {
       const key = `${f.key}.${choice.key}`
       if (f.source === 'background' && f.id === 'magic-initiate' && bg?.featChoice?.[choice.key]) continue // fixed by the background
       const count = call(choice.count, ctx)
-      list.push({ key, label: choice.label, featureName: f.name, count, kind: choice.kind || 'pick', options: call(choice.options, ctx), picked: ch.choices[key] || [], source: f.source, level: f.level || 1 })
+      list.push({ key, label: choice.label, featureName: f.name, count, kind: choice.kind || 'pick', options: call(choice.options, { ...ctx, own: ctx.ownOf(f) }), picked: ch.choices[key] || [], source: f.source, level: f.level || 1 })
     }
     if (f.asi && f.source === 'class') {
       const key = `${f.id}.asi`
@@ -159,6 +161,7 @@ export function derive(input) {
 
   const ctx = {
     ch, level, total: level, prof, mod, score: Object.fromEntries(ABILITIES.map((a) => [a, scores[a].total])), armor, shield,
+    ownOf: (f) => (k) => ch.choices[`${f.key}.${k}`] || (f.source === 'background' && bg?.featChoice?.[k]) || [],
     pick: (featureId, key) => (ch.choices[`${featureId}.${key}`] || ch.choices[`species.${featureId}.${key}`] || [])[0],
     skillSources: (id) => skillProf.get(id) || [],
     proficientSkills: () => [...skillProf.keys()].map((id) => ({ id, name: SKILLS.find((s) => s.id === id)?.name || id })),
@@ -286,6 +289,7 @@ export function derive(input) {
     note: `Or Grapple / Shove (DC ${8 + (monkWeapons ? Math.max(mod.STR, mod.DEX) : mod.STR) + prof})`,
   })
   const spellcasting = spellcastingOf({ ch, cls, features, ctx, level, mod, prof, d20Pen, penSource })
+  const featSpells = featSpellsOf({ features, ctx, mod, prof, d20Pen, penSource })
   const attacksPerAction = Math.max(1, ...active.filter((e) => e.type === 'attacks').map((e) => e.value(ctx)))
 
   // actions for "My Turn"
@@ -302,7 +306,7 @@ export function derive(input) {
 
   return {
     name: ch.name, level, cls, species: sp, background: bg, subclass: cls?.subclasses.find((s) => s.id === ch.subclassId) || null,
-    scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, spellcasting, resources, attacks, attacksPerAction, actions,
+    scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, spellcasting, featSpells, resources, attacks, attacksPerAction, actions,
     exhaustion, d20Pen, inspiration: !!ch.state?.inspiration, conditions: ch.state?.conditions || [],
     senses, resistances, immunities, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
     choices, pending: choices.filter((c) => !c.done), armor, shield, crit,

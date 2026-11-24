@@ -6,7 +6,7 @@ import { CLASSES, classById } from '../content/classes.js'
 import { SPECIES, speciesById } from '../content/species.js'
 import { BACKGROUNDS, backgroundById } from '../content/backgrounds.js'
 import { ABILITIES, ABILITY_NAMES, skillName, armorById, weaponById } from '../content/basics.js'
-import { OptionCards, AsiPicker, asiDone, Stepper, signed, GameIcon } from './common.jsx'
+import { OptionCards, AsiPicker, asiDone, Stepper, signed, GameIcon, SourceTag } from './common.jsx'
 import { shrinkImage } from './store.js'
 import { expansionsAllowed } from './sync.js'
 import { pathsFor, pathOf, abilityOrder, recommend, recommendAsi } from '../engine/advice.js'
@@ -178,7 +178,7 @@ function BackgroundStep({ ch, setCh, d }) {
       <div className="cards">
         {BACKGROUNDS.map((b) => (
           <button key={b.id} className={`card opt has-icon ${ch.backgroundId === b.id ? 'on' : ''}`} aria-pressed={ch.backgroundId === b.id} onClick={() => setCh({ ...ch, backgroundId: b.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('background'))) })}><GameIcon id={`bg.${b.id}`} size={40} className="opt-icon" />
-            <span className="opt-name">{b.name}{ch.backgroundId === b.id && <span className="tick">✓</span>}</span>
+            <span className="opt-name">{b.name}{b.source && <SourceTag source={b.source} />}{ch.backgroundId === b.id && <span className="tick">✓</span>}</span>
             <span className="opt-sum">{b.blurb}</span>
             <span className="facts"><span>{b.abilities.join(' · ').replace(/ · /g, ', ')}</span><span>{d.features.find((f) => f.source === 'background')?.name && ch.backgroundId === b.id ? d.features.find((f) => f.source === 'background').name : b.feat.replace(/-/g, ' ')}</span><span>{b.skills.map(skillName).join(', ')}</span></span>
           </button>
@@ -258,7 +258,7 @@ function AbilityStep({ ch, setCh, d, settings, throwOn }) {
       )}
       {(method === 'standard' || (method === 'roll' && rolled.length === 6)) && (
         <>
-          <div className="row"><span className="muted small grow">Give each value to one ability.</span><button className="btn ghost small" onClick={() => auto()}>Suggest for {pathOf(ch) ? 'my style' : cls?.name || 'me'}</button></div>
+          <div className="row"><span className="muted small grow">Each value goes to one ability, once. Tap a value another ability has and the two swap.{pool.some((_, i) => !ABILITIES.some((x) => assign[x] === i)) && <> Left to give: <b className="mono">{pool.filter((_, i) => !ABILITIES.some((x) => assign[x] === i)).join(', ')}</b>.</>}</span><button className="btn ghost small" onClick={() => auto()}>Suggest for {pathOf(ch) ? 'my style' : cls?.name || 'me'}</button></div>
           <div className="assign">
             {ABILITIES.map((a) => (
               <div key={a} className="assign-row">
@@ -303,6 +303,15 @@ function AbilityStep({ ch, setCh, d, settings, throwOn }) {
   )
 }
 
+/** A choice's options as cards: expansion ones only when allowed, skills you already have disabled (and never
+ * recommended), the recommendations on what is left. */
+function shownOptions(ch, d, c) {
+  const have = (o) => c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id)
+  const shown = c.options.filter((o) => !o.expansion || expansionsAllowed(ch) || c.picked.includes(o.id)).map((o) => (have(o) ? { ...o, disabled: true, summary: o.summary || 'Already proficient' } : o))
+  const rec = recommend(ch, d, { ...c, options: shown })
+  return shown.map((o) => ({ ...o, rec: o.disabled ? undefined : rec[o.id], icon: c.kind === 'subclass' ? `class.${ch.classId}` : c.kind === 'weapon' ? `w.${o.id}` : c.kind === 'feat' ? 'ui.feat' : c.kind === 'spell' && o.school ? `school.${o.school.toLowerCase()}` : undefined }))
+}
+
 /** Every open choice that `filter` keeps, as pickers. ASI drafts stay local until complete. */
 export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
   const [drafts, setDrafts] = useState({})
@@ -323,7 +332,7 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
                 <p className="muted small">{c.count > 1 ? `Choose ${c.count} (${c.picked.length} chosen).` : 'Choose one.'}</p>
                 {c.kind === 'subclass' && c.options.some((o) => o.expansion) && <p className="muted small">{expansionsAllowed(ch) ? 'Includes subclasses from the expansion books (tagged).' : `${c.options.filter((o) => o.expansion).length} more subclasses from the expansion books: ${ch.roomId ? 'the DM can allow them in the group settings' : 'allow them in Table settings'}.`}</p>}
                 <OptionCards columns={c.options.length > 6 ? 2 : 1} count={c.count} picked={c.picked} onChange={(v) => set(c.key, v)}
-                  options={c.options.filter((o) => !o.expansion || expansionsAllowed(ch) || c.picked.includes(o.id)).map((o, _i, shown, rec = recommend(ch, d, { ...c, options: shown })) => ({ ...o, rec: rec[o.id], icon: c.kind === 'subclass' ? `class.${ch.classId}` : c.kind === 'weapon' ? `w.${o.id}` : c.kind === 'feat' ? 'ui.feat' : undefined, summary: o.summary || (c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) ? 'Already proficient' : ''), disabled: c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id) }))} />
+                  options={shownOptions(ch, d, c)} />
               </>}
         </div>
       ))}
