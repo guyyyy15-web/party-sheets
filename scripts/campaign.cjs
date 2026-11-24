@@ -44,7 +44,7 @@ async function choose(p, scope) {
   const URL = 'http://localhost:8779/'
   const b = await chromium.launch()
   const ctx = await b.newContext({ ...devices['iPhone 13'] })
-  await ctx.addInitScript(() => { localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9')); localStorage.setItem('ps.throwOnScreen', 'false') })
+  await ctx.addInitScript(() => { (localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9')), localStorage.setItem('ps.seenLanding', 'true')); localStorage.setItem('ps.throwOnScreen', 'false') })
   const p = await ctx.newPage()
   const errs = []
   p.on('pageerror', (e) => errs.push(e.message)); p.on('dialog', (d) => d.accept())

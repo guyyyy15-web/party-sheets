@@ -48,7 +48,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     const b = await chromium.launch()
     const phone = async () => {
       const ctx = await b.newContext({ ...devices['iPhone 13'] })
-      await ctx.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), API)
+      await ctx.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true')), API)
       const p = await ctx.newPage(); p.on('dialog', (d) => d.accept()); p.on('pageerror', (e) => ok(false, `page error: ${e.message}`))
       return { ctx, p }
     }
@@ -90,7 +90,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
 
     // the DM, on a laptop
     const dctx = await b.newContext({ viewport: { width: 1440, height: 900 } })
-    await dctx.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), API)
+    await dctx.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true')), API)
     const D = await dctx.newPage(); D.on('pageerror', (e) => ok(false, `DM page error: ${e.message}`))
     await D.goto(dmUrl)
     ok(await until(async () => (await D.locator('.dm-card').count()) === 2), 'DM: sees both characters')
@@ -187,7 +187,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
 
     // the DM screen on a phone
     const dp = await b.newContext({ ...devices['iPhone 13'] })
-    await dp.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), API)
+    await dp.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true')), API)
     const DP = await dp.newPage(); await DP.goto(dmUrl); await DP.waitForSelector('.dm-card')
     ok(await DP.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'DM on a phone: nothing scrolls sideways')
     await DP.screenshot({ path: `${shots}/rooms-5-dm-phone.png`, fullPage: true })
@@ -201,7 +201,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
 
     // the owner's admin screen: set the password, then see every group and character
     const adm = await b.newContext({ viewport: { width: 1280, height: 900 } })
-    await adm.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), API)
+    await adm.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true')), API)
     const AD = await adm.newPage(); AD.on('pageerror', (e) => ok(false, `admin page error: ${e.message}`))
     await AD.goto(URL + '#/admin')
     await AD.fill('input[type=password]', 'owner-password-123'); await AD.click('button:text-is("Open")')
@@ -213,7 +213,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await AD.screenshot({ path: `${shots}/rooms-6-admin.png`, fullPage: true })
     await axe(AD, 'admin screen')
     const octx = await b.newContext()
-    await octx.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), API)
+    await octx.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true')), API)
     const other = await octx.newPage()
     await other.goto(URL + '#/admin'); await other.fill('input[type=password]', 'not-the-password-1'); await other.click('button:text-is("Open")')
     ok(await until(() => other.isVisible('text=Wrong admin password')), 'admin: a wrong password is refused')

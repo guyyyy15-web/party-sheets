@@ -33,6 +33,10 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - Term cards (`src/content/glossary.js` ~118 terms in our own words, `src/engine/explain.js` "For you" lines that call
   `derive()` with the item swapped in, UI `src/ui/glossary.jsx`): ⓘ on armor and conditions, weapon properties as
   links, "What it is" in the how-it's-made sheets, a searchable Rules glossary (📖 on the sheet, Table settings).
+- Landing page (`src/ui/landing.jsx`): a first visit with no characters and no account sees what Party Sheets is
+  (5 points), Start / Sign in / Share; once (`ps.seenLanding`), never on invite, DM or restore links; "About Party
+  Sheets" in Table settings reopens it. Link preview: `og.png` (`node scripts/og.cjs`) and the og: tags in index.html.
+  Test scripts set `ps.seenLanding` except smoke, which checks the landing page.
 - Spellcasting: class data in `src/content/casters.js`, spells in `src/content/spells.js` (SRD only, own words),
   the math in `src/engine/spells.js` (`spellcastingOf`, `spellRoll`). A character stores `spells: { cantrips, prepared }`
   and `state.concentration`; slots are resources `slot-N` / `pact-slots` in `state.used`.
