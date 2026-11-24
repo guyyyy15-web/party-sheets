@@ -21,7 +21,7 @@ async function scan(p, name) {
   await new Promise((r) => server.listen(8772, r))
   const b = await chromium.launch()
   const ctx = await b.newContext({ ...devices['iPhone 13'] })
-  await ctx.addInitScript(() => localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9'))) // never the production server
+  await ctx.addInitScript(() => (localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9')), localStorage.setItem('ps.seenLanding', 'true'))) // never the production server
   const p = await ctx.newPage()
   await p.goto('http://localhost:8772/'); await p.waitForSelector('text=No heroes yet'); await scan(p, 'home')
   await p.click('text=+ New character'); await scan(p, 'wizard: hero')
@@ -58,6 +58,8 @@ async function scan(p, name) {
   await p.click('.sheet button[aria-label="Close"]'); await p.click('button[aria-label="Rules glossary"]'); await scan(p, 'glossary')
   await p.click('button[aria-label="Back"]'); await p.click('button[aria-label="All characters"]')
   await p.click('text=+ New character'); await p.fill('input[placeholder="e.g. Katsebushi"]', 'B'); await p.click('.wiz-foot button'); await p.click('.class-card:has-text("Wizard")'); await scan(p, 'play style question')
+    await p.click('.wiz-top button, button[aria-label="Cancel"]').catch(() => {})
+  await p.goto('http://localhost:8772/'); await p.click('button[aria-label="Table settings"]'); await p.click('text=About Party Sheets'); await scan(p, 'landing page')
     await b.close(); server.close()
   console.log(bad ? `\n${bad} serious issue(s)` : '\nno serious accessibility issues')
   process.exit(bad ? 1 : 0)

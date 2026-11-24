@@ -8,6 +8,8 @@ import { RoomsSection } from './ui/rooms.jsx'
 import { DmView } from './ui/dm.jsx'
 import { AdminView } from './ui/admin.jsx'
 import { GlossaryView } from './ui/glossary.jsx'
+import { Landing, shareApp } from './ui/landing.jsx'
+import { signedIn } from './ui/account.js'
 import { AccountSheet, AccountChip, SaveAccountNudge } from './ui/account.jsx'
 import { refreshAccount, signOutLocal } from './ui/account.js'
 import { ownerKey } from './ui/sync.js'
@@ -19,7 +21,7 @@ import { Sheet, themeOf } from './ui/common.jsx'
 
 function App() {
   const [chars, setChars] = useState(null)
-  const [view, setView] = useState(() => (location.hash === '#/admin' ? { name: 'admin' } : { name: 'home' }))
+  const [view, setView] = useState(() => (location.hash === '#/admin' ? { name: 'admin' } : !location.hash && !getSetting('seenLanding', false) && !signedIn() ? { name: 'landing' } : { name: 'home' }))
   const [tray, setTray] = useState(false)
   const [pool, setPool] = useState({ 20: 1 })
   const [poolMod, setPoolMod] = useState(0)
@@ -171,6 +173,8 @@ function App() {
   }
 
   if (!chars) return <div className="boot">Loading…</div>
+  // someone who already has characters skips the landing page (unless they opened it from settings)
+  const landing = view.name === 'landing' && (view.again || !chars.some((c) => !c.draft))
 
   let screen
   if (view.name === 'wizard' && current) {
@@ -186,18 +190,21 @@ function App() {
       onDelete={async () => { await remove(current); setView({ name: 'home' }) }} />
   } else if (view.name === 'glossary') {
     screen = <GlossaryView ch={current && !current.draft ? current : null} onBack={() => setView(view.back === 'sheet' && current ? { name: 'sheet', id: current.id } : { name: 'home' })} />
+  } else if (landing) {
+    const leave = () => { setSetting('seenLanding', true); setView({ name: 'home' }) }
+    screen = <Landing onStart={() => { setSetting('seenLanding', true); start() }} onSignIn={() => { leave(); prevOwnerRef.current = ownerKey(); setAcct(true) }} onClose={view.again ? leave : null} />
   } else if (view.name === 'admin') {
     screen = <AdminView onBack={() => { history.replaceState(null, '', location.pathname); setView({ name: 'home' }) }} />
   } else if (view.name === 'dm' && roomById(view.roomId)) {
     screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} />
   } else {
-    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onGlossary={() => setView({ name: 'glossary' })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
+    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onGlossary={() => setView({ name: 'glossary' })} onAbout={() => setView({ name: 'landing', again: true })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
   }
 
   return (
     <>
       {screen}
-      {view.name !== 'wizard' && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice">🎲</button>}
+      {view.name !== 'wizard' && !landing && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice">🎲</button>}
       {tray && <DiceTray pool={pool} setPool={setPool} mod={poolMod} setMod={setPoolMod} throwOn={throwOn} setThrowOn={setThrowOn} last={log[0]}
         onClose={() => setTray(false)} onThrow={() => { setTray(false); roll({ kind: 'pool', pool, mod: poolMod }) }} />}
       {shown && <RollCard e={shown} onClose={() => setShown(null)} />}
@@ -207,7 +214,7 @@ function App() {
   )
 }
 
-function Home({ chars, onOpen, onAccount, onGlossary, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
+function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
   const file = useRef(null)
   const [table, setTable] = useState(false)
   const last = getSetting('lastBackupAt', null)
@@ -255,6 +262,8 @@ function Home({ chars, onOpen, onAccount, onGlossary, onNew, onSaveAll, onBring,
             <CloudKey />
           </div>
           <button className="btn ghost wide" onClick={() => { setTable(false); onGlossary() }}>📖 Rules glossary</button>
+          <ShareAppButton />
+          <button className="btn ghost wide" onClick={() => { setTable(false); onAbout() }}>About Party Sheets</button>
           <div className="panel">
             <b>Backup file</b>
             <p className="muted small">{last ? `Last one ${Math.round((Date.now() - last) / 86400e3)} days ago.` : 'None yet.'}</p>
@@ -284,6 +293,16 @@ function UnsavedBanner({ chars, onSaveAll }) {
       <p className="small">{offline ? 'No connection. Changes are kept on this phone and go up as soon as you\'re back online.' : syncStatus(stuck[0].id).msg || 'Tap to try again.'}</p>
       <button className="btn primary" onClick={onSaveAll}>Save now</button>
     </div>
+  )
+}
+
+function ShareAppButton() {
+  const [r, setR] = useState(null)
+  return (
+    <>
+      <button className="btn ghost wide" onClick={async () => setR(await shareApp())}>{r === 'copied' ? '✓ Link copied' : '↗ Share Party Sheets'}</button>
+      {r === 'manual' && <input className="input mono" readOnly value={location.href.split('#')[0]} aria-label="Party Sheets link" onFocus={(e) => e.target.select()} />}
+    </>
   )
 }
 
