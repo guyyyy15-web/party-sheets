@@ -26,6 +26,13 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - Level-up UX (`src/engine/levelup.js` `levelDiff` + `headlines`, UI `src/ui/levelup.jsx`): the card after "Become
   level N" and the next-level preview on the sheet both come from `levelDiff`, so they agree; `state.leveledAt` shows a
   "What's new" link for a day. The plan for the next UX steps is the Claude doc "Party Sheets — Level-up UX plan".
+- Play style and advice (`src/content/builds.js` 37 paths, `src/engine/advice.js`): after picking a class the player
+  answers "How do you want to play?" (`ch.build`, a choice). `recommend` / `recommendAsi` / `recommendSpells` tag up to
+  3 options per choice with a reason in real numbers; no path → the class's first path. A path's expansion subclass
+  falls back to a core one when the group hasn't allowed expansions.
+- Term cards (`src/content/glossary.js` ~118 terms in our own words, `src/engine/explain.js` "For you" lines that call
+  `derive()` with the item swapped in, UI `src/ui/glossary.jsx`): ⓘ on armor and conditions, weapon properties as
+  links, "What it is" in the how-it's-made sheets, a searchable Rules glossary (📖 on the sheet, Table settings).
 - Spellcasting: class data in `src/content/casters.js`, spells in `src/content/spells.js` (SRD only, own words),
   the math in `src/engine/spells.js` (`spellcastingOf`, `spellRoll`). A character stores `spells: { cantrips, prepared }`
   and `state.concentration`; slots are resources `slot-N` / `pact-slots` in `state.used`.

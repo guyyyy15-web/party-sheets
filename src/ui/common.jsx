@@ -59,9 +59,10 @@ export function Sheet({ title, onClose, children }) {
 }
 
 /** Where a number comes from: a list of { label, value }. */
-export function SourcesSheet({ title, total, sources, onClose }) {
+export function SourcesSheet({ title, total, sources, onClose, children }) {
   return (
     <Sheet title={title} onClose={onClose}>
+      {children}
       <ul className="sources">
         {sources.map((s, i) => <li key={i}><span><span className={`swatch-dot k-${s.kind || 'base'}`} aria-hidden />{s.label}</span><Num kind={s.kind || 'base'} value={s.value} sign={!(i === 0 && (s.kind === 'base' || !s.kind))} className="mono" /></li>)}
         <li className="total"><span>Total</span><span className="mono">{total}</span></li>
@@ -90,10 +91,11 @@ export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
   }
   return (
     <div className={`cards cols-${columns}`}>
-      {options.map((o) => (
-        <button key={o.id} className={`card opt ${o.icon ? 'has-icon' : ''} ${picked.includes(o.id) ? 'on' : ''}`} aria-pressed={picked.includes(o.id)} onClick={() => toggle(o.id)} disabled={o.disabled}>
+      {[...options].sort((a, b) => (b.rec ? 1 : 0) - (a.rec ? 1 : 0)).map((o) => (
+        <button key={o.id} className={`card opt ${o.icon ? 'has-icon' : ''} ${o.rec ? 'rec' : ''} ${picked.includes(o.id) ? 'on' : ''}`} aria-pressed={picked.includes(o.id)} onClick={() => toggle(o.id)} disabled={o.disabled}>
           {o.icon && <GameIcon id={o.icon} size={34} className="opt-icon" />}
           <span className="opt-name">{o.name}{o.source && <SourceTag source={o.source} />}{picked.includes(o.id) && <span className="tick">✓</span>}</span>
+          {o.rec && <span className="rec-line"><span className="rec-tag">Recommended</span>{o.rec}</span>}
           {o.summary && <span className="opt-sum">{o.summary}</span>}
         </button>
       ))}
@@ -102,7 +104,7 @@ export function OptionCards({ options, picked, count, onChange, columns = 1 }) {
 }
 
 /** An ASI (or Epic Boon) at a level: +2 / +1 +1 / a feat. value: {type, ability, abilities, feat}. */
-export function AsiPicker({ value, onChange, scores, epic, level, takenFeats, caster, armor = [] }) {
+export function AsiPicker({ value, onChange, scores, epic, level, takenFeats, caster, armor = [], rec }) {
   const v = value || { type: epic ? 'feat' : 'plus2' }
   const feats = FEATS.filter((f) => (epic ? f.category === 'epic' : ['general', 'origin', 'fighting-style'].includes(f.category) && !(f.category === 'fighting-style')))
     .filter((f) => !f.prereq?.spellcasting || caster)
@@ -115,6 +117,7 @@ export function AsiPicker({ value, onChange, scores, epic, level, takenFeats, ca
   const set = (patch) => onChange({ ...v, ...patch })
   return (
     <div className="asi">
+      {rec && <div className="rec-box"><span className="rec-tag">Recommended</span><span className="grow">{rec.reason}</span>{JSON.stringify(rec.value) !== JSON.stringify(value) && <button className="btn small primary" onClick={() => onChange(rec.value)}>Use this</button>}</div>}
       {!epic && (
         <div className="seg">
           {[['plus2', '+2 to one'], ['plus1', '+1 to two'], ['feat', 'A feat']].map(([t, l]) => (

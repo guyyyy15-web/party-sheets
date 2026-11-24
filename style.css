@@ -454,3 +454,26 @@ body { line-height: 1.5; }
 .lvl-choose { margin: 12px 0; }
 .next-level { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 12px; padding: 10px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--panel); color: var(--text); text-align: left; font-size: 14.5px; }
 .next-level .lbl { color: var(--accent); white-space: nowrap; }
+/* recommendations */
+.rec-tag { display: inline-block; margin-inline-end: 6px; padding: 1px 6px; border-radius: 5px; font: 700 10.5px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--accent-ink); background: var(--ok); vertical-align: 1px; }
+.rec-line { display: block; font-size: 13.5px; color: var(--text); line-height: 1.4; margin: 2px 0; }
+.card.rec { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
+.rec-box { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--ok) 55%, var(--line)); background: color-mix(in srgb, var(--ok) 10%, transparent); font-size: 14px; }
+.play-style h2 { margin-bottom: 2px; }
+/* glossary */
+.term-i { min-width: 32px; min-height: 32px; padding: 0; border: 0; background: none; color: var(--info); font-size: 17px; line-height: 1; }
+.cond + .term-i, li > .term-i { margin-inline-start: 4px; }
+.conds li { display: flex; align-items: flex-start; } .conds li .cond { flex: 1; }
+.gear-cell { position: relative; display: flex; } .gear-cell .gear-card { flex: 1; } .gear-cell .term-i { position: absolute; top: 2px; right: 2px; z-index: 1; }
+.term-text { line-height: 1.55; }
+.for-you ul { margin: 6px 0 0; padding-inline-start: 18px; } .for-you li { margin: 4px 0; line-height: 1.45; }
+.term-table-wrap { overflow-x: auto; margin: 8px 0; }
+.term-table { width: 100%; border-collapse: collapse; font-size: 13.5px; } .term-table th, .term-table td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.term-table th { color: var(--muted); font-weight: 600; } .term-table tr.on td { color: var(--accent); font-weight: 700; }
+.term-related { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; } .term-related .chip { font-family: inherit; }
+.term-word { font-size: inherit; color: inherit; text-decoration: underline dotted; min-height: 0; }
+.gl-group h2 { font-size: 19px; margin: 22px 0 8px; } .gl-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.gl-list button { width: 100%; text-align: left; min-height: 52px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+.gl-list b { display: block; } .gl-list .muted { display: block; margin-top: 2px; }
+.glossary-page .input[type=search] { margin-top: 12px; }
+.src-tag { white-space: nowrap; overflow-wrap: normal; flex: none; }
