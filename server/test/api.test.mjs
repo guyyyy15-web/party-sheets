@@ -169,3 +169,46 @@ test('accounts: an encrypted vault per sign-in method, unique usernames, only th
   assert.equal((await call(`/vault/${vid}`)).status, 404)
   assert.equal((await call(`/usernames/${uname}`)).body.taken, false, 'the name is free again')
 })
+
+test('initiative: the DM makes the Initiative link; it runs the fight; players send their own roll and see no enemy numbers', async () => {
+  const { room, playerKey, dmKey } = (await call('/rooms', { method: 'POST', body: { name: 'Fight night' } })).body
+  const own = key()
+  const ch = { ...hero('Brakka'), notes: 'secret plan', equipment: { gp: 99, items: 'a key', weapons: ['longsword'] } }
+  assert.equal((await call(`/rooms/${room.id}/characters/brakka01`, { method: 'PUT', auth: playerKey, owner: own, body: { patch: ch } })).status, 201)
+
+  assert.equal((await call(`/rooms/${room.id}/init-link`, { method: 'POST', auth: playerKey })).status, 403, 'players cannot make it')
+  const il = await call(`/rooms/${room.id}/init-link`, { method: 'POST', auth: dmKey })
+  assert.equal(il.status, 201)
+  const initKey = il.body.initKey
+
+  // the runner sees sheets without gold, items or notes
+  const r = await call(`/rooms/${room.id}`, { auth: initKey })
+  assert.equal(r.body.role, 'init')
+  const seen = r.body.characters[0].data
+  assert.equal(seen.notes, undefined); assert.equal(seen.equipment.gp, undefined); assert.equal(seen.equipment.items, undefined); assert.deepEqual(seen.equipment.weapons, ['longsword'])
+
+  // no fight yet: a roll has nowhere to go
+  assert.equal((await call(`/rooms/${room.id}/encounter/initiative`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', total: 12 } })).status, 404)
+  const fight = { active: true, round: 1, turn: null, seq: 1, combatants: [
+    { id: 'pc-brakka01', kind: 'pc', charId: 'brakka01', name: 'Brakka', init: null, bonus: 2 },
+    { id: 'npc-1', kind: 'npc', group: 'Ogre', name: 'Ogre', init: 15, bonus: -1, dmg: 39, ac: 11, conditions: ['prone'], evil: 'x' },
+  ] }
+  assert.equal((await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: playerKey, body: { rev: 0, data: fight } })).status, 403, 'players cannot run it')
+  const put = await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: 0, data: fight } })
+  assert.equal(put.status, 200); assert.equal(put.body.rev, 1); assert.equal(put.body.data.combatants[1].evil, undefined, 'unknown fields dropped')
+  assert.equal((await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: dmKey, body: { rev: 0, data: fight } })).status, 409, 'an old rev is refused')
+
+  // the player sends their roll (only for their own character)
+  assert.equal((await call(`/rooms/${room.id}/encounter/initiative`, { method: 'POST', auth: playerKey, owner: key(), body: { characterId: 'brakka01', total: 12 } })).status, 403)
+  const sent = await call(`/rooms/${room.id}/encounter/initiative`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', total: 17 } })
+  assert.equal(sent.status, 200); assert.equal(sent.body.rev, 2)
+  const ogre = sent.body.data.combatants.find((c) => c.id === 'npc-1')
+  assert.equal(ogre.ac, undefined); assert.equal(ogre.dmg, 39, 'players see the damage count, not the AC')
+
+  // the runner sees it, with the numbers; and may change a player's HP like the DM
+  const g = await call(`/rooms/${room.id}/encounter`, { auth: initKey })
+  assert.equal(g.body.data.combatants.find((c) => c.charId === 'brakka01').init, 17); assert.equal(g.body.data.combatants[1].ac, 11)
+  assert.equal((await call(`/rooms/${room.id}/characters/brakka01`, { method: 'PATCH', auth: initKey, body: { state: { hp: 3, conditions: ['prone'] } } })).status, 200)
+  // end the fight
+  assert.equal((await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: 2, data: null } })).body.data, null)
+})

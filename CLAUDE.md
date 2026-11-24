@@ -79,6 +79,14 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - Sync (`src/ui/sync.js`, pure parts in `src/sync-core.js`): one request per sync. Send `diff(local, base)` (PUT,
   merged by field; `state` one level deeper) or fetch the server copy. Every 10 s and 0.8 s after a change; the DM
   screen refreshes every 5 s. The same `mergePatch` runs on both sides.
+- **Initiative** (`src/encounter-core.js` pure + tested, UI `src/ui/initiative.jsx`, migration 0005): a third link per
+  group, `#/init/<room>.<initKey>`, made (or remade) by the DM in Links (`POST /rooms/:id/init-link`, only its hash
+  kept). Role `init` sees sheets without gold, items or notes (`privateless`) and may PATCH HP/conditions like the DM.
+  One fight per room (`encounters`: JSON + rev; `PUT` with the last seen rev, 409 → re-apply). Players' rolls arrive by
+  themselves (`POST …/encounter/initiative`, own character only) from the sheet's fight banner or the Init stat; every
+  number can be typed by hand (real dice). Enemies by kind × count, no HP: `dmg` counts damage taken from 0 (healing
+  down), the DM says when one falls (`dead`, skipped in the order). Players see the order, enemies' damage and
+  conditions, never their AC. Poll: runner 3 s, players 5 s.
 - Group settings (`rooms.settings`, DM only): `expansions` = subclasses from the expansion books (`expansion: true`,
   tagged with their book). A character in no group follows the phone's Table setting.
 - Admin screen (`#/admin`, `src/ui/admin.jsx`, `GET /admin/stats`): the first password set becomes the admin's

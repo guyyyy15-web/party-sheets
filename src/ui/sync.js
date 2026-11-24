@@ -24,7 +24,7 @@ async function api(path, { method = 'GET', key, owner, body } = {}) {
   let r
   try { r = await fetch(apiBase() + path, { method, headers, body: body ? JSON.stringify(body) : undefined }) } catch { throw new ApiError(0, 'offline') }
   const j = await r.json().catch(() => ({}))
-  if (!r.ok) throw new ApiError(r.status, j.error || `error ${r.status}`)
+  if (!r.ok) throw Object.assign(new ApiError(r.status, j.error || `error ${r.status}`), { body: j })
   return j
 }
 
@@ -40,7 +40,7 @@ function keepRoom(r) {
   return next.find((x) => x.id === r.id)
 }
 /** Groups from a backup file: added when this phone doesn't know them yet. */
-export function restoreRooms(list) { for (const r of list) if (!roomById(r.id)) keepRoom({ id: r.id, name: r.name, playerKey: r.playerKey, dmKey: r.dmKey }) }
+export function restoreRooms(list) { for (const r of list) if (!roomById(r.id)) keepRoom({ id: r.id, name: r.name, playerKey: r.playerKey, dmKey: r.dmKey, initKey: r.initKey }) }
 export const forgetRoom = (id) => { setSetting('rooms', listRooms().filter((r) => r.id !== id)); window.dispatchEvent(new Event('ps-rooms')) }
 const roomKey = (r) => r.dmKey || r.playerKey
 
@@ -52,15 +52,30 @@ export async function createRoom(name) {
 export async function joinRoom({ kind, roomId, key }) {
   const j = await api(`/rooms/${roomId}`, { key })
   if (kind === 'dm' && j.role !== 'dm') throw new ApiError(403, 'not a DM link')
-  return keepRoom({ id: roomId, name: j.room.name, settings: j.room.settings || {}, ...(kind === 'dm' ? { dmKey: key } : { playerKey: key }) })
+  if (kind === 'init' && j.role !== 'init' && j.role !== 'dm') throw new ApiError(403, 'not an Initiative link')
+  return keepRoom({ id: roomId, name: j.room.name, settings: j.room.settings || {}, ...(kind === 'dm' ? { dmKey: key } : kind === 'init' ? { initKey: key } : { playerKey: key }) })
 }
 const page = () => location.href.split('#')[0]
 export const inviteLink = (r) => (r.playerKey ? `${page()}#/join/${r.id}.${r.playerKey}` : null)
 export const dmLink = (r) => (r.dmKey ? `${page()}#/dm/${r.id}.${r.dmKey}` : null)
+export const initLink = (r) => (r.initKey ? `${page()}#/init/${r.id}.${r.initKey}` : null)
+/** The DM makes (or remakes: the old one stops working) the group's Initiative link. */
+export const makeInitLink = (r) => api(`/rooms/${r.id}/init-link`, { method: 'POST', key: r.dmKey }).then((j) => keepRoom({ id: r.id, initKey: j.initKey }))
+
+// ── the group's fight (initiative)
+/** The key that runs the fight on this phone: the Initiative link's, or the DM's. */
+export const runKey = (r) => r?.initKey || r?.dmKey || null
+export const fetchEncounter = (r, key = runKey(r) || r.playerKey) => api(`/rooms/${r.id}/encounter`, { key })
+/** Replace the fight; `rev` = the version last seen. A 409 carries the current one ({ rev, data }). */
+export const putEncounter = (r, data, rev) => api(`/rooms/${r.id}/encounter`, { method: 'PUT', key: runKey(r), body: { data, rev } })
+/** A player's own initiative (or the runner's for anyone). */
+export const sendInitiative = (r, characterId, total) => api(`/rooms/${r.id}/encounter/initiative`, { method: 'POST', key: runKey(r) || r.playerKey, owner: true, body: { characterId, total } })
+/** HP / conditions / death saves of a character, by the DM or the initiative runner. */
+export const runnerPatch = (r, charId, state) => api(`/rooms/${r.id}/characters/${charId}`, { method: 'PATCH', key: runKey(r), body: { state } })
 
 /** The room as its members see it: the DM gets every full sheet, a player gets the party list. */
 export async function fetchRoom(r, asDm) {
-  const j = await api(`/rooms/${r.id}`, { key: asDm ? r.dmKey : r.playerKey || r.dmKey })
+  const j = await api(`/rooms/${r.id}`, { key: asDm ? (asDm === 'run' ? runKey(r) : r.dmKey) : r.playerKey || r.dmKey || r.initKey })
   if (j.room.name !== r.name || JSON.stringify(j.room.settings || {}) !== JSON.stringify(r.settings || {})) keepRoom({ id: r.id, name: j.room.name, settings: j.room.settings || {} })
   return j
 }

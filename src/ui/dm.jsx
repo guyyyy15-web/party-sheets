@@ -14,7 +14,7 @@ import { ShareLinks } from './rooms.jsx'
 const POLL_MS = 5000
 const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago` }
 
-export function DmView({ room, onBack }) {
+export function DmView({ room, onBack, onInit }) {
   const [list, setList] = useState(null)
   const [err, setErr] = useState(null)
   const [hpFor, setHpFor] = useState(null)
@@ -51,6 +51,7 @@ export function DmView({ room, onBack }) {
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="Back">‹</button>
         <div className="grow"><h1>{room.name}</h1><p className="muted small">DM screen · updates every few seconds</p></div>
+        <button className="btn primary small" onClick={onInit}>⚔ Initiative</button>
         <button className="btn ghost small" onClick={() => setSettings(true)}>Settings</button>
         <button className="btn ghost small" onClick={() => setShare(true)}>Invite</button>
       </header>
