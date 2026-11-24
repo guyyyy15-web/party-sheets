@@ -63,7 +63,7 @@ export function parseBackupFile(text) {
 }
 /** The groups (with their links) saved in a backup file. */
 export function backupRooms(text) {
-  try { const j = JSON.parse(text); return Array.isArray(j?.rooms) ? j.rooms.filter((r) => r && /^[A-Za-z0-9_-]{6,40}$/.test(r.id) && typeof r.name === 'string' && (r.playerKey || r.dmKey)) : [] } catch { return [] }
+  try { const j = JSON.parse(text); return Array.isArray(j?.rooms) ? j.rooms.filter((r) => r && /^[A-Za-z0-9_-]{6,40}$/.test(r.id) && typeof r.name === 'string' && (r.playerKey || r.dmKey || r.initKey)) : [] } catch { return [] }
 }
 
 /** Shares the file (iPhone share sheet) or downloads it. */

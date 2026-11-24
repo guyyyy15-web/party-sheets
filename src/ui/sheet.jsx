@@ -8,6 +8,7 @@ import { ChoicesStep, Portrait } from './wizard.jsx'
 import { SyncBadge } from './rooms.jsx'
 import { SpellsTab, FeatSpells } from './spells.jsx'
 import { TurnGuide } from './turn.jsx'
+import { useFight, FightBanner } from './initiative.jsx'
 import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
 import { levelDiff } from '../engine/levelup.js'
 import { pathsFor } from '../engine/advice.js'
@@ -32,6 +33,9 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const [condOpen, setCondOpen] = useState(false)
   const hp = ch.state.hp ?? d.hp.value
   const setState = (patch) => setCh({ ...ch, state: { ...ch.state, ...patch } })
+  // a fight in the group: the initiative rolled here goes to the Initiative screen by itself
+  const fight = useFight(ch)
+  const rollInit = () => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode, parts: d.initiative.sources, rule: 'initiative' }).then((e) => { if (e && fight.enc) fight.send(e.total) })
   const used = (id) => ch.state.used?.[id] || 0
   const spend = (id, n = 1) => setState({ used: { ...ch.state.used, [id]: Math.max(0, used(id) + n) } })
   const show = (title, x) => setSources({ title, total: x.value, sources: x.sources })
@@ -58,7 +62,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
         </button>
         <button className="stat" onClick={() => show('Armor Class', d.ac)} aria-label={`Armor Class ${d.ac.value}: how it's made`}><span className="lbl">AC</span><b>{d.ac.value}</b><span className="tap-hint" aria-hidden>how?</span></button>
         <button className="stat" onClick={() => show('Speed', d.speed)} aria-label={`Speed ${d.speed.value} ft: how it's made`}><span className="lbl">Speed</span><b>{d.speed.value}</b><span className="tap-hint" aria-hidden>ft</span></button>
-        <button className="stat" onClick={() => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode, parts: d.initiative.sources, rule: 'initiative' })} aria-label={`Roll initiative, ${signed(d.initiative.value)}`}><span className="lbl">Init 🎲</span><b>{signed(d.initiative.value)}</b><Breakdown parts={d.initiative.sources} /></button>
+        <button className="stat" onClick={rollInit} aria-label={`Roll initiative, ${signed(d.initiative.value)}`}><span className="lbl">Init 🎲</span><b>{signed(d.initiative.value)}</b><Breakdown parts={d.initiative.sources} /></button>
         <div className="stat"><span className="lbl">Prof</span><b><Num kind="prof" value={d.prof} /></b></div>
       </section>
 
@@ -96,6 +100,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
         </section>
       )}
 
+      <FightBanner fight={fight} onRoll={rollInit} bonus={d.initiative.value} />
       {d.spellcasting?.concentration && <button className="banner conc-banner" onClick={() => setTab('spells')}>◎ Concentrating: {d.spellcasting.concentration.name} ›</button>}
       {d.pending.length > 0 && <button className="banner" onClick={() => setLevelUp('choices')}>⚠ {d.pending.length} choice{d.pending.length > 1 ? 's' : ''} to make ›</button>}
 
@@ -433,7 +438,7 @@ export function ConditionsSheet({ d, ch, setState, onClose, onTerm }) {
 }
 
 /** Choose a weapon from cards: picture, damage, properties; the ones you're trained with first. */
-function WeaponPicker({ cls, onPick, onClose }) {
+export function WeaponPicker({ cls, onPick, onClose }) {
   const [q, setQ] = useState('')
   const trained = (w) => !cls || cls.weapons.some((t) => t === w.cat.split('-')[0] || (t === 'martial-light' && w.cat.startsWith('martial') && w.props.includes('light')) || (t === 'martial-finesse-light' && w.cat.startsWith('martial') && (w.props.includes('finesse') || w.props.includes('light'))))
   const groups = [['simple-melee', 'Simple melee'], ['simple-ranged', 'Simple ranged'], ['martial-melee', 'Martial melee'], ['martial-ranged', 'Martial ranged']]

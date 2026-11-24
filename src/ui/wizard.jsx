@@ -6,6 +6,7 @@ import { CLASSES, classById } from '../content/classes.js'
 import { SPECIES, speciesById } from '../content/species.js'
 import { BACKGROUNDS, backgroundById } from '../content/backgrounds.js'
 import { ABILITIES, ABILITY_NAMES, skillName, armorById, weaponById } from '../content/basics.js'
+import { WeaponPicker } from './sheet.jsx'
 import { OptionCards, AsiPicker, asiDone, Stepper, signed, GameIcon, SourceTag } from './common.jsx'
 import { shrinkImage } from './store.js'
 import { expansionsAllowed } from './sync.js'
@@ -342,11 +343,12 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
 
 function GearStep({ ch, setCh, d }) {
   const cls = d.cls
+  const [adding, setAdding] = useState(false)
   const setPack = (p) => setCh({ ...ch, equipment: { ...ch.equipment, pack: p.id, armor: p.armor || null, weapons: p.weapons || [], gp: (p.gp || 0) + 50, items: p.items } })
   return (
     <section>
       <h1 className="wiz-title">Gear</h1>
-      <p className="lead">The {cls?.name} kit, or gold to shop with.</p>
+      <p className="lead">Pick the {cls?.name} kit (set weapons and armor, as in the 2024 rules) or gold to shop with. Change the weapons below, now or later on the Gear tab.</p>
       <OptionCards count={1} picked={ch.equipment.pack ? [ch.equipment.pack] : []} onChange={([id]) => setPack(cls.packs.find((p) => p.id === id))}
         options={(cls?.packs || []).map((p) => ({ id: p.id, name: p.name, summary: p.items, icon: p.weapons?.length || p.armor ? 'ui.pack' : 'ui.gold' }))} />
       {cls?.armor.includes('shield') && (
@@ -355,8 +357,10 @@ function GearStep({ ch, setCh, d }) {
       <div className="panel">
         <div className="row"><span className="grow">AC</span><b className="mono">{d.ac.value}</b></div>
         <div className="row"><span className="grow">Armor</span><span>{armorById(ch.equipment.armor)?.name || 'None'}</span></div>
-        <div className="row"><span className="grow">Weapons</span><span className="gear-inline">{(ch.equipment.weapons || []).length ? ch.equipment.weapons.map((w, i) => <span key={i}><GameIcon id={`w.${w}`} size={20} />{weaponById(w)?.name}</span>) : 'None'}</span></div>
+        <div className="row"><span className="grow">Weapons</span><span className="gear-inline">{(ch.equipment.weapons || []).length ? ch.equipment.weapons.map((w, i) => <span key={i}><GameIcon id={`w.${w}`} size={20} />{weaponById(w)?.name}<button className="icon-btn" aria-label={`Remove ${weaponById(w)?.name}`} onClick={() => setCh({ ...ch, equipment: { ...ch.equipment, weapons: ch.equipment.weapons.filter((_, j) => j !== i) } })}>✕</button></span>) : 'None'}</span></div>
       </div>
+      <button className="btn ghost" onClick={() => setAdding(true)}>+ Choose a weapon</button>
+      {adding && <WeaponPicker cls={cls} onPick={(id) => { setCh({ ...ch, equipment: { ...ch.equipment, weapons: [...(ch.equipment.weapons || []), id] } }); setAdding(false) }} onClose={() => setAdding(false)} />}
     </section>
   )
 }

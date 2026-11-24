@@ -1,7 +1,7 @@
 // Groups ("rooms"): each playing group has its own room, an invite link for the players and a DM link for its DM.
 import React, { useState, useEffect } from 'react'
 import { Sheet } from './common.jsx'
-import { createRoom, listRooms, inviteLink, dmLink, fetchRoom, forgetRoom, syncStatus, onSyncStatus } from './sync.js'
+import { createRoom, listRooms, inviteLink, dmLink, initLink, makeInitLink, roomById, fetchRoom, forgetRoom, syncStatus, onSyncStatus } from './sync.js'
 
 /** Share a link: the phone's share sheet, else copy, else show it to copy by hand. */
 async function shareUrl(url, title, text) {
@@ -23,11 +23,22 @@ function LinkRow({ label, hint, url, title, text }) {
   )
 }
 
-export function ShareLinks({ room, onClose }) {
-  const inv = inviteLink(room), dm = dmLink(room)
+export function ShareLinks({ room: room0, onClose }) {
+  const [room, setRoom] = useState(() => roomById(room0.id) || room0)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const inv = inviteLink(room), dm = dmLink(room), init = initLink(room)
+  const make = async () => {
+    if (init && !confirm('Make a new Initiative link? The old one stops working.')) return
+    setBusy(true); setErr(null)
+    try { setRoom(await makeInitLink(room)) } catch (e) { setErr(e.status === 0 ? 'No connection. Try again when online.' : e.message) } finally { setBusy(false) }
+  }
   return (
     <Sheet title={`Links for ${room.name}`} onClose={onClose}>
       {inv && <LinkRow label="Invite for players" hint="For the players." url={inv} title={`Join ${room.name}`} text={`Join our group "${room.name}" on Party Sheets:`} />}
+      {init && <LinkRow label="Initiative link" hint="For whoever runs the initiative at the table: the order, enemies, HP and conditions. No gold, items or notes." url={init} title={`Initiative: ${room.name}`} text={`Run the initiative for "${room.name}":`} />}
+      {room.dmKey && <button className="btn ghost wide" disabled={busy} onClick={make}>{init ? '↻ Make a new Initiative link' : '⚔ Make an Initiative link'}</button>}
+      {err && <p className="warn-line" role="alert">{err}</p>}
       {dm && <LinkRow label="DM link (keep it for the DM)" hint="Only for the DM: every sheet, live." url={dm} title={`DM: ${room.name}`} text={`DM screen for "${room.name}":`} />}
     </Sheet>
   )
@@ -52,7 +63,7 @@ export function NewRoomSheet({ onClose, onCreated }) {
 }
 
 /** Home: the groups this phone knows, with my characters in each and the rest of the party. */
-export function RoomsSection({ chars, renderChar, onDm, onNewInRoom, onBring, joined }) {
+export function RoomsSection({ chars, renderChar, onDm, onInit, onNewInRoom, onBring, joined }) {
   const [rooms, setRooms] = useState(listRooms)
   const [party, setParty] = useState({})
   const [share, setShare] = useState(null)
@@ -75,7 +86,8 @@ export function RoomsSection({ chars, renderChar, onDm, onNewInRoom, onBring, jo
         return (
           <div key={r.id} className={`room ${joined === r.id ? 'fresh' : ''}`}>
             <div className="room-head">
-              <span className="grow"><b>{r.name}</b><span className="muted small">{r.dmKey ? 'You are the DM' : 'Player'}{party[r.id] ? ` · ${party[r.id].length} in the party` : ''}</span></span>
+              <span className="grow"><b>{r.name}</b><span className="muted small">{r.dmKey ? 'You are the DM' : r.initKey ? 'You run the initiative' : 'Player'}{party[r.id] ? ` · ${party[r.id].length} in the party` : ''}</span></span>
+              {(r.initKey || r.dmKey) && <button className="btn small primary" onClick={() => onInit(r)}>⚔ Initiative</button>}
               {r.dmKey && <button className="btn small primary" onClick={() => onDm(r)}>DM screen</button>}
               <button className="btn small ghost" onClick={() => setShare(r)} aria-label={`Links for ${r.name}`}>Links</button>
             </div>

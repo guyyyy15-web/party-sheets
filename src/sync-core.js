@@ -46,6 +46,6 @@ export function rebase(local, base, server) {
 export function parseLink(hash) {
   const r = /^#\/restore\/([A-Za-z0-9_-]{24,64})$/.exec(hash || '')
   if (r) return { kind: 'restore', key: r[1] }
-  const m = /^#\/(join|dm)\/([A-Za-z0-9_-]{6,40})\.([A-Za-z0-9_-]{24,64})$/.exec(hash || '')
+  const m = /^#\/(join|dm|init)\/([A-Za-z0-9_-]{6,40})\.([A-Za-z0-9_-]{24,64})$/.exec(hash || '')
   return m ? { kind: m[1], roomId: m[2], key: m[3] } : null
 }

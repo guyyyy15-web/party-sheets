@@ -6,6 +6,7 @@ import { parseLink } from './sync-core.js'
 import { joinRoom, listRooms, roomById, restoreRooms, shareCharacter, unshareCharacter, syncCharacter, fetchRoom, deleteRemote, markPending, restoreFrom, restoreLink, syncStatus, onSyncStatus } from './ui/sync.js'
 import { RoomsSection } from './ui/rooms.jsx'
 import { DmView } from './ui/dm.jsx'
+import { InitiativeView } from './ui/initiative.jsx'
 import { AdminView } from './ui/admin.jsx'
 import { GlossaryView } from './ui/glossary.jsx'
 import { Landing, shareApp } from './ui/landing.jsx'
@@ -64,6 +65,7 @@ function App() {
       try {
         const r = await joinRoom(link)
         if (link.kind === 'dm') setView({ name: 'dm', roomId: r.id })
+        else if (link.kind === 'init') setView({ name: 'init', roomId: r.id })
         else { setJoined(r.id); setView({ name: 'home' }) }
       } catch (e) { say(e.status === 0 ? 'No connection: open the link again when online.' : e.status === 404 ? 'That group no longer exists.' : 'That link doesn\'t work. Ask for a new one.') }
     }
@@ -207,15 +209,17 @@ function App() {
   } else if (view.name === 'admin') {
     screen = <AdminView onBack={() => { history.replaceState(null, '', location.pathname); setView({ name: 'home' }) }} />
   } else if (view.name === 'dm' && roomById(view.roomId)) {
-    screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} />
+    screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} onInit={() => setView({ name: 'init', roomId: view.roomId, from: 'dm' })} />
+  } else if (view.name === 'init' && roomById(view.roomId)) {
+    screen = <InitiativeView room={roomById(view.roomId)} onBack={() => setView(view.from === 'dm' ? { name: 'dm', roomId: view.roomId } : { name: 'home' })} />
   } else {
-    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onGlossary={() => setView({ name: 'glossary' })} onAbout={() => setView({ name: 'landing', again: true })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
+    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onGlossary={() => setView({ name: 'glossary' })} onAbout={() => setView({ name: 'landing', again: true })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} onInit={(r) => setView({ name: 'init', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
   }
 
   return (
     <>
       {screen}
-      {view.name !== 'wizard' && !landing && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice">🎲</button>}
+      {view.name !== 'wizard' && view.name !== 'init' && !landing && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice">🎲</button>}
       {tray && <DiceTray pool={pool} setPool={setPool} mod={poolMod} setMod={setPoolMod} throwOn={throwOn} setThrowOn={setThrowOn} last={log[0]}
         onClose={() => setTray(false)} onThrow={() => { setTray(false); roll({ kind: 'pool', pool, mod: poolMod }) }} />}
       {shown && <RollCard e={shown} onClose={() => setShown(null)} />}
@@ -234,7 +238,7 @@ function App() {
   )
 }
 
-function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll, onBring, onDm, joined, onExport, onImport, settings, setSettings }) {
+function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll, onBring, onDm, onInit, joined, onExport, onImport, settings, setSettings }) {
   const file = useRef(null)
   const [table, setTable] = useState(false)
   const last = getSetting('lastBackupAt', null)
@@ -269,7 +273,7 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
       <UnsavedBanner chars={chars} onSaveAll={onSaveAll} />
       {real.some((c) => !c.draft) && <SaveAccountNudge onOpen={onAccount} />}
       <button className="btn primary wide big-btn" onClick={() => onNew()}>+ New character</button>
-      <RoomsSection chars={real} renderChar={card} onDm={onDm} onNewInRoom={(r) => onNew(r)} onBring={onBring} joined={joined} />
+      <RoomsSection chars={real} renderChar={card} onDm={onDm} onInit={onInit} onNewInRoom={(r) => onNew(r)} onBring={onBring} joined={joined} />
       <input ref={file} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f) }} aria-label="Backup file" />
       {table && (
         <Sheet title="Table settings" onClose={() => setTable(false)}>

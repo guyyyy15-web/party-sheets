@@ -510,3 +510,30 @@ body { line-height: 1.5; }
 .edge-text small { color: var(--muted); font-size: 12px; }
 .edge.adv { border-color: var(--ok); }
 .edge.dis { border-color: var(--bad); }
+
+/* Initiative: the runner's screen, and the fight banner on a player's sheet */
+.init-page { max-width: 760px; margin: 0 auto; padding: 0 16px calc(96px + env(safe-area-inset-bottom)); }
+.init-bar { display: flex; align-items: center; gap: 10px; margin: 12px 0; font-size: 17px; }
+.init-missing { display: flex; align-items: center; gap: 10px; padding: 8px 12px; text-align: start; }
+.init-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.init-row { display: flex; align-items: stretch; gap: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.init-row.npc { background: color-mix(in srgb, var(--bad) 6%, var(--panel-2)); }
+.init-row.now { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.init-row.down .init-name b { color: var(--muted); text-decoration: line-through; }
+.init-num { min-width: 52px; min-height: 52px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: 700 22px/1 var(--mono, ui-monospace, monospace); display: grid; place-items: center; }
+.init-num.empty { color: var(--accent); border-style: dashed; }
+.init-main { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 6px 12px; background: none; border: 0; color: var(--text); text-align: start; }
+.init-main .hp-bar { left: 6px; right: 6px; bottom: 4px; }
+.init-main .hp-bar.mid span { background: #c9a35c; } .init-main .hp-bar.low span { background: var(--bad); }
+.init-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 16px; }
+.tag-pc, .tag-down, .tag-looks { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+.tag-down { color: #fff; background: var(--bad); border-color: var(--bad); }
+.tag-looks.bloodied { color: #c9a35c; border-color: #c9a35c; } .tag-looks.down { color: #fff; background: var(--bad); border-color: var(--bad); }
+.init-list.compact .init-row { padding: 4px; } .init-list.compact .init-num { min-width: 40px; min-height: 40px; font-size: 17px; }
+.init-foot { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--ink); border-top: 1px solid var(--line); max-width: 760px; margin: 0 auto; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.danger-text { color: var(--bad); }
+.fight-banner { display: flex; flex-direction: column; gap: 8px; width: 100%; margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--text); text-align: start; }
+button.fight-banner { flex-direction: row; align-items: center; min-height: 48px; }
+.fight-banner.mine { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.dmg-total { font-size: 18px; margin: 4px 0 10px; } .dmg-total b { font-size: 28px; }

@@ -15,6 +15,8 @@ export const LIMITS = {
   roomsPerClientPerHour: 10,
   writesPerClientPerMinute: 120,
   totalRooms: 5000,
+  encounterBytes: 48 * 1024,
+  combatants: 60,
 }
 const ID = /^[A-Za-z0-9_-]{6,40}$/
 const KEY = /^[A-Za-z0-9_-]{24,64}$/
@@ -77,7 +79,7 @@ async function count(env, kind) {
   try { await env.DB.prepare('INSERT INTO usage (day, kind, count) VALUES (?, ?, 1) ON CONFLICT (day, kind) DO UPDATE SET count = count + 1').bind(today(), kind).run() } catch { /* never fail a request over a counter */ }
 }
 
-/** Who is calling for this room: 'dm', 'player', or an error. Bearer key = the player or the DM key. */
+/** Who is calling for this room: 'dm', 'player', 'init' (runs the initiative), or an error. Bearer key = the player or the DM key. */
 async function roleIn(env, req, roomId) {
   if (!ID.test(roomId || '')) fail(400, 'bad room')
   const room = await env.DB.prepare('SELECT * FROM rooms WHERE id = ?').bind(roomId).first()
@@ -87,6 +89,7 @@ async function roleIn(env, req, roomId) {
   const h = await sha256(key)
   if (same(h, room.dm_hash)) return { room, role: 'dm' }
   if (same(h, room.player_hash)) return { room, role: 'player' }
+  if (room.init_hash && same(h, room.init_hash)) return { room, role: 'init' }
   fail(403, 'wrong key')
 }
 const ownerHash = async (req) => {
@@ -147,6 +150,7 @@ async function route(req, env) {
     const rows = (await env.DB.prepare('SELECT id, data, rev, updated_at FROM characters WHERE room_id = ? ORDER BY updated_at DESC').bind(room.id).all()).results
     const characters = rows.map((r) => {
       const data = JSON.parse(r.data)
+      if (role === 'init') return { id: r.id, rev: r.rev, updatedAt: r.updated_at, data: privateless(data) }
       return role === 'dm' ? { id: r.id, rev: r.rev, updatedAt: r.updated_at, data } : { id: r.id, rev: r.rev, name: data.name, classId: data.classId, level: data.level, speciesId: data.speciesId, portrait: data.portrait?.kind === 'icon' ? data.portrait : null }
     })
     return json({ room: publicRoom(room), role, characters })
@@ -260,6 +264,53 @@ async function route(req, env) {
     }
   }
 
+  // ── initiative: the group's Initiative link (made by the DM), and its current fight
+  const il = /^\/rooms\/([A-Za-z0-9_-]+)\/init-link$/.exec(p)
+  if (il && m === 'POST') {
+    const { room, role } = await roleIn(env, req, il[1])
+    if (role !== 'dm') fail(403, 'DM only')
+    const initKey = randomKey()
+    await env.DB.prepare('UPDATE rooms SET init_hash = ?, updated_at = ? WHERE id = ?').bind(await sha256(initKey), Date.now(), room.id).run()
+    return json({ initKey }, 201)
+  }
+  const em = /^\/rooms\/([A-Za-z0-9_-]+)\/encounter(\/initiative)?$/.exec(p)
+  if (em) {
+    const { room, role } = await roleIn(env, req, em[1])
+    const runs = role === 'dm' || role === 'init'
+    const row = await env.DB.prepare('SELECT data, rev FROM encounters WHERE room_id = ?').bind(room.id).first()
+    const cur = row ? JSON.parse(row.data) : null
+    if (!em[2] && m === 'GET') return json({ rev: row?.rev || 0, data: runs ? cur : hideEnemies(cur), role })
+    if (!em[2] && m === 'PUT') {
+      // the initiative runner replaces the fight; `rev` must be the one they last saw (else 409 with the current one)
+      if (!runs) fail(403, 'only the initiative runner')
+      await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
+      const body = await readJson(req, LIMITS.encounterBytes + 256)
+      if ((body?.rev || 0) !== (row?.rev || 0)) return json({ error: 'changed', rev: row?.rev || 0, data: cur }, 409)
+      if (body.data == null) { await env.DB.prepare('DELETE FROM encounters WHERE room_id = ?').bind(room.id).run(); return json({ rev: 0, data: null }) }
+      const data = cleanEncounter(body.data)
+      const rev = await saveEncounter(env, room.id, data, row)
+      if (!row) await count(env, 'fight_started')
+      return json({ rev, data })
+    }
+    if (em[2] && m === 'POST') {
+      // a player sends their own initiative (rolled in the app or by hand); the runner may send anyone's
+      await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
+      if (!cur || !cur.active) fail(404, 'no fight')
+      const body = await readJson(req, 512)
+      const id = String(body?.characterId || '')
+      const total = Number(body?.total)
+      if (!ID.test(id) || !Number.isInteger(total) || total < -10 || total > 60) fail(400, 'bad initiative')
+      const ch = await env.DB.prepare('SELECT owner_hash, room_id, data FROM characters WHERE id = ?').bind(id).first()
+      if (!ch || ch.room_id !== room.id) fail(404, 'no such character')
+      if (!runs && !same(await ownerHash(req), ch.owner_hash)) fail(403, 'not yours')
+      const c = cur.combatants.find((x) => x.charId === id)
+      if (c) c.init = total
+      else if (cur.combatants.length < LIMITS.combatants) cur.combatants.push({ id: `pc-${id}`, kind: 'pc', charId: id, name: String(JSON.parse(ch.data).name || 'Hero').slice(0, 40), bonus: 0, init: total })
+      const rev = await saveEncounter(env, room.id, cur, row)
+      return json({ rev, data: runs ? cur : hideEnemies(cur) })
+    }
+  }
+
   const cm = /^\/rooms\/([A-Za-z0-9_-]+)\/characters\/([A-Za-z0-9_-]+)$/.exec(p)
   if (cm) {
     const { room, role } = await roleIn(env, req, cm[1])
@@ -308,8 +359,8 @@ async function route(req, env) {
     }
 
     if (m === 'PATCH') {
-      // DM quick actions: only these state fields
-      if (role !== 'dm') fail(403, 'DM only')
+      // DM quick actions (also the initiative runner's): only these state fields
+      if (role !== 'dm' && role !== 'init') fail(403, 'DM only')
       if (!inRoom) fail(404, 'no such character')
       await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
       const body = await readJson(req, 4096)
@@ -339,6 +390,40 @@ async function route(req, env) {
     }
   }
   fail(404, 'not found')
+}
+
+/** What the initiative runner sees of a sheet: everything for the numbers, not gold, items or notes. */
+function privateless(data) {
+  const { notes, ...rest } = data
+  return { ...rest, equipment: rest.equipment ? { ...rest.equipment, gp: undefined, items: undefined } : rest.equipment }
+}
+/** Players see enemies without their AC; the damage count is the table's (everyone counts it anyway). */
+function hideEnemies(enc) {
+  if (!enc) return enc
+  return { ...enc, combatants: enc.combatants.map((c) => (c.kind !== 'npc' ? c : { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [] })) }
+}
+const int = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null)
+/** Only the known fields, in range: the encounter is shown to every player of the group. */
+function cleanEncounter(e) {
+  if (!e || typeof e !== 'object' || !Array.isArray(e.combatants)) fail(400, 'bad encounter')
+  if (e.combatants.length > LIMITS.combatants) fail(413, 'too many in the fight')
+  const str = (s, n) => String(s ?? '').slice(0, n)
+  const combatants = e.combatants.map((c) => {
+    if (!c || !/^(pc|npc)-[A-Za-z0-9_-]{1,40}$/.test(c.id || '')) fail(400, 'bad combatant')
+    const base = { id: c.id, kind: c.kind === 'pc' ? 'pc' : 'npc', name: str(c.name, 40), init: int(c.init, -10, 60), bonus: int(c.bonus, -10, 30) ?? 0 }
+    if (base.kind === 'pc') return { ...base, charId: str(c.charId, 40) }
+    return { ...base, group: str(c.group, 30), dmg: int(c.dmg, 0, 99999) ?? 0, ac: int(c.ac, 0, 50), dead: !!c.dead,
+      conditions: Array.isArray(c.conditions) ? c.conditions.filter((x) => typeof x === 'string').slice(0, 20).map((x) => x.slice(0, 20)) : [] }
+  })
+  const ids = new Set(combatants.map((c) => c.id))
+  return { active: e.active !== false, round: int(e.round, 1, 9999) ?? 1, turn: ids.has(e.turn) ? e.turn : null, seq: int(e.seq, 0, 1e6) ?? 0, combatants }
+}
+async function saveEncounter(env, roomId, data, row) {
+  const text = JSON.stringify(data)
+  if (text.length > LIMITS.encounterBytes) fail(413, 'fight too large')
+  const now = Date.now()
+  if (!row) { await env.DB.prepare('INSERT INTO encounters (room_id, data, rev, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT (room_id) DO UPDATE SET data = excluded.data, rev = encounters.rev + 1, updated_at = excluded.updated_at').bind(roomId, text, now).run(); return (await env.DB.prepare('SELECT rev FROM encounters WHERE room_id = ?').bind(roomId).first('rev')) }
+  return env.DB.prepare('UPDATE encounters SET data = ?, rev = rev + 1, updated_at = ? WHERE room_id = ? RETURNING rev').bind(text, now, roomId).first('rev')
 }
 
 /** A brand-new character: limits per owner and per client. */
