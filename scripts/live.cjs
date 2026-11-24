@@ -24,7 +24,9 @@ const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails+
     await p.click('.class-card:has-text("Fighter")'); await p.click('.wiz-foot button')
     await p.click('.card:has-text("Goliath")'); await p.click('.panel .card:has-text("Stone")'); await p.click('.wiz-foot button')
     await p.click('.card:has-text("Sage")'); await p.click('button:has-text("+1 to all three")')
-    ok(await p.isEnabled('.wiz-foot button'), `${devName}: Sage needs no extra choice (Magic Initiate list is fixed)`)
+    ok(!(await p.isEnabled('.wiz-foot button')), `${devName}: Sage asks for its Magic Initiate spells (the list is fixed: Wizard)`)
+    for (const n of ['Intelligence', 'Fire Bolt', 'Light', 'Magic Missile']) await p.click(`.panel .card:has(.opt-name:text-is("${n}"))`)
+    ok(await p.isEnabled('.wiz-foot button'), `${devName}: with the spells picked, the background is done`)
     await p.click('.wiz-foot button')
     // 4d6 thrown on screen, six times
     await p.click('button:has-text("Roll 4d6")')

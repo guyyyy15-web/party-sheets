@@ -158,3 +158,21 @@ test('a picked subclass stays in the choice list (done), so the picker does not 
   const c = derive(ch).choices.find((x) => x.kind === 'subclass')
   assert.ok(c && c.done && c.picked[0] === derive(ch).subclass?.id)
 })
+
+test('feat spells: Magic Initiate picks from its list with its own ability, Fey Touched uses the raised ability', () => {
+  const base = { ...newCharacter(), classId: 'fighter', speciesId: 'dwarf', backgroundId: 'acolyte', level: 4, scores: { STR: 15, DEX: 14, CON: 13, INT: 12, WIS: 10, CHA: 8 } }
+  let d = derive({ ...base, choices: { 'asi-4.asi': { type: 'feat', feat: 'fey-touched', ability: 'CHA' } } })
+  const can = d.pending.find((c) => c.key === 'background>magic-initiate.cantrips')
+  assert.equal(can.count, 2)
+  assert.ok(can.options.length && can.options.every((o) => spellById(o.id).level === 0 && spellById(o.id).classes.includes('cleric')), 'Acolyte: Cleric cantrips only')
+  const fey = d.pending.find((c) => c.key === 'asi-4.asi>fey-touched.spell')
+  assert.ok(fey.options.every((o) => spellById(o.id).level === 1 && ['Divination', 'Enchantment'].includes(spellById(o.id).school)))
+  d = derive({ ...base, choices: { 'asi-4.asi': { type: 'feat', feat: 'fey-touched', ability: 'CHA' }, 'background>magic-initiate.ability': ['WIS'], 'background>magic-initiate.cantrips': ['guidance', 'sacred-flame'], 'background>magic-initiate.spell': ['bless'], 'asi-4.asi>fey-touched.spell': [fey.options[0].id] } })
+  assert.ok(!d.pending.some((c) => c.kind === 'spell'), 'no spell picks left')
+  const by = Object.fromEntries(d.featSpells.map((x) => [x.spell.id, x]))
+  assert.equal(by['sacred-flame'].ability, 'WIS'); assert.equal(by['sacred-flame'].dc.value, 8 + d.mod.WIS + d.prof)
+  assert.equal(by.bless.free, 'magic-initiate'); assert.equal(by['sacred-flame'].free, null)
+  assert.equal(by['misty-step'].ability, 'CHA'); assert.equal(by['misty-step'].dc.value, 8 + d.mod.CHA + d.prof)
+  assert.equal(by['misty-step'].free, 'fey-touched-misty-step')
+  assert.ok(d.resources.some((r) => r.id === 'magic-initiate'))
+})

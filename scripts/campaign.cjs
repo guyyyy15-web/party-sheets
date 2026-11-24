@@ -59,7 +59,7 @@ async function choose(p, scope) {
     await p.click('.wiz-foot button')
     await p.click(`.class-card:has-text("${cls}")`); await p.click('.wiz-foot button')
     await p.click(`.card:has-text("${species}")`); await choose(p, '.wizard'); await p.click('.wiz-foot button')
-    await p.click(`.card:has-text("${bg}")`); await p.click('button:has-text("+2 and +1")'); await p.click('.wiz-foot button')
+    await p.click(`.card:has-text("${bg}")`); await choose(p, '.wizard'); await p.click('button:has-text("+2 and +1")'); await p.click('.wiz-foot button')
     await p.click('button:has-text("Suggest for")'); await p.click('.wiz-foot button')
     await choose(p, '.wizard'); await p.click('.wiz-foot button')
     await p.click('.card.opt >> nth=0'); await p.click('.wiz-foot button')

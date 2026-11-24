@@ -3,9 +3,8 @@
 import React from 'react'
 import { rollDice, rollD20, rollPool, poolSides, poolLabel, diceNeeded, d20Needed, signed } from '../dice.js'
 
-const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 export const webglOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')) } catch { return false } }
-export const throwDefault = () => !reducedMotion() && webglOk()
+export const throwDefault = () => webglOk() // on by default (Guy), even with Reduce motion; the tray can turn it off
 
 let p3d = null
 /** three.js + cannon-es are a separate file, loaded the first time dice are thrown. */

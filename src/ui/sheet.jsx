@@ -6,7 +6,8 @@ import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTER
 import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend, themeOf, GameIcon } from './common.jsx'
 import { ChoicesStep, Portrait } from './wizard.jsx'
 import { SyncBadge } from './rooms.jsx'
-import { SpellsTab } from './spells.jsx'
+import { SpellsTab, FeatSpells } from './spells.jsx'
+import { TurnGuide } from './turn.jsx'
 import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
 import { levelDiff } from '../engine/levelup.js'
 import { pathsFor } from '../engine/advice.js'
@@ -109,15 +110,16 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       <div className="sheet-main">
       <nav className="tabs" role="tablist">
-        {[['turn', 'My Turn'], ...(d.spellcasting ? [['spells', 'Spells']] : []), ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
+        {[['turn', 'My Turn'], ...(d.spellcasting || d.featSpells.length ? [['spells', 'Spells']] : []), ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{l}</button>
         ))}
       </nav>
 
-      <div className="seg mode">{[['dis', 'Disadvantage'], ['normal', 'Normal'], ['adv', 'Advantage']].map(([m, l]) => <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}>{l}</button>)}</div>
+      <EdgeTracker edge={ch.state.edge || 0} onSet={(edge) => setState({ edge })} />
 
-      {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} used={used} spend={spend} setState={setState} hp={hp} show={show} setTerm={setTerm} />}
+      {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} setMode={setMode} used={used} spend={spend} setState={setState} hp={hp} show={show} setTerm={setTerm} onSpells={() => setTab('spells')} />}
       {tab === 'spells' && d.spellcasting && <SpellsTab key={spellPick ? 'pick' : 'tab'} openPicker={spellPick} onPickerClosed={() => setSpellPick(false)} d={d} ch={ch} setCh={setCh} setState={setState} roll={roll} mode={mode} show={show} />}
+      {tab === 'spells' && d.featSpells.length > 0 && <FeatSpells d={d} ch={ch} setState={setState} roll={roll} mode={mode} />}
       {tab === 'checks' && <ChecksTab d={d} roll={roll} mode={mode} show={show} />}
       {tab === 'features' && <FeaturesTab d={d} />}
       {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} onTerm={setTerm} />}
@@ -164,7 +166,8 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   )
 }
 
-function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show, setTerm }) {
+function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, setTerm, onSpells }) {
+  const [guide, setGuide] = useState(false)
   const atk = d.attacks
   const pinned = new Set(ch.pinned || [])
   const groups = ['action', 'bonus', 'reaction', 'free', 'info']
@@ -177,7 +180,10 @@ function TurnTab({ d, ch, roll, mode, used, spend, setState, hp, show, setTerm }
   }
   return (
     <section className="turn">
+      <button className="btn primary wide big-btn start-turn" onClick={() => setGuide(true)}>▶ Start my turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
+      {guide && <TurnGuide d={d} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} />}
       <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>
+      <p className="muted small tap-hint">🎲 Tap a number to roll it: first <b>to hit</b> (d20), then <b>damage</b> if it hits.</p>
       {atk.map((a) => (
         <div key={a.id} className="attack">
           <GameIcon id={`w.${a.id}`} size={34} className="atk-icon" />
@@ -456,5 +462,22 @@ function WeaponPicker({ cls, onPick, onClose }) {
         )
       })}
     </Sheet>
+  )
+}
+
+/**
+ * Advantage tracker: + when something gives you advantage, − for disadvantage (they cancel). While it isn't 0, every
+ * d20 roll asks whether it applies (app.jsx), because an advantage usually covers some rolls, not all.
+ */
+function EdgeTracker({ edge, onSet }) {
+  const what = edge > 0 ? 'Advantage' : edge < 0 ? 'Disadvantage' : 'No advantage'
+  return (
+    <div className={`edge ${edge > 0 ? 'adv' : edge < 0 ? 'dis' : ''}`} role="group" aria-label="Advantage tracker">
+      <button className="icon-btn boxed" onClick={() => onSet(edge - 1)} aria-label="Disadvantage: one more (or one less advantage)">−</button>
+      <span className="grow edge-text"><b>{what}{edge ? ` (${edge > 0 ? '+' : ''}${edge})` : ''}</b>
+        <small>{edge ? 'Your d20 rolls will ask whether it applies.' : 'Something gives you advantage? Tap +. Disadvantage? Tap −.'}</small></span>
+      {edge !== 0 && <button className="btn ghost small" onClick={() => onSet(0)}>Clear</button>}
+      <button className="icon-btn boxed" onClick={() => onSet(edge + 1)} aria-label="Advantage: one more (or one less disadvantage)">+</button>
+    </div>
   )
 }

@@ -309,7 +309,7 @@ function shownOptions(ch, d, c) {
   const have = (o) => c.kind === 'skill' && d.skills.find((s) => s.id === o.id)?.prof && !c.picked.includes(o.id)
   const shown = c.options.filter((o) => !o.expansion || expansionsAllowed(ch) || c.picked.includes(o.id)).map((o) => (have(o) ? { ...o, disabled: true, summary: o.summary || 'Already proficient' } : o))
   const rec = recommend(ch, d, { ...c, options: shown })
-  return shown.map((o) => ({ ...o, rec: o.disabled ? undefined : rec[o.id], icon: c.kind === 'subclass' ? `class.${ch.classId}` : c.kind === 'weapon' ? `w.${o.id}` : c.kind === 'feat' ? 'ui.feat' : undefined }))
+  return shown.map((o) => ({ ...o, rec: o.disabled ? undefined : rec[o.id], icon: c.kind === 'subclass' ? `class.${ch.classId}` : c.kind === 'weapon' ? `w.${o.id}` : c.kind === 'feat' ? 'ui.feat' : c.kind === 'spell' && o.school ? `school.${o.school.toLowerCase()}` : undefined }))
 }
 
 /** Every open choice that `filter` keeps, as pickers. ASI drafts stay local until complete. */

@@ -28,6 +28,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   for (const pk of picks.species || []) await p.click(`.panel .card:has-text("${pk}")`)
   await p.click('.wiz-foot button')
   await p.click(`.card:has-text("${bg}")`)
+  for (const pk of picks.bg || []) await p.click(`.panel .card:has(.opt-name:text-is("${pk}"))`)
   await p.click('button:has-text("+2 and +1")')
   await p.click('.wiz-foot button')
   if (method === 'point-buy') {
@@ -118,15 +119,36 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   ok(/Attack roll: d20 \+ ability modifier/.test(card), 'and the rule, to play without the app')
   await p.screenshot({ path: `${shots}/05a-math.png` })
   await p.click('button[aria-label="Close the roll"]')
-  // advantage explains itself
-  await p.click('.seg.mode button:text-is("Advantage")')
+  // advantage is tracked on the character; a d20 roll asks whether it applies
+  await p.click('button[aria-label^="Advantage: one more"]')
+  ok(/Advantage \(\+1\)/.test(await p.textContent('.edge')), 'the advantage tracker shows +1')
   await p.click('[role=tab]:has-text("Checks")')
   await p.click('.skills button:has-text("Stealth")')
+  await p.waitForSelector('.sheet[aria-label="You have advantage"]')
+  ok(true, 'a d20 roll asks whether the advantage applies')
+  await p.click('button:has-text("Yes: roll two d20")')
   await p.waitForSelector('.roll-card')
   ok(/Advantage: two d20 rolled \d+ and \d+, keep the higher/.test(await p.textContent('.roll-card')), 'advantage shows both d20s and which one counts')
   await p.click('button[aria-label="Close the roll"]')
-  await p.click('.seg.mode button:text-is("Normal")')
+  await p.click('.skills button:has-text("Stealth")')
+  await p.click('button:has-text("No: roll one d20")')
+  await p.waitForSelector('.roll-card')
+  ok(!/Advantage: two d20/.test(await p.textContent('.roll-card')), '"No" rolls one d20')
+  await p.click('button[aria-label="Close the roll"]')
+  await p.click('.edge button:has-text("Clear")')
   await p.click('[role=tab]:has-text("My Turn")')
+  // the guided turn: pick an attack, roll to hit, hit, roll damage
+  await p.click('button:has-text("Start my turn")')
+  await p.click('.guide-opt:has-text("Unarmed Strike")')
+  await p.click('.sheet[aria-label="My turn"] button:has-text("Roll to hit (")')
+  await p.waitForSelector('.roll-card'); await p.click('button[aria-label="Close the roll"]')
+  const g = p.locator('.sheet[aria-label="My turn"]')
+  if (await g.locator('button:text-is("Hit")').count()) await g.locator('button:text-is("Hit")').click()
+  else if (await g.locator('button:has-text("Roll damage ›")').count()) await g.locator('button:has-text("Roll damage ›")').click()
+  if (await g.locator('button:has-text("Roll damage (")').count()) { await g.locator('button:has-text("Roll damage (")').click(); await p.waitForSelector('.roll-card'); await p.click('button[aria-label="Close the roll"]') }
+  ok(/damage\. Tell the DM|No damage|natural 1/.test(await g.textContent()), 'the guided turn goes to hit, then damage')
+  await p.screenshot({ path: `${shots}/05b-turn.png` })
+  await g.locator('button[aria-label="Close"]').click()
 
   // 3D throws: the dice of an earlier throw never stay on the table
   await p.click('.fab')
@@ -200,7 +222,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
 
   // a spellcaster: choose spells, cast one with a slot, roll its healing
   await buildHero(p, { name: 'Mira', cls: 'Cleric', species: 'Dwarf', bg: 'Acolyte', method: 'standard',
-    picks: { choices: ['Medicine', 'Persuasion', 'Protector'] } })
+    picks: { bg: ['Wisdom', 'Light', 'Thaumaturgy', 'Sanctuary'], choices: ['Medicine', 'Persuasion', 'Protector'] } })
   await p.click('[role=tab]:has-text("Spells")')
   ok(/^[0-9]+$/.test(await p.textContent('.sc-head .stat-card b')), 'cleric: spell save DC shown')
   await p.click('.banner:has-text("Choose your spells")')
