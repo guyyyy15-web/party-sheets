@@ -147,6 +147,11 @@ async function choose(p, scope) {
       await p.click('.vitals .hp'); ok(await p.isVisible('.sheet .warn-line:has-text("CON save")'), 'fight: damage reminds about the concentration save'); await p.click('.sheet button[aria-label="Close"]')
       // short rest: spend a Hit Die (d8 + CON); slots stay spent
       await p.click('.vitals .hp'); await p.fill('input[aria-label="Amount"]', '15'); await p.click('.sheet button:text-is("Damage")')
+      // concentrating on Bless: the damage rolls the CON save (DC 10 for 15 damage) by itself
+      await p.waitForSelector('.roll-card:has-text("Concentration: CON save, DC 10")')
+      const saveTotal = Number(await p.textContent('.roll-card .rc-head b'))
+      await p.click('button[aria-label="Close the roll"]')
+      ok((await p.isVisible('.conc:has-text("Bless")')) === (saveTotal >= 10), `fight: the CON save (${saveTotal} vs DC 10) ${saveTotal >= 10 ? 'keeps' : 'ends'} Bless`)
       const hpLow = Number((await p.textContent('.vitals .hp b')).replace(/\s/g, '').split('/')[0])
       await p.click('button:has-text("Short rest")')
       await p.click('.sheet button:has-text("Roll a Hit Die"), .sheet button:has-text("Hit Die")')
