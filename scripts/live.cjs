@@ -70,7 +70,7 @@ const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails+
     ok(m && Number(m[1]) === Number(m[2]) + Number(m[3]), `${devName}: 3D throw settles in ${((Date.now() - t2) / 1000).toFixed(1)} s and adds up (${txt.trim()})`)
     await p.click('.dice3d')
     await p.screenshot({ path: `screenshots/live-${devName.replace(' ', '')}.png` })
-    for (const tab of ['Checks', 'Features', 'Gear', 'Notes', 'Your Turn']) {
+    for (const tab of ['Checks', 'Features', 'Gear', 'Notes', 'Turn']) {
       await p.click(`[role=tab]:has-text("${tab}")`)
       const w = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
       if (!w) ok(false, `${devName}: ${tab} scrolls sideways`)

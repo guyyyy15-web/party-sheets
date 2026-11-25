@@ -15,6 +15,7 @@ import { AccountSheet, AccountChip, SaveAccountNudge } from './ui/account.jsx'
 import { refreshAccount, signOutLocal } from './ui/account.js'
 import { ownerKey } from './ui/sync.js'
 import { DiceTray, performRoll, throwDefault, load3d, RollCard, RULES } from './ui/dice.jsx'
+import { announce } from './ui/fx.js'
 import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
 import { Sheet, themeOf, GameIcon } from './ui/common.jsx'
@@ -167,6 +168,8 @@ function App() {
     try {
       const showMath = settings.showMath !== false
       const e = await performRoll({ ...req, showMath }, throwOn)
+      // a critical or a natural 1 on a d20: the avatar and the table hear it
+      if (req.kind === 'd20' && view.name === 'sheet') { if (e.flag === 'NAT 20' || e.crit) announce('crit', e.flag === 'NAT 20' ? 'NAT 20!' : 'Critical!'); else if (e.flag === 'NAT 1') announce('fumble', 'Natural 1') }
       setLog((l) => [e, ...l].slice(0, 20))
       if (!throwOn) setShown(showMath ? e : { ...e, steps: null, rules: null })
       return e
@@ -290,6 +293,7 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
       {table && (
         <Sheet title="Tavern settings" onClose={() => setTable(false)}>
           <label className="row toggle"><input type="checkbox" checked={settings.allowRoll !== false} onChange={(e) => setSettings({ ...settings, allowRoll: e.target.checked })} /><span>Allow rolling ability scores (4d6) in the wizard</span></label>
+          <label className="row toggle"><input type="checkbox" checked={settings.sounds !== false} onChange={(e) => setSettings({ ...settings, sounds: e.target.checked })} /><span>Sounds and buzz when things happen (hits, your turn, criticals)</span></label>
           <label className="row toggle"><input type="checkbox" checked={settings.showMath !== false} onChange={(e) => setSettings({ ...settings, showMath: e.target.checked })} /><span>Show the math on every roll</span></label>
           <label className="row toggle"><input type="checkbox" checked={!!settings.expansions} onChange={(e) => setSettings({ ...settings, expansions: e.target.checked })} /><span>Expansion subclasses (characters not in a table)</span></label>
           <div className="panel">
