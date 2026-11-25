@@ -81,10 +81,10 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.goto(URL)
   // a first visit: the landing page says what this is, and shares the link
   await p.waitForSelector('.landing')
-  ok(await p.isVisible('.landing h1:text-is("Party Sheets")') && (await p.locator('.landing-points li').count()) === 5, 'landing: what Party Sheets is, in five points')
+  ok(await p.isVisible('.landing h1:text-is("Tavern Table")') && (await p.locator('.landing-points li').count()) === 5, 'landing: what Tavern Table is, in five points')
   await p.screenshot({ path: `${shots}/00-landing.png`, fullPage: true })
-  await p.click('button:has-text("Share Party Sheets")')
-  ok(await p.isVisible('text=Link copied') || await p.inputValue('input[aria-label="Party Sheets link"]').then((v) => v.startsWith('http')).catch(() => false), 'landing: Share gives the link')
+  await p.click('button:has-text("Share Tavern Table")')
+  ok(await p.isVisible('text=Link copied') || await p.inputValue('input[aria-label="Tavern Table link"]').then((v) => v.startsWith('http')).catch(() => false), 'landing: Share gives the link')
   ok(!(await p.isVisible('.fab')), 'landing: no dice button over it')
   await p.click('button:has-text("I have an account")'); await p.click('.sheet button[aria-label="Close"]')
   await p.waitForSelector('text=No heroes yet')

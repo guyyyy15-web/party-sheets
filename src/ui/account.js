@@ -126,8 +126,8 @@ export async function addPasskey(label) {
   let cred
   try {
     cred = await navigator.credentials.create({ publicKey: {
-      rp: { name: 'Party Sheets', id: location.hostname },
-      user: { id: rand(16), name: label || 'Party Sheets player', displayName: `${label || 'Player'} · Party Sheets` },
+      rp: { name: 'Tavern Table', id: location.hostname },
+      user: { id: rand(16), name: label || 'Tavern Table player', displayName: `${label || 'Player'} · Tavern Table` },
       challenge: rand(32),
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
       authenticatorSelection: { residentKey: 'required', requireResidentKey: true, userVerification: 'required' },

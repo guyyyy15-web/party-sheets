@@ -37,11 +37,11 @@ export function ShareLinks({ room: room0, onClose, onGone }) {
   }
   return (
     <Sheet title={`Links for ${room.name}`} onClose={onClose}>
-      {inv && <LinkRow icon="ui.group" label="Invite for players" hint="Each player opens it once and brings a character." url={inv} title={`Join ${room.name}`} text={`⚔️ Join our D&D group "${room.name}" on Party Sheets. Tap to join:`} />}
-      {init && <LinkRow label="Initiative link" hint="For whoever runs the initiative at the table: the order, enemies, HP and conditions. No gold, items or notes." url={init} icon="ui.d20" title={`Initiative: ${room.name}`} text={`🎲 Run the initiative for "${room.name}" on Party Sheets:`} />}
+      {inv && <LinkRow icon="ui.group" label="Invite for players" hint="Each player opens it once and brings a character." url={inv} title={`Join ${room.name}`} text={`⚔️ Join our D&D group "${room.name}" on Tavern Table. Tap to join:`} />}
+      {init && <LinkRow label="Initiative link" hint="For whoever runs the initiative at the table: the order, enemies, HP and conditions. No gold, items or notes." url={init} icon="ui.d20" title={`Initiative: ${room.name}`} text={`🎲 Run the initiative for "${room.name}" on Tavern Table:`} />}
       {room.dmKey && <button className="btn ghost wide" disabled={busy} onClick={make}>{init ? '↻ Make a new Initiative link' : '⚔ Make an Initiative link'}</button>}
       {err && <p className="warn-line" role="alert">{err}</p>}
-      {dm && <LinkRow icon="ui.dm" label="DM link (keep it for the DM)" hint="Only for the DM: every sheet, live." url={dm} title={`DM: ${room.name}`} text={`🛡 The DM screen for "${room.name}" on Party Sheets (keep it to yourself):`} />}
+      {dm && <LinkRow icon="ui.dm" label="DM link (keep it for the DM)" hint="Only for the DM: every sheet, live." url={dm} title={`DM: ${room.name}`} text={`🛡 The DM screen for "${room.name}" on Tavern Table (keep it to yourself):`} />}
       <div className="danger-zone">
         {room.dmKey ? (
           <button className="btn ghost wide danger-text" disabled={busy} onClick={async () => {
