@@ -176,3 +176,27 @@ test('feat spells: Magic Initiate picks from its list with its own ability, Fey 
   assert.equal(by['misty-step'].free, 'fey-touched-misty-step')
   assert.ok(d.resources.some((r) => r.id === 'magic-initiate'))
 })
+
+test('items: a +1 weapon in hand, magic armor and shield worn, a ring works only when attuned (3 at most)', async () => {
+  const { cleanItem } = await import('../src/content/items.js')
+  const base = { ...newCharacter(), classId: 'fighter', speciesId: 'dwarf', backgroundId: 'soldier', level: 5, scores: { STR: 16, DEX: 12, CON: 14, INT: 10, WIS: 10, CHA: 8 }, equipment: { armor: 'leather', shield: false, weapons: [] } }
+  const d0 = derive(base)
+  const sword = cleanItem({ name: 'Flame Tongue', kind: 'weapon', base: 'longsword', bonus: 1, equipped: true })
+  const plate = cleanItem({ name: 'Mithral Plate', kind: 'armor', base: 'plate', bonus: 1, equipped: true })
+  const shield = cleanItem({ name: 'Shield +1', kind: 'shield', bonus: 1, equipped: true })
+  const ring = cleanItem({ name: 'Ring of Protection', kind: 'wondrous', ac: 1, save: 1, attune: true, attuned: false, equipped: true })
+  let d = derive({ ...base, items: [sword, plate, shield, ring] })
+  const a = d.attacks.find((x) => x.name === 'Flame Tongue')
+  const plain = derive({ ...base, equipment: { ...base.equipment, weapons: ['longsword'] } }).attacks.find((x) => x.id === 'longsword')
+  assert.equal(a.toHit, plain.toHit + 1); assert.equal(a.damage, '1d8+4', '+3 STR +1 magic')
+  assert.ok(a.toHitSources.some((s) => s.label === 'Flame Tongue' && s.value === 1))
+  assert.equal(d.ac.value, 18 + 1 + 2 + 1, 'plate 18, +1, shield 2, shield +1; the ring is not attuned')
+  d = derive({ ...base, items: [sword, plate, shield, { ...ring, attuned: true }] })
+  assert.equal(d.ac.value, 23); assert.equal(d.saves.WIS.value, d0.saves.WIS.value + 1)
+  // not equipped: nothing changes
+  const bag = derive({ ...base, items: [{ ...sword, equipped: false }, { ...plate, equipped: false }] })
+  assert.equal(bag.ac.value, d0.ac.value); assert.ok(!bag.attacks.some((x) => x.name === 'Flame Tongue'))
+  // a fourth attuned ring doesn't work
+  const rings = [1, 2, 3, 4].map((k) => cleanItem({ id: `r${k}`, name: `Ring ${k}`, kind: 'wondrous', ac: 1, attune: true, attuned: true, equipped: true }))
+  assert.equal(derive({ ...base, items: rings }).ac.value, d0.ac.value + 3)
+})

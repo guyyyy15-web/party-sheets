@@ -99,6 +99,13 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   get the claims list. The runner can take anyone out of the fight (tap their number → Remove).
 - The DM deletes a group in Links (`DELETE /rooms/:id`: characters stay saved in no group, the fight goes); others
   can remove it from their phone; a group that answers 404 is forgotten. The wizard's 🗑 deletes a half-made hero.
+- **Items** (`src/content/items.js` `cleanItem`/`itemLine`, UI `src/ui/items.jsx`, engine in `derive()`): a character's
+  `items` [{ id, name, kind weapon|armor|shield|wondrous|potion|gear, base, bonus 0–3, ac, save, attune, attuned,
+  equipped, qty, potion, desc, from dm|custom }]. Equipped weapons join the attacks (+bonus to hit and damage, with a
+  source), worn armor/shield set AC (+bonus), wondrous items add AC/saves; an item that needs attunement works only when
+  attuned (3 at most). Potions: Drink rolls the SRD healing dice and takes one off. The DM gives items from the DM
+  screen (🎁 → `state.gifts`, a DM PATCH key, ≤ 10, ≤ 8 KB); the player's sheet shows each gift: Hold/Wear it, Into my
+  bag, or Decline. Players add their own (tagged custom). Gear tab: items first.
 - Logo: the d20 from game-icons (`ui.d20`; icons/icon.svg → `node scripts/icons.cjs`; og.png → `node scripts/og.cjs`).
   Links sheet: each link has Copy and Share (share text is a short sentence + the URL).
 - Group settings (`rooms.settings`, DM only): `expansions` = subclasses from the expansion books (`expansion: true`,

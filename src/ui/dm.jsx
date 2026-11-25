@@ -10,6 +10,8 @@ import { HpSheet, ConditionsSheet } from './sheet.jsx'
 import { fetchRoom, dmPatch, updateRoom, roomById } from './sync.js'
 import { Sheet } from './common.jsx'
 import { ShareLinks } from './rooms.jsx'
+import { ItemEditor } from './items.jsx'
+import { cleanItem } from '../content/items.js'
 
 const POLL_MS = 5000
 const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago` }
@@ -21,6 +23,7 @@ export function DmView({ room, onBack, onInit, onGone }) {
   const [condFor, setCondFor] = useState(null)
   const [share, setShare] = useState(false)
   const [settings, setSettings] = useState(false)
+  const [giftFor, setGiftFor] = useState(null)
   const [, tick] = useState(0)
   const pending = useRef(0)
 
@@ -61,18 +64,20 @@ export function DmView({ room, onBack, onInit, onGone }) {
           <button className="btn primary" onClick={() => setShare(true)}>Share the invite</button></div>
       ) : (
         <ul className="dm-grid">
-          {list.map((c) => <DmCard key={c.id} c={c} onHp={() => setHpFor(c.id)} onCond={() => setCondFor(c.id)} act={act} />)}
+          {list.map((c) => <DmCard key={c.id} c={c} onHp={() => setHpFor(c.id)} onCond={() => setCondFor(c.id)} onGift={() => setGiftFor(c.id)} act={act} />)}
         </ul>
       )}
       {hpC && <HpSheet d={derive(hpC.ch)} ch={hpC.ch} hp={hpC.ch.state.hp ?? derive(hpC.ch).hp.value} setState={(s) => act(hpC.c, s)} onClose={() => setHpFor(null)} />}
       {condC && <ConditionsSheet d={derive(condC.ch)} ch={condC.ch} setState={(s) => act(condC.c, s)} onClose={() => setCondFor(null)} />}
+      {giftFor && (() => { const c = list.find((x) => x.id === giftFor); return c && <ItemEditor title={`Give ${c.data.name} an item`} cta={`🎁 Give it to ${c.data.name}`} onClose={() => setGiftFor(null)}
+        onSave={(it) => { act(c, { gifts: [...(c.data.state?.gifts || []), cleanItem({ ...it, from: 'dm', equipped: false, attuned: false })].slice(-10) }); setGiftFor(null) }} /> })()}
       {share && <ShareLinks room={room} onClose={() => setShare(false)} onGone={(r) => { onGone?.(r); onBack() }} />}
       {settings && <GroupSettings room={room} onClose={() => setSettings(false)} onError={setErr} />}
     </main>
   )
 }
 
-function DmCard({ c, onHp, onCond, act }) {
+function DmCard({ c, onHp, onCond, onGift, act }) {
   const ch = c.data
   const d = derive(ch)
   const hp = ch.state?.hp ?? d.hp.value
@@ -104,6 +109,10 @@ function DmCard({ c, onHp, onCond, act }) {
       <div className="row dm-actions">
         <button className={`insp ${d.inspiration ? 'on' : ''}`} aria-pressed={d.inspiration} onClick={() => act(c, { inspiration: !d.inspiration })}><span aria-hidden>{d.inspiration ? '★' : '☆'}</span> Inspiration</button>
         <button className={`cond-btn ${conds.length ? 'on' : ''}`} onClick={onCond}>{conds.length ? conds.join(', ') : 'No conditions'}</button>
+      </div>
+      <div className="row dm-items">
+        <span className="muted small grow">{(ch.items || []).length ? `Items: ${ch.items.map((i) => i.name).join(', ')}` : 'No magic items'}{ch.state?.gifts?.length ? ` · ${ch.state.gifts.length} waiting` : ''}</span>
+        <button className="btn small ghost" onClick={onGift}>🎁 Give an item</button>
       </div>
     </li>
   )

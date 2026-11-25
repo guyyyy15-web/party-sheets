@@ -9,6 +9,7 @@ import { SyncBadge } from './rooms.jsx'
 import { SpellsTab, FeatSpells } from './spells.jsx'
 import { TurnGuide } from './turn.jsx'
 import { useFight, FightBanner } from './initiative.jsx'
+import { ItemsSection, GiftBanner } from './items.jsx'
 import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
 import { levelDiff } from '../engine/levelup.js'
 import { pathsFor } from '../engine/advice.js'
@@ -122,6 +123,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       )}
 
       <FightBanner fight={fight} onRoll={rollInit} bonus={d.initiative.value} />
+      <GiftBanner ch={ch} setCh={setCh} />
       {d.spellcasting?.concentration && <button className="banner conc-banner" onClick={() => setTab('spells')}>◎ Concentrating: {d.spellcasting.concentration.name} ›</button>}
       {d.pending.length > 0 && <button className="banner" onClick={() => setLevelUp('choices')}>⚠ {d.pending.length} choice{d.pending.length > 1 ? 's' : ''} to make ›</button>}
 
@@ -148,7 +150,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       {tab === 'spells' && d.featSpells.length > 0 && <FeatSpells d={d} ch={ch} setState={setState} roll={roll} mode={mode} />}
       {tab === 'checks' && <ChecksTab d={d} roll={roll} mode={mode} show={show} />}
       {tab === 'features' && <FeaturesTab d={d} />}
-      {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} onTerm={setTerm} />}
+      {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} onTerm={setTerm} roll={roll} hp={hp} />}
       {tab === 'notes' && <textarea className="input notes" value={ch.notes} placeholder="Backstory, NPCs, loot, plans…" onChange={(e) => setCh({ ...ch, notes: e.target.value })} aria-label="Notes" />}
       </div>
       </div>
@@ -214,7 +216,7 @@ function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, 
       <p className="muted small tap-hint">🎲 Tap a number to roll it: first <b>to hit</b> (d20), then <b>damage</b> if it hits.</p>
       {atk.map((a) => (
         <div key={a.id} className={`attack ${openAtk === a.id ? 'open' : ''}`}>
-          <GameIcon id={`w.${a.id}`} size={34} className="atk-icon" />
+          <GameIcon id={`w.${a.icon || a.id}`} size={34} className="atk-icon" />
           <div className="grow">
             <span className="atk-head"><b>{a.name}</b><span className="atk-short muted small">{a.type}{a.range ? ` · ${a.range} ft` : ''}{a.mastery ? ` · ${a.mastery.name}` : ''}</span>
               <button className="icon-btn info-btn" aria-expanded={openAtk === a.id} aria-label={`${a.name}: how it's made`} onClick={() => setOpenAtk(openAtk === a.id ? null : a.id)}>ⓘ</button></span>
@@ -295,12 +297,13 @@ function FeaturesTab({ d }) {
   )
 }
 
-function GearTab({ d, ch, setCh, onTerm }) {
+function GearTab({ d, ch, setCh, onTerm, roll, hp }) {
   const eq = ch.equipment
   const setEq = (patch) => setCh({ ...ch, equipment: { ...eq, ...patch } })
   const [adding, setAdding] = useState(false)
   return (
     <section>
+      <ItemsSection ch={ch} setCh={setCh} d={d} roll={roll} hp={hp} />
       <h2 className="sec">Armor</h2>
       <div className="gear-grid" role="radiogroup" aria-label="Armor">
         {[{ id: '', name: 'No armor', type: 'unarmored', base: null }, ...ARMOR].map((a) => {

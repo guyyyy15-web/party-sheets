@@ -607,3 +607,11 @@ button.fight-banner { flex-direction: row; align-items: center; min-height: 48px
 .link-row .link-url { display: block; margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--ink); font: 13px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .danger-text { color: color-mix(in srgb, var(--bad) 55%, #fff); }
 .link-row .link-url { width: 100%; box-sizing: border-box; border: 0; }
+
+.items .item { align-items: flex-start; }
+.items .item.on { border-color: var(--accent); }
+.item-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 46%; }
+.gift-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.gift-banner svg { color: var(--accent); }
+.gift-banner .row { width: 100%; gap: 6px; }
+.dm-items { margin-top: 6px; align-items: center; }
