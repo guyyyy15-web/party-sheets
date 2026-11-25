@@ -615,3 +615,9 @@ button.fight-banner { flex-direction: row; align-items: center; min-height: 48px
 .gift-banner svg { color: var(--accent); }
 .gift-banner .row { width: 100%; gap: 6px; }
 .dm-items { margin-top: 6px; align-items: center; }
+
+.turn-bar { margin: 6px 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.tchips { display: flex; gap: 6px; flex-wrap: wrap; }
+.tchip { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); font-weight: 600; font-size: 13.5px; }
+.tchip.used { border-color: var(--line); background: none; color: var(--muted); text-decoration: line-through; }
+.tmove { margin-top: 6px; align-items: center; gap: 6px; }

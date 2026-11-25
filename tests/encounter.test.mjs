@@ -59,3 +59,13 @@ test('players report damage: the runner applies it (or another amount) or drops 
   dropClaim(e, 'c2'); assert.equal(e.claims.length, 0)
   assert.equal(forPlayers({ ...e, claims: [{ id: 'x' }] }).claims, undefined, 'players never get the claims list')
 })
+
+test('claims: healing takes damage back off an enemy, a condition lands on it', () => {
+  const e = newEncounter([{ charId: 'a', name: 'Ana', init: 12 }])
+  addGroup(e, { name: 'Orc', roll: seq(9) })
+  hurt(e, 'npc-1', 10)
+  e.claims = [{ id: 'h', target: 'npc-1', amount: 4, heal: true }, { id: 'c', target: 'npc-1', amount: 0, condition: 'charmed' }]
+  applyClaim(e, 'h'); applyClaim(e, 'c')
+  const o = e.combatants.find((c) => c.id === 'npc-1')
+  assert.equal(o.dmg, 6); assert.deepEqual(o.conditions, ['charmed'])
+})

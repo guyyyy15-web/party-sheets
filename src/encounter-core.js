@@ -111,7 +111,10 @@ export function applyClaim(enc, claimId, amount) {
   const cl = (enc.claims || []).find((c) => c.id === claimId)
   if (!cl) return enc
   const t = enc.combatants.find((c) => c.id === cl.target)
-  if (t?.kind === 'npc') t.dmg = Math.max(0, (t.dmg || 0) + num(amount ?? cl.amount))
+  if (t?.kind === 'npc') {
+    if (cl.condition) t.conditions = [...new Set([...(t.conditions || []), cl.condition])].slice(0, 20)
+    else t.dmg = Math.max(0, (t.dmg || 0) + (cl.heal ? -1 : 1) * num(amount ?? cl.amount))
+  }
   enc.claims = enc.claims.filter((c) => c.id !== claimId)
   return enc
 }

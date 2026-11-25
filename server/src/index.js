@@ -316,8 +316,11 @@ async function route(req, env) {
       if (!ch || ch.room_id !== room.id) fail(404, 'no such character')
       if (!runs && !same(await ownerHash(req), ch.owner_hash)) fail(403, 'not yours')
       const by = cur.combatants.find((c) => c.charId === id)
-      const claim = { id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, by: by?.id || null, byName: String(by?.name || 'A player').slice(0, 40), target: target.id, amount, label: String(body?.label || '').slice(0, 40), at: Date.now() }
-      const applied = !!cur.auto && target.kind === 'npc'
+      const heal = !!body?.heal
+      const condition = typeof body?.condition === 'string' && /^[a-z-]{1,20}$/.test(body.condition) ? body.condition : null
+      const claim = { id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, by: by?.id || null, byName: String(by?.name || 'A player').slice(0, 40), target: target.id, amount, label: String(body?.label || '').slice(0, 40), at: Date.now(), ...(heal ? { heal } : {}), ...(condition ? { condition } : {}) }
+      // auto: only damage to an enemy (healing a player or a condition always waits for the runner)
+      const applied = !!cur.auto && target.kind === 'npc' && !heal && !condition
       if (applied) target.dmg = (target.dmg || 0) + amount
       else cur.claims = [...(cur.claims || []), claim].slice(-30)
       const rev = await saveEncounter(env, room.id, cur, row)
@@ -449,7 +452,7 @@ function cleanEncounter(e) {
       conditions: Array.isArray(c.conditions) ? c.conditions.filter((x) => typeof x === 'string').slice(0, 20).map((x) => x.slice(0, 20)) : [] }
   })
   const ids = new Set(combatants.map((c) => c.id))
-  const claims = (Array.isArray(e.claims) ? e.claims : []).slice(-30).filter((c) => c && ids.has(c.target)).map((c) => ({ id: str(c.id, 24), by: c.by && ids.has(c.by) ? c.by : null, byName: str(c.byName, 40), target: c.target, amount: int(c.amount, 0, 999) ?? 0, label: str(c.label, 40), at: int(c.at, 0, 9e15) ?? 0 }))
+  const claims = (Array.isArray(e.claims) ? e.claims : []).slice(-30).filter((c) => c && ids.has(c.target)).map((c) => ({ id: str(c.id, 24), by: c.by && ids.has(c.by) ? c.by : null, byName: str(c.byName, 40), target: c.target, amount: int(c.amount, 0, 999) ?? 0, label: str(c.label, 40), at: int(c.at, 0, 9e15) ?? 0, ...(c.heal ? { heal: true } : {}), ...(typeof c.condition === 'string' && /^[a-z-]{1,20}$/.test(c.condition) ? { condition: c.condition } : {}) }))
   return { active: e.active !== false, round: int(e.round, 1, 9999) ?? 1, turn: ids.has(e.turn) ? e.turn : null, seq: int(e.seq, 0, 1e6) ?? 0, auto: !!e.auto, claims, combatants }
 }
 async function saveEncounter(env, roomId, data, row) {

@@ -73,7 +73,7 @@ export const putEncounter = (r, data, rev) => api(`/rooms/${r.id}/encounter`, { 
 /** A player's own initiative (or the runner's for anyone). */
 export const sendInitiative = (r, characterId, total) => api(`/rooms/${r.id}/encounter/initiative`, { method: 'POST', key: runKey(r) || r.playerKey, owner: true, body: { characterId, total } })
 /** A player's damage to someone in the fight: applied at once or waiting for the runner ({ applied, data }). */
-export const sendClaim = (r, characterId, target, amount, label) => api(`/rooms/${r.id}/encounter/claim`, { method: 'POST', key: r.playerKey || runKey(r), owner: true, body: { characterId, target, amount, label } })
+export const sendClaim = (r, characterId, target, amount, label, extra) => api(`/rooms/${r.id}/encounter/claim`, { method: 'POST', key: r.playerKey || runKey(r), owner: true, body: { characterId, target, amount, label, ...(extra || {}) } })
 /** HP / conditions / death saves of a character, by the DM or the initiative runner. */
 export const runnerPatch = (r, charId, state) => api(`/rooms/${r.id}/characters/${charId}`, { method: 'PATCH', key: runKey(r), body: { state } })
 
