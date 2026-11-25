@@ -109,6 +109,9 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   bag, or Decline. Players add their own (tagged custom). Gear tab: items first.
 - Logo: the d20 from game-icons (`ui.d20`; icons/icon.svg → `node scripts/icons.cjs`; og.png → `node scripts/og.cjs`).
   Links sheet: each link has Copy and Share (share text is a short sentence + the URL).
+- Link previews: each kind of link opens through its own page (`join.html`, `dm.html`, `initiative.html`) with its own
+  og: title, description and image (`og-join.png`, `og-dm.png`, `og-init.png`; all made by `node scripts/og.cjs`),
+  which forwards to `./` + the hash at once (the key after # never reaches a server). Old `#/join/…` links still work.
 - Group settings (`rooms.settings`, DM only): `expansions` = subclasses from the expansion books (`expansion: true`,
   tagged with their book). A character in no group follows the phone's Table setting.
 - Admin screen (`#/admin`, `src/ui/admin.jsx`, `GET /admin/stats`): the first password set becomes the admin's
