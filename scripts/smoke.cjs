@@ -82,6 +82,10 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   // a first visit: the landing page says what this is, and shares the link
   await p.waitForSelector('.landing')
   ok(await p.isVisible('.landing h1:text-is("Tavern Table")') && (await p.locator('.landing-points li').count()) === 5, 'landing: what Tavern Table is, in five points')
+  // try a turn: the demo rogue attacks the goblin with the app's own dice and engine
+  await p.click('.try-turn button:has-text("Attack the goblin")')
+  ok(/against the goblin's AC 13: a (hit!|miss\.)/.test(await p.textContent('.try-log li')), 'landing: "Try a turn" rolls to hit with the real numbers')
+  ok(await p.locator('.parade img').count() === 12 && await p.locator('.show-shot').count() === 8, 'landing: 12 class avatars and 8 screens')
   await p.screenshot({ path: `${shots}/00-landing.png`, fullPage: true })
   await p.click('button:has-text("Share Tavern Table")')
   ok(await p.isVisible('text=Link copied') || await p.inputValue('input[aria-label="Tavern Table link"]').then((v) => v.startsWith('http')).catch(() => false), 'landing: Share gives the link')
@@ -371,6 +375,20 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
     ok(await r.waitForSelector('.hero-strip .la-float.hurt', { timeout: 3000 }).then(async (el) => (await el.textContent()) === '−9').catch(() => false), 'avatar: a hit shows −9 on the avatar')
     ok(/Bloodied|Badly hurt/.test(await r.textContent('.hero-strip .strip-tone')), 'avatar: the strip says how hurt (17 → 8 HP)')
     await r.screenshot({ path: `${shots}/16-avatar-hurt.png` })
+    // the sheet on paper: Print / PDF from the character settings; the numbers are the sheet's; a real PDF comes out
+    const acShown = await r.textContent('.vitals .stat b >> nth=0')
+    await r.click('button[aria-label="Character settings"]'); await r.click('button:has-text("Print / PDF sheet")')
+    await r.waitForSelector('.print-root .pr-head h1')
+    ok((await r.textContent('.pr-head h1')) === 'Ember' && (await r.textContent('.pr-stats')).includes(`${acShown}Armor Class`), `print: Ember's sheet with her AC ${acShown}`)
+    ok(await r.isVisible('.pr-page h3:has-text("1st level")'), 'print: a page of spells with their slots')
+    await r.screenshot({ path: `${shots}/17-print.png`, fullPage: true })
+    await r.emulateMedia({ media: 'print' })
+    const pdf = await r.pdf({ format: 'A4', printBackground: true })
+    const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length
+    ok(pdf.length > 10000 && pages >= 3, `print: a ${pages}-page PDF (${Math.round(pdf.length / 1024)} KB)`)
+    require('fs').writeFileSync(`${shots}/ember.pdf`, pdf)
+    await r.emulateMedia({ media: 'screen' })
+    await r.click('.pr-tools button:has-text("Back")')
     await rctx.close()
   }
 

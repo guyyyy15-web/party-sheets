@@ -730,3 +730,44 @@ button.fight-banner { flex-direction: row; align-items: center; min-height: 48px
 .strip-chip.conc-banner { border-color: var(--info); color: #a9c8ea; } .strip-chip.rage { border-color: #e0533f; color: #ffb3a8; }
 .init-row .live-avatar { align-self: center; }
 @media (max-width: 599px) { .sheet-page .tabs { gap: 0; } .sheet-page .tabs button { font-size: 13.5px; padding: 0 2px; letter-spacing: -.01em; } }
+/* the printed sheet (src/ui/print.jsx): paper colors on screen and on paper, the class color as the accent */
+.print-root { background: #fbf7ef; color: #1d1714; margin: -12px -16px; padding: 12px 16px 40px; font-family: var(--font); min-height: 100dvh; }
+.print-root .muted { color: #6b5f54; }
+.pr-tools { display: flex; gap: 8px; align-items: center; position: sticky; top: 0; background: #fbf7ef; padding: 8px 0; z-index: 2; }
+.pr-tools .btn.ghost { color: #1d1714; border-color: #cbbfae; } .pr-tools .seg button { color: #1d1714; } .pr-tools .seg button.on { background: var(--cls); color: #fff; }
+.pr-hint { margin: 0 0 10px; }
+.pr-page { background: #fff; border: 1px solid #e4dccd; border-radius: 8px; padding: 14px; margin: 0 0 14px; }
+.pr-head { display: flex; gap: 14px; align-items: center; border-bottom: 3px solid var(--cls); padding-bottom: 10px; margin-bottom: 10px; }
+.pr-head h1 { font-family: var(--display); font-size: 26px; color: #1d1714; } .pr-head p { margin: 2px 0; }
+.pr-face { width: 86px; height: 86px; border-radius: 50%; border: 3px solid var(--cls); object-fit: cover; flex: none; }
+.pr-quiet { color: #6b5f54; font-size: 12px; }
+.pr-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 6px; margin: 8px 0; }
+.pr-stats div { border: 1.5px solid #d8cdbb; border-radius: 8px; text-align: center; padding: 6px 4px; } .pr-stats b { display: block; font: 700 20px var(--mono); } .pr-stats small { color: #6b5f54; font-size: 11px; }
+.pr-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 640px), print { .pr-grid { grid-template-columns: 1fr 1fr; } }
+.pr-box { border: 1.5px solid #d8cdbb; border-radius: 8px; padding: 8px 10px; margin: 8px 0; break-inside: avoid; }
+.pr-box h3 { font: 700 12px var(--font); text-transform: uppercase; letter-spacing: .06em; color: var(--cls); margin: 0 0 6px; filter: brightness(.7); }
+.pr-table { width: 100%; border-collapse: collapse; font-size: 13px; } .pr-table th, .pr-table td { text-align: left; padding: 3px 4px; border-bottom: 1px solid #eee5d7; } .pr-table thead th { font-size: 11px; color: #6b5f54; }
+.pr-skills, .pr-res, .pr-feats, .pr-list, .pr-spells { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+.pr-skills li, .pr-res li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px dotted #e4dccd; } .pr-skills small, .pr-res small { color: #6b5f54; }
+.pr-feats li, .pr-spells li { padding: 4px 0; border-bottom: 1px dotted #e4dccd; break-inside: avoid; } .pr-feats span, .pr-spells span { display: block; color: #3a302a; }
+.pr-pips { display: inline-flex; gap: 3px; flex-wrap: wrap; } .pr-pips i { width: 11px; height: 11px; border: 1.5px solid #6b5f54; border-radius: 50%; }
+.pr-write { height: 54px; border-bottom: 1px solid #d8cdbb; } .pr-write.tall { height: 160px; } .pr-notes { white-space: pre-wrap; font-size: 13px; }
+.pr-foot { font-size: 10px; color: #6b5f54; text-align: center; }
+@media print {
+  :root { color-scheme: light; } html, body { background: #fff !important; } #root { padding: 0 !important; max-width: none !important; min-height: 0 !important; }
+  .no-print, .fab, .toast, .roll-card { display: none !important; }
+  .print-root { margin: 0; padding: 0; background: #fff; }
+  .pr-page { border: 0; padding: 0; margin: 0; break-after: page; } .pr-page:last-of-type { break-after: auto; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+/* the landing page: avatars, try a turn, the screens */
+.parade { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 4px 0 14px; } .parade img.avatar-img { width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--line); }
+.try-turn { border: 1px solid var(--accent); border-radius: 16px; padding: 14px; margin: 18px 0; background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.try-turn h2 { font-size: 20px; margin-bottom: 8px; } .try-cast { align-items: center; gap: 12px; } .try-cast b { display: block; }
+.try-goblin { display: grid; place-items: center; font-size: 30px; min-width: 56px; } .try-goblin .small { font-size: 12px; color: var(--muted); }
+.try-log { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 4px; font-size: 14px; min-height: 20px; }
+.landing-shows { display: grid; gap: 22px; margin: 22px 0; }
+.show { display: grid; gap: 10px; } .show h2 { font-size: 20px; } .show p { margin: 4px 0 0; }
+.show-shot { width: 100%; max-width: 390px; height: auto; border-radius: 22px; border: 6px solid #2c221c; box-shadow: 0 10px 30px rgba(0,0,0,.45); justify-self: center; }
+@media (min-width: 760px) { .show { grid-template-columns: 1fr 340px; align-items: center; gap: 28px; } .show:nth-child(even) .show-text { order: 2; } }
