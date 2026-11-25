@@ -20,6 +20,9 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const norm = (a) => { const l = Math.hypot(...a); return a.map((x) => x / l) }
 
 /** A number drawn on a square canvas (underlined 6 and 9). For the d4: three numbers, one at each corner. */
+// the height actually visible on phones (vh slides under Safari's and Chrome's toolbars)
+const DVH = typeof CSS !== 'undefined' && CSS.supports?.('height', '1dvh')
+
 function faceTexture(label, color, corners = null) {
   const s = 256
   const c = document.createElement('canvas')
@@ -100,7 +103,7 @@ function makeStage() {
   el.className = 'dice3d'
   el.setAttribute('role', 'dialog')
   el.setAttribute('aria-label', 'Dice')
-  Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '50', background: 'rgba(10,8,12,.74)', touchAction: 'none', display: 'none' })
+  Object.assign(el.style, { position: 'fixed', inset: '0', ...(DVH ? { height: '100dvh' } : {}), zIndex: '50', background: 'rgba(10,8,12,.74)', touchAction: 'none', display: 'none' })
   const renderer = new WebGLRenderer({ antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
   renderer.shadowMap.enabled = true
@@ -108,7 +111,7 @@ function makeStage() {
   el.appendChild(renderer.domElement)
   const banner = document.createElement('div')
   Object.assign(banner.style, {
-    position: 'absolute', left: '50%', bottom: 'calc(40px + env(safe-area-inset-bottom))', transform: 'translateX(-50%)', minWidth: '200px', width: 'min(92vw, 420px)', maxHeight: '55vh', overflowY: 'auto',
+    position: 'absolute', left: '50%', bottom: 'calc(40px + env(safe-area-inset-bottom))', transform: 'translateX(-50%)', minWidth: '200px', width: 'min(92vw, 420px)', maxHeight: DVH ? '55dvh' : '55vh', overflowY: 'auto',
     maxWidth: 'calc(100% - 32px)', textAlign: 'center', padding: '10px 18px', borderRadius: '14px', background: '#17151a', border: `1px solid ${GOLD}`,
     color: '#e9e2d0', fontFamily: "'Shippori Mincho', Georgia, serif", opacity: '0', transition: 'opacity .25s', pointerEvents: 'none',
   })

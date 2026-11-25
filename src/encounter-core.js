@@ -1,8 +1,9 @@
 // A group's fight (initiative), pure: no DOM, no network. The encounter is one JSON object the server stores per
 // room; the initiative manager (the Initiative link or the DM) changes it, players send their own initiative roll.
 //   { active, round, turn: combatant id | null, seq, combatants: [Combatant] }
-//   Combatant: { id, kind: 'pc' | 'npc', name, init: number | null, bonus, group?, charId?, dmg?, ac?,
-//                conditions?: [condition id], dead?: bool }
+//   Combatant: { id, kind: 'pc' | 'npc', name, init: number | null, bonus, group?, charId?, dmg?,
+//                conditions?: [condition id], dead?: bool, icon?, color?, note? }  (no AC: Guy, 2026-11-25)
+//   An enemy's look (icon, color, note) is set by the runner and seen by everyone, to tell enemies apart.
 //   claims: [{ id, by, byName, target, amount, label, at }] = damage players reported, waiting for the runner
 //   auto: true = players' damage to enemies is applied at once (no waiting)
 // Enemies have no HP here (the table doesn't know it): `dmg` counts the damage they took, from 0 up (healing takes
@@ -33,7 +34,22 @@ export function addPc(enc, { charId, name, bonus = 0, init = null }) {
  * Enemies of one kind: `count` of them, "Soldier 1", "Soldier 2"… (a single one keeps its plain name). Numbering
  * continues if that kind is already in the fight. One initiative roll for the whole group unless `each`.
  */
-export function addGroup(enc, { name, count = 1, bonus = 0, ac = null, each = false, roll = d20 }) {
+// An enemy's look: an emoji, a color from this list, a short note everyone sees ("red cloak", "the boss").
+export const ENEMY_ICONS = ['👹', '💀', '🐺', '🐉', '🕷️', '🐍', '🧟', '👻', '🦇', '🧙', '🗡️', '🏹', '🛡️', '👑', '🐗', '🦂']
+export const ENEMY_COLORS = ['red', 'orange', 'gold', 'green', 'teal', 'blue', 'violet', 'gray']
+export function cleanLook({ icon, color, note } = {}) {
+  return { icon: ENEMY_ICONS.includes(icon) ? icon : null, color: ENEMY_COLORS.includes(color) ? color : null, note: String(note || '').trim().slice(0, 40) || null }
+}
+/** Change an enemy's look; `group: true` changes every enemy of its kind. */
+export function setLook(enc, id, look, { group = false } = {}) {
+  const c = enc.combatants.find((x) => x.id === id)
+  if (!c || c.kind !== 'npc') return enc
+  const l = cleanLook(look)
+  for (const x of enc.combatants) if (x.id === id || (group && x.kind === 'npc' && x.group === c.group)) Object.assign(x, l)
+  return enc
+}
+
+export function addGroup(enc, { name, count = 1, bonus = 0, each = false, roll = d20, icon = null, color = null, note = null }) {
   const base = String(name || 'Enemy').trim().slice(0, 30) || 'Enemy'
   const n = Math.max(1, Math.min(20, num(count, 1)))
   const already = enc.combatants.filter((c) => c.group === base).length
@@ -41,7 +57,7 @@ export function addGroup(enc, { name, count = 1, bonus = 0, ac = null, each = fa
   for (let i = 0; i < n && enc.combatants.length < MAX_COMBATANTS; i++) {
     enc.seq = (enc.seq || 0) + 1
     const label = n === 1 && already === 0 ? base : `${base} ${already + i + 1}`
-    enc.combatants.push({ id: `npc-${enc.seq}`, kind: 'npc', group: base, name: label, bonus: num(bonus), init: each ? roll() + num(bonus) : groupInit, dmg: 0, ac: ac == null || ac === '' ? null : num(ac), conditions: [] })
+    enc.combatants.push({ id: `npc-${enc.seq}`, kind: 'npc', group: base, name: label, bonus: num(bonus), init: each ? roll() + num(bonus) : groupInit, dmg: 0, conditions: [], ...cleanLook({ icon, color, note }) })
   }
   return enc
 }
@@ -126,10 +142,10 @@ export function targetsFor(enc, meId) {
   return [...list.filter((c) => c.kind === 'npc'), ...list.filter((c) => c.kind !== 'npc')]
 }
 
-/** What the players' screens get: enemies without their AC (the damage count is the table's, everyone sees it). */
+/** What the players' screens get: enemies with their damage count and look; nothing the runner keeps to itself. */
 export function forPlayers(enc) {
   if (!enc) return enc
-  return { ...enc, claims: undefined, combatants: enc.combatants.map((c) => (c.kind === 'npc' ? { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [] } : c)) }
+  return { ...enc, claims: undefined, combatants: enc.combatants.map((c) => (c.kind === 'npc' ? { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [], icon: c.icon || null, color: c.color || null, note: c.note || null } : c)) }
 }
 /** Where a combatant is in the order (1-based), and how many turns until theirs. */
 export function placeOf(enc, id) {

@@ -147,12 +147,15 @@ async function route(req, env) {
 
   const rm = /^\/rooms\/([A-Za-z0-9_-]+)$/.exec(p)
   if (rm && m === 'GET') {
+    // ?sheets=1 (a player's view of the fight): party members' sheets as the table sees them (partySheet)
+    const sheets = new URL(req.url).searchParams.get('sheets') === '1'
     // the room and its characters: the DM gets full sheets, players a party summary (name, class, level, owner's portrait)
     const { room, role } = await roleIn(env, req, rm[1])
     const rows = (await env.DB.prepare('SELECT id, data, rev, updated_at FROM characters WHERE room_id = ? ORDER BY updated_at DESC').bind(room.id).all()).results
     const characters = rows.map((r) => {
       const data = JSON.parse(r.data)
       if (role === 'init') return { id: r.id, rev: r.rev, updatedAt: r.updated_at, data: privateless(data) }
+      if (role === 'player' && sheets) return { id: r.id, rev: r.rev, updatedAt: r.updated_at, name: data.name, data: partySheet(data) }
       return role === 'dm' ? { id: r.id, rev: r.rev, updatedAt: r.updated_at, data } : { id: r.id, rev: r.rev, name: data.name, classId: data.classId, level: data.level, speciesId: data.speciesId, portrait: data.portrait?.kind === 'icon' ? data.portrait : null }
     })
     return json({ room: publicRoom(room), role, characters })
@@ -471,10 +474,17 @@ function privateless(data) {
   const { notes, ...rest } = data
   return { ...rest, equipment: rest.equipment ? { ...rest.equipment, gp: undefined, items: undefined } : rest.equipment }
 }
-/** Players see enemies without their AC; the damage count is the table's (everyone counts it anyway). */
+/** What players see of each other's sheets in a fight: the numbers, conditions and spells on them; no notes, gold,
+ *  item text, gifts or photo (an icon portrait stays). */
+function partySheet(data) {
+  const out = privateless(data)
+  const { gifts, ...state } = out.state || {}
+  return { ...out, state, ownerKey: undefined, portrait: data.portrait?.kind === 'icon' ? data.portrait : null }
+}
+/** Players see enemies with their damage count and look (the table's), never the claims. */
 function hideEnemies(enc) {
   if (!enc) return enc
-  return { ...enc, combatants: enc.combatants.map((c) => (c.kind !== 'npc' ? c : { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [] })), claims: undefined }
+  return { ...enc, combatants: enc.combatants.map((c) => (c.kind !== 'npc' ? c : { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [], icon: c.icon || null, color: c.color || null, note: c.note || null })), claims: undefined }
 }
 const int = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null)
 /** Only the known fields, in range: the encounter is shown to every player of the group. */
@@ -486,7 +496,11 @@ function cleanEncounter(e) {
     if (!c || !/^(pc|npc)-[A-Za-z0-9_-]{1,40}$/.test(c.id || '')) fail(400, 'bad combatant')
     const base = { id: c.id, kind: c.kind === 'pc' ? 'pc' : 'npc', name: str(c.name, 40), init: int(c.init, -10, 60), bonus: int(c.bonus, -10, 30) ?? 0 }
     if (base.kind === 'pc') return { ...base, charId: str(c.charId, 40) }
-    return { ...base, group: str(c.group, 30), dmg: int(c.dmg, 0, 99999) ?? 0, ac: int(c.ac, 0, 50), dead: !!c.dead,
+    // an enemy's look: one emoji (≤ 8 code units), a palette color, a short note everyone sees; no AC any more
+    return { ...base, group: str(c.group, 30), dmg: int(c.dmg, 0, 99999) ?? 0, dead: !!c.dead,
+      icon: typeof c.icon === 'string' && c.icon && c.icon.length <= 8 && !/[<>&"'\\]/.test(c.icon) ? c.icon : null,
+      color: ['red', 'orange', 'gold', 'green', 'teal', 'blue', 'violet', 'gray'].includes(c.color) ? c.color : null,
+      note: typeof c.note === 'string' && c.note.trim() ? c.note.trim().slice(0, 40) : null,
       conditions: Array.isArray(c.conditions) ? c.conditions.filter((x) => typeof x === 'string').slice(0, 20).map((x) => x.slice(0, 20)) : [] }
   })
   const ids = new Set(combatants.map((c) => c.id))
