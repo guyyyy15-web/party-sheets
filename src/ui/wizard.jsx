@@ -1,6 +1,9 @@
 // The onboarding wizard: name → class → species → background → abilities → choices → equipment → finish.
 // Every step saves a draft, so closing the app halfway keeps the character.
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { AvatarImg, LookSheet } from './avatar.jsx'
+import { newSeed } from '../engine/avatar.js'
+import { CLASS_COLORS } from '../content/avatars.js'
 import { derive, readyToPlay } from '../engine/engine.js'
 import { CLASSES, classById } from '../content/classes.js'
 import { SPECIES, speciesById } from '../content/species.js'
@@ -97,6 +100,7 @@ const smooth = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 const stepHint = (s) => ['Give your hero a name', 'Pick a class', 'Pick a species (and its options)', 'Pick a background and its bonuses', 'Set your ability scores', 'Make the choices above', '', ''][s]
 
 function HeroStep({ ch, setCh }) {
+  const [look, setLook] = useState(false)
   const pickPhoto = async (e) => {
     const f = e.target.files?.[0]
     e.target.value = ''
@@ -108,7 +112,13 @@ function HeroStep({ ch, setCh }) {
       <label className="field" data-need={!ch.name.trim()} data-key="name"><span>Name</span>
         <input className="input" value={ch.name} onChange={(e) => setCh({ ...ch, name: e.target.value.slice(0, 40) })} placeholder="e.g. Katsebushi" autoComplete="off" enterKeyHint="next" />
       </label>
-      <span className="field-label">Portrait</span>
+      <span className="field-label">Your look</span>
+      <div className="row hero-look">
+        <button className={`look-main ${!ch.portrait ? 'on' : ''}`} onClick={() => setLook(true)} aria-label="Your look: change the avatar"><AvatarImg ch={ch} size={96} /></button>
+        <span className="grow"><button className="btn ghost wide" onClick={() => setCh({ ...ch, avatar: { seed: newSeed() }, portrait: null })}>🎲 A new face</button><button className="btn ghost wide" onClick={() => setLook(true)}>✎ Change the look</button></span>
+      </div>
+      {look && <LookSheet ch={ch} setCh={setCh} onClose={() => setLook(false)} />}
+      <span className="field-label small muted">Or a photo or an emoji</span>
       <div className="portraits">
         <label className="portrait-pick" aria-label="Choose a photo">
           {ch.portrait?.kind === 'photo' ? <img src={ch.portrait.src} alt="" /> : <span>📷<small>Photo</small></span>}
@@ -358,7 +368,7 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
                 onChange={(v) => { setDrafts({ ...drafts, [c.key]: v }); if (asiDone(v)) set(c.key, v); else if (ch.choices[c.key]) { const next = { ...ch.choices }; delete next[c.key]; setCh({ ...ch, choices: next }) } }} />
             : <>
                 <p className="muted small">{c.count > 1 ? `Choose ${c.count} (${c.picked.length} chosen).` : 'Choose one.'}</p>
-                {c.kind === 'subclass' && c.options.some((o) => o.expansion) && <p className="muted small">{expansionsAllowed(ch) ? 'Includes subclasses from the expansion books (tagged).' : `${c.options.filter((o) => o.expansion).length} more subclasses from the expansion books: ${ch.roomId ? 'the DM can allow them in the group settings' : 'allow them in Table settings'}.`}</p>}
+                {c.kind === 'subclass' && c.options.some((o) => o.expansion) && <p className="muted small">{expansionsAllowed(ch) ? 'Includes subclasses from the expansion books (tagged).' : `${c.options.filter((o) => o.expansion).length} more subclasses from the expansion books: ${ch.roomId ? 'the DM can allow them in the table settings' : 'allow them in Table settings'}.`}</p>}
                 <OptionCards columns={c.options.length > 6 ? 2 : 1} count={c.count} picked={c.picked} onChange={(v) => set(c.key, v)}
                   options={shownOptions(ch, d, c)} />
               </>}
@@ -415,11 +425,12 @@ function ReadyStep({ ch, d, ready, go }) {
   )
 }
 
+/** The character's picture: their photo or emoji if they chose one, else their avatar (src/ui/avatar.jsx). */
 export function Portrait({ ch, size = 48 }) {
   const p = ch.portrait
   return (
-    <span className={`portrait cls-${ch.classId || 'none'}`} style={{ width: size, height: size, fontSize: size * 0.5 }}>
-      {p?.kind === 'photo' ? <img src={p.src} alt="" /> : p?.kind === 'icon' ? p.src : ch.classId ? <GameIcon id={`class.${ch.classId}`} size={Math.round(size * 0.6)} /> : (ch.name || '?').slice(0, 1).toUpperCase()}
+    <span className={`portrait cls-${ch.classId || 'none'} ${p?.kind === 'photo' || p?.kind === 'icon' ? '' : 'is-avatar'}`} style={{ width: size, height: size, fontSize: size * 0.5, '--cls': CLASS_COLORS[ch.classId] || 'var(--accent)' }}>
+      {p?.kind === 'photo' ? <img src={p.src} alt="" /> : p?.kind === 'icon' ? p.src : <AvatarImg ch={ch} size={size} />}
     </span>
   )
 }

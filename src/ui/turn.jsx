@@ -84,7 +84,7 @@ export function TurnGuide({ d, ch, setState, roll, mode, setMode, bonus, canPay,
   const more = t && n < t.count
 
   return (
-    <Sheet title="My turn" onClose={onClose}>
+    <Sheet title="Your turn" onClose={onClose}>
       <ol className="turn-steps" aria-label="Steps of your turn">
         {['Action', 'Roll', 'Bonus', 'Done'].map((s, i) => <li key={s} className={['pick', ['target', 'hit', 'save', 'dmg', 'next'], 'bonus', 'end'].findIndex((p) => (Array.isArray(p) ? p.includes(phase) : p === phase)) >= i ? 'on' : ''}>{s}</li>)}
       </ol>

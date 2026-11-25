@@ -87,7 +87,7 @@ export function InitiativeView({ room, onBack }) {
     <main className="init-page">
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="Back">‹</button>
-        <div className="grow"><h1>Initiative</h1><p className="muted small">{room.name} · updates every few seconds</p></div>
+        <div className="grow"><h1>The Fight</h1><p className="muted small">{room.name} · updates every few seconds</p></div>
         {data && <button className="btn ghost small" onClick={() => { if (confirm('End this fight? The order and the enemies are cleared.')) change(() => null) }}>End fight</button>}
       </header>
       {err && <p className="warn-line" role="status">{err}</p>}
@@ -95,7 +95,7 @@ export function InitiativeView({ room, onBack }) {
         <div className="empty">
           <div className="empty-art" aria-hidden>⚔️</div>
           <h2>No fight right now</h2>
-          <p className="muted">{party?.length ? `Start one: the party (${party.map((c) => c.data.name).join(', ')}) joins, each player rolls initiative on their own sheet and it shows up here.` : 'No characters in this group yet. Send the players the invite link first.'}</p>
+          <p className="muted">{party?.length ? `Start one: the party (${party.map((c) => c.data.name).join(', ')}) joins, each player rolls initiative on their own sheet and it shows up here.` : 'No characters in this table yet. Send the players the invite link first.'}</p>
           <button className="btn primary big-btn" onClick={start} disabled={!party}>⚔ Start a fight</button>
         </div>
       ) : (

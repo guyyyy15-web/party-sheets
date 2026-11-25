@@ -17,7 +17,7 @@ const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails+
     await p.goto(URL)
     await p.waitForSelector('text=No heroes yet')
     ok(true, `${devName}: home in ${Date.now() - t0} ms`)
-    await p.click('text=+ New character')
+    await p.click('text=+ New hero')
     await p.fill('input[placeholder="e.g. Katsebushi"]', 'Tester')
     await p.click('button[aria-label="Level up"]'); await p.click('button[aria-label="Level up"]'); await p.click('button[aria-label="Level up"]'); await p.click('button[aria-label="Level up"]')
     await p.click('.wiz-foot button')
@@ -70,7 +70,7 @@ const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails+
     ok(m && Number(m[1]) === Number(m[2]) + Number(m[3]), `${devName}: 3D throw settles in ${((Date.now() - t2) / 1000).toFixed(1)} s and adds up (${txt.trim()})`)
     await p.click('.dice3d')
     await p.screenshot({ path: `screenshots/live-${devName.replace(' ', '')}.png` })
-    for (const tab of ['Checks', 'Features', 'Gear', 'Notes', 'My Turn']) {
+    for (const tab of ['Checks', 'Features', 'Gear', 'Notes', 'Your Turn']) {
       await p.click(`[role=tab]:has-text("${tab}")`)
       const w = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
       if (!w) ok(false, `${devName}: ${tab} scrolls sideways`)

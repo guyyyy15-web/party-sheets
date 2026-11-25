@@ -12,6 +12,8 @@
     "campaign": "node scripts/campaign.cjs"
   },
   "devDependencies": {
+    "@dicebear/core": "^10.7.0",
+    "@dicebear/styles": "^10.6.0",
     "@iconify-json/game-icons": "^1.2.4",
     "axe-core": "4.10.2",
     "cannon-es": "0.20.0",

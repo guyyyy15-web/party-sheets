@@ -6,7 +6,7 @@ import { speciesById } from '../content/species.js'
 import { getSetting, setSetting } from './store.js'
 import { apiBase } from './sync.js'
 
-const KINDS = { room_created: 'New groups', character_saved: 'New characters', character_joined: 'Joined a group', player_write: 'Player changes', dm_action: 'DM actions' }
+const KINDS = { room_created: 'New tables', character_saved: 'New characters', character_joined: 'Joined a table', player_write: 'Player changes', dm_action: 'DM actions' }
 const when = (t) => { if (!t) return '—'; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago` }
 
 async function call(path, { key, method = 'GET', body } = {}) {
@@ -46,7 +46,7 @@ export function AdminView({ onBack }) {
             <Tile n={t.rooms} label="Groups" sub={`${t.activeRooms7d} active this week`} />
             <Tile n={t.characters} label="Characters saved" sub={`${t.activeCharacters7d} changed this week`} />
             <Tile n={t.players} label="Players (phones)" />
-            <Tile n={`${Math.round(t.bytes / 1024)} KB`} label="Stored" sub={`up to ${stats.limits.totalRooms} groups`} />
+            <Tile n={`${Math.round(t.bytes / 1024)} KB`} label="Stored" sub={`up to ${stats.limits.totalRooms} tables`} />
           </section>
           <UsageChart usage={stats.usage} />
           {stats.solo?.length > 0 && (
@@ -63,14 +63,14 @@ export function AdminView({ onBack }) {
               </ul>
             </>
           )}
-          <h2 className="admin-h">Groups</h2>
-          {stats.rooms.length === 0 && <p className="muted">No groups yet.</p>}
+          <h2 className="admin-h">Tables</h2>
+          {stats.rooms.length === 0 && <p className="muted">No tables yet.</p>}
           <ul className="admin-rooms">
             {stats.rooms.map((r) => (
               <li key={r.id} className="room">
                 <div className="room-head">
                   <span className="grow"><b>{r.name}</b><span className="muted small">{r.characters.length} character{r.characters.length === 1 ? '' : 's'} · {new Set(r.characters.map((c) => c.player)).size} player{new Set(r.characters.map((c) => c.player)).size === 1 ? '' : 's'} · active {when(r.lastActive)} · made {new Date(r.createdAt).toLocaleDateString()}</span></span>
-                  <button className="btn small danger" onClick={async () => { if (!confirm(`Delete the group "${r.name}" and its ${r.characters.length} shared characters from the server? The characters stay on the players' phones.`)) return; try { await call(`/admin/rooms/${r.id}`, { key, method: 'DELETE' }); load() } catch (e) { setErr(e.message) } }}>Delete</button>
+                  <button className="btn small danger" onClick={async () => { if (!confirm(`Delete the table "${r.name}" and its ${r.characters.length} shared characters from the server? The characters stay on the players' phones.`)) return; try { await call(`/admin/rooms/${r.id}`, { key, method: 'DELETE' }); load() } catch (e) { setErr(e.message) } }}>Delete</button>
                 </div>
                 {r.characters.length > 0 && (
                   <ul className="admin-chars">

@@ -53,8 +53,8 @@ export function DmView({ room, onBack, onInit, onGone }) {
     <main className="dm-page">
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="Back">‹</button>
-        <div className="grow"><h1>{room.name}</h1><p className="muted small">DM screen · updates every few seconds</p></div>
-        <button className="btn primary small" onClick={onInit}>⚔ Initiative</button>
+        <div className="grow"><h1>{room.name}</h1><p className="muted small">The DM's table · updates every few seconds</p></div>
+        <button className="btn primary small" onClick={onInit}>⚔ The Fight</button>
         <button className="btn ghost small" onClick={() => setSettings(true)}>Settings</button>
         <button className="btn ghost small" onClick={() => setShare(true)}>Invite</button>
       </header>
@@ -126,7 +126,7 @@ function GroupSettings({ room, onClose, onError }) {
   const save = async (body) => { setBusy(true); try { setR(await updateRoom(r, body)) } catch (e) { onError(e.status === 0 ? 'Offline: settings not saved.' : e.message) } finally { setBusy(false) } }
   return (
     <Sheet title="Group settings" onClose={onClose}>
-      <label className="field"><span>Group name</span><input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== r.name && save({ name: name.trim() })} /></label>
+      <label className="field"><span>Table name</span><input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== r.name && save({ name: name.trim() })} /></label>
       <label className="row toggle"><input type="checkbox" checked={!!r.settings?.expansions} disabled={busy} onChange={(e) => save({ settings: { expansions: e.target.checked } })} />
         <span>Allow subclasses from the expansion books (Xanathar's, Tasha's and more), beyond the Player's Handbook</span></label>
       
