@@ -1,6 +1,7 @@
-# Party Sheets: rules for Claude sessions
+# Tavern Table (repo: party-sheets): rules for Claude sessions
 
-Phone character sheets for Guy's D&D group (one table, not a public product). UI in English. Guy writes in Hebrew:
+Shown to players as **Tavern Table** (Guy, 2026-11-25; formerly Party Sheets). Code, storage keys, the Worker and the
+repo keep the old `party-sheets` names (changing them would break saves, links and Face ID). Phone character sheets for Guy's D&D group (one table, not a public product). UI in English. Guy writes in Hebrew:
 answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD is a Claude doc: "Party Sheets — PRD".
 
 - Edit `src/`, then `npm run build`: `app.js` and `dice3d.js` are committed and must match `src/` (a test checks).

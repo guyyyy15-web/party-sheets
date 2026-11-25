@@ -50,12 +50,12 @@ export const backupName = () => `party-sheets-${new Date().toISOString().slice(0
 /** A backup file's text → characters to add (new ids, nothing overwritten). Throws a readable error. */
 export function parseBackupFile(text) {
   let j
-  try { j = JSON.parse(text) } catch { throw new Error("This file isn't a Party Sheets backup.") }
+  try { j = JSON.parse(text) } catch { throw new Error("This file isn't a Tavern Table backup.") }
   if (j?.kind === 'katsebushi-backup') {
     parseKatsebushi(text) // validates
     throw new Error('This is a Katsebushi backup. Build Katsebushi in the wizard (Monk, Open Hand): the old sheet has no species or background to bring over.')
   }
-  if (j?.kind !== BACKUP_KIND || !Array.isArray(j.characters)) throw new Error("This file isn't a Party Sheets backup.")
+  if (j?.kind !== BACKUP_KIND || !Array.isArray(j.characters)) throw new Error("This file isn't a Tavern Table backup.")
   const list = j.characters.filter((c) => c && typeof c === 'object' && c.v === 1 && typeof c.name === 'string' && c.scores)
   if (!list.length) throw new Error('No characters in this file.')
   // an imported character is a new copy: it isn't in any group until brought into one

@@ -266,7 +266,7 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
   return (
     <main className="home">
       <header className="home-top">
-        <div className="brand"><span className="logo" aria-hidden><GameIcon id="ui.d20" size={34} /></span><h1>Party Sheets</h1></div>
+        <div className="brand"><span className="logo" aria-hidden><GameIcon id="ui.d20" size={34} /></span><h1>Tavern Table</h1></div>
         <span className="top-actions"><AccountChip onOpen={onAccount} /><button className="icon-btn" onClick={() => setTable(true)} aria-label="Table settings">⚙</button></span>
       </header>
       {real.length === 0 ? (
@@ -295,7 +295,7 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
           </div>
           <button className="btn ghost wide" onClick={() => { setTable(false); onGlossary() }}>📖 Rules glossary</button>
           <ShareAppButton />
-          <button className="btn ghost wide" onClick={() => { setTable(false); onAbout() }}>About Party Sheets</button>
+          <button className="btn ghost wide" onClick={() => { setTable(false); onAbout() }}>About Tavern Table</button>
           <div className="panel">
             <b>Backup file</b>
             <p className="muted small">{last ? `Last one ${Math.round((Date.now() - last) / 86400e3)} days ago.` : 'None yet.'}</p>
@@ -332,8 +332,8 @@ function ShareAppButton() {
   const [r, setR] = useState(null)
   return (
     <>
-      <button className="btn ghost wide" onClick={async () => setR(await shareApp())}>{r === 'copied' ? '✓ Link copied' : '↗ Share Party Sheets'}</button>
-      {r === 'manual' && <input className="input mono" readOnly value={location.href.split('#')[0]} aria-label="Party Sheets link" onFocus={(e) => e.target.select()} />}
+      <button className="btn ghost wide" onClick={async () => setR(await shareApp())}>{r === 'copied' ? '✓ Link copied' : '↗ Share Tavern Table'}</button>
+      {r === 'manual' && <input className="input mono" readOnly value={location.href.split('#')[0]} aria-label="Tavern Table link" onFocus={(e) => e.target.select()} />}
     </>
   )
 }
@@ -343,7 +343,7 @@ function CloudKey() {
   const [done, setDone] = useState(null)
   const url = restoreLink()
   const share = async () => {
-    try { if (navigator.share) { await navigator.share({ title: 'Party Sheets cloud key', url }); setDone('shared'); return } } catch (e) { if (e?.name === 'AbortError') return }
+    try { if (navigator.share) { await navigator.share({ title: 'Tavern Table cloud key', url }); setDone('shared'); return } } catch (e) { if (e?.name === 'AbortError') return }
     try { await navigator.clipboard.writeText(url); setDone('copied') } catch { setShown(true) }
   }
   return (

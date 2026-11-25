@@ -1,6 +1,6 @@
 {
-  "name": "Party Sheets",
-  "short_name": "Party Sheets",
+  "name": "Tavern Table",
+  "short_name": "Tavern Table",
   "description": "Character sheets for our table: build your hero, the rules do the math.",
   "start_url": "./",
   "scope": "./",

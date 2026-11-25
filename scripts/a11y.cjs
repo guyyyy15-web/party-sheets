@@ -59,7 +59,7 @@ async function scan(p, name) {
   await p.click('button[aria-label="Back"]'); await p.click('button[aria-label="All characters"]')
   await p.click('text=+ New character'); await p.fill('input[placeholder="e.g. Katsebushi"]', 'B'); await p.click('.wiz-foot button'); await p.click('.class-card:has-text("Wizard")'); await scan(p, 'play style question')
     await p.click('.wiz-top button, button[aria-label="Cancel"]').catch(() => {})
-  await p.goto('http://localhost:8772/'); await p.click('button[aria-label="Table settings"]'); await p.click('text=About Party Sheets'); await scan(p, 'landing page')
+  await p.goto('http://localhost:8772/'); await p.click('button[aria-label="Table settings"]'); await p.click('text=About Tavern Table'); await scan(p, 'landing page')
     await b.close(); server.close()
   console.log(bad ? `\n${bad} serious issue(s)` : '\nno serious accessibility issues')
   process.exit(bad ? 1 : 0)
