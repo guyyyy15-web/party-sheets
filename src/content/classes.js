@@ -68,7 +68,7 @@ export const FIGHTER = {
     id: 'champion', name: 'Champion', summary: 'Raw physical power: more criticals, more grit.',
     features: [
       { id: 'improved-critical', level: 3, name: 'Improved Critical', summary: 'Your weapon and unarmed attacks score a critical hit on a 19 or 20.', effects: [{ type: 'crit', value: (c) => (c.level >= 15 ? 18 : 19) }] },
-      { id: 'remarkable-athlete', level: 3, name: 'Remarkable Athlete', summary: 'Advantage on initiative and Athletics checks. After a critical hit, move half your speed without provoking.' },
+      { id: 'remarkable-athlete', level: 3, name: 'Remarkable Athlete', summary: 'Advantage on initiative and Athletics checks. After a critical hit, move half your speed without provoking.', effects: [{ type: 'adv', on: 'initiative', label: 'Remarkable Athlete' }] },
       { id: 'additional-fighting-style', level: 7, name: 'Additional Fighting Style', summary: 'Another Fighting Style feat.',
         choices: [{ key: 'style', label: 'Fighting Style', count: 1, kind: 'feat', options: fightingStyles }] },
       { id: 'heroic-warrior', level: 10, name: 'Heroic Warrior', summary: 'At the start of each of your turns in combat, gain Heroic Inspiration if you don\'t have it.' },

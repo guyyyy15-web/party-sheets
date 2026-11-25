@@ -8,6 +8,7 @@ import { backgroundById } from '../content/backgrounds.js'
 import { featById, FEATS } from '../content/feats.js'
 import { EXHAUSTION } from '../content/conditions.js'
 import { buffLabel } from './buffs.js'
+import { ON_HIT, ON_HURT, ON_CAST, DAMAGE_REDUCTION } from '../content/triggers.js'
 
 // Short rest healing per Hit Die spent: the die + CON, at least this much. Long rest: all spent Hit Dice come back.
 export const HIT_DIE_MIN = 1
@@ -275,7 +276,7 @@ export function derive(input) {
   const resources = []
   for (const e of active) if (e.type === 'resource' && !resources.some((r) => r.id === e.id)) {
     const max = e.max(ctx)
-    if (max > 0) resources.push({ id: e.id, name: e.name, max, reset: e.reset, short: e.short, used: Math.min(max, ch.state?.used?.[e.id] || 0) })
+    if (max > 0) resources.push({ id: e.id, name: e.name, max, reset: e.reset, short: e.short, used: Math.min(max, ch.state?.used?.[e.id] || 0), ...(e.hidden ? { hidden: true } : {}) })
   }
 
   if (cls) {
@@ -354,7 +355,12 @@ export function derive(input) {
   // actions for "My Turn"
   const actions = [{ id: 'attack', name: 'Attack', kind: 'action', summary: `${attacksPerAction} attack${attacksPerAction > 1 ? 's' : ''} with a weapon or Unarmed Strike.` }]
   for (const e of active) if (e.type === 'action' && !actions.some((a) => a.id === e.id)) {
-    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), perTurn: e.perTurn ?? /once (per turn|on each of your turns)/i.test(String(call(e.summary, ctx) || '')), cost: e.cost, onCast: e.onCast || null, alt: e.alt || null, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx), parts: e.roll.parts ? e.roll.parts(ctx) : null, why: e.roll.why || null }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: e.setHp, attack: e.attack, count: e.count && e.count(ctx), from: e.from })
+    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), perTurn: e.perTurn ?? /once (per turn|on each of your turns)/i.test(String(call(e.summary, ctx) || '')), cost: e.cost, onCast: e.onCast || null, alt: e.alt || null, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx), parts: e.roll.parts ? e.roll.parts(ctx) : null, why: e.roll.why || null }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: call(e.setHp, ctx), needsBuff: e.needsBuff || null, attack: e.attack, count: e.count && e.count(ctx), from: e.from,
+      // when it fires (src/content/triggers.js): after a hit, when you are hit, after a casting
+      onHit: ON_HIT[e.id] && (!ON_HIT[e.id].only || ON_HIT[e.id].only(e)) ? { ...ON_HIT[e.id], value: ON_HIT[e.id].value?.(ctx) ?? null, only: undefined } : null,
+      onHurt: ON_HURT[e.id] ? { ...ON_HURT[e.id], value: ON_HURT[e.id].value?.(ctx) ?? null, types: ON_HURT[e.id].types ? ON_HURT[e.id].types(ctx.has) : null } : null,
+      ...(ON_CAST[e.id] && !e.onCast ? { onCast: ON_CAST[e.id] } : {}),
+      buff: e.buff ? call(e.buff, ctx) : null, concentration: e.concentration || null, endsConcentration: !!e.endsConcentration })
   }
   for (const e of active) if (e.type === 'note' && e.save) actions.push({ id: `note-${e.from}`, name: e.from, kind: 'info', summary: e.save.label, save: { dc: e.save.dc(ctx) } })
 
@@ -365,12 +371,16 @@ export function derive(input) {
   // temp HP at the start of each turn (Heroism): the best one
   const turnTemp = fx('tempHp').reduce((best, e) => (!best || e.value > best.value ? { value: e.value, label: e.label } : best), null)
   const choices = openChoices(ch, features, ctx)
+  // spell damage that adds a modifier (Potent Spellcasting, Empowered Evocation, Agonizing Blast, Elemental Affinity)
+  const spellDamage = active.filter((e) => e.type === 'spellDamage').map((e) => ({ label: e.label || e.from, value: mod[e.ability], ability: e.ability, cantripOf: e.cantripOf || null, school: e.school || null, classOf: e.classOf || null, ids: e.ids || null, damageType: e.damageType || null }))
+  // damage you take, reduced (Heavy Armor Master)
+  const reductions = Object.entries(DAMAGE_REDUCTION).filter(([id, r]) => ctx.has(id) && (!r.when || r.when(ctx))).map(([id, r]) => ({ id, label: featById(id)?.name || id, types: r.types, value: r.value(ctx), attack: !!r.attack }))
 
   return {
     name: ch.name, level, cls, species: sp, background: bg, subclass: cls?.subclasses.find((s) => s.id === ch.subclassId) || null,
     scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, spellcasting, featSpells, resources, attacks, attacksPerAction, actions,
     exhaustion, d20Pen, inspiration: !!ch.state?.inspiration, conditions: ch.state?.conditions || [],
-    senses, resistances, immunities, vulnerabilities, buffs, turnTemp, checkAdv, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
+    senses, resistances, immunities, vulnerabilities, buffs, spellDamage, reductions, turnTemp, checkAdv, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
     choices, pending: choices.filter((c) => !c.done), armor, shield, crit,
   }
 }

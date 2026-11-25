@@ -74,13 +74,16 @@ export const BARBARIAN = {
     { id: 'rage', level: 1, name: 'Rage', summary: 'Bonus action, not in heavy armor: resist bludgeoning, piercing and slashing, bonus damage on STR attacks, advantage on STR checks and saves. No spells or concentration. One use back on a short rest.',
       effects: [
         { type: 'resource', id: 'rage', name: 'Rage', max: (c) => scale([[1, 2], [3, 3], [6, 4], [12, 5], [17, 6]])(c.level), reset: 'long', short: 1 },
-        { type: 'action', id: 'rage', name: 'Rage', kind: 'bonus', cost: { resource: 'rage', amount: 1 }, summary: (c) => `Resistance to physical damage, +${rageDamage(c.level)} damage on STR attacks. Lasts while you keep attacking (up to 10 minutes).` },
+        { type: 'action', id: 'rage', name: 'Rage', kind: 'bonus', cost: { resource: 'rage', amount: 1 }, summary: (c) => `Resistance to physical damage, +${rageDamage(c.level)} damage on STR attacks. Lasts while you keep attacking (up to 10 minutes).`, when: notHeavy,
+          // while it lasts the sheet's numbers change (a buff on yourself); entering a Rage ends concentration
+          buff: (c) => ({ name: 'Rage', effects: [{ on: 'resist', types: ['bludgeoning', 'piercing', 'slashing'] }, { on: 'damage', value: rageDamage(c.level), str: true }, { on: 'save', ability: 'STR', adv: true }, { on: 'check', ability: 'STR', adv: true }],
+            note: 'No spells or concentration. Ends early unless you attack, force a save, or use a bonus action to extend it each turn (up to 10 minutes).' }), endsConcentration: true },
       ] },
     { id: 'barbarian-unarmored-defense', level: 1, name: 'Unarmored Defense', summary: 'Without armor, AC = 10 + DEX + CON. A shield still counts.',
       effects: [{ type: 'ac', label: 'Unarmored Defense (10 + DEX + CON)', value: (c) => 10 + c.mod.DEX + c.mod.CON, when: (c) => !c.armor }] },
     { id: 'barbarian-mastery', level: 1, name: 'Weapon Mastery', summary: 'Use the mastery property of melee weapons you choose. Swap one on a long rest.',
       choices: [masteryChoice((c) => scale([[1, 2], [4, 3], [10, 4]])(c.level), (wp) => wp.cat.endsWith('melee'))] },
-    { id: 'danger-sense', level: 2, name: 'Danger Sense', summary: 'Advantage on DEX saving throws unless you are Incapacitated.' },
+    { id: 'danger-sense', level: 2, name: 'Danger Sense', summary: 'Advantage on DEX saving throws unless you are Incapacitated.', effects: [{ type: 'adv', on: 'save', ability: 'DEX', label: 'Danger Sense' }] },
     { id: 'reckless-attack', level: 2, name: 'Reckless Attack', summary: 'On your first attack of the turn: advantage on STR attacks until your next turn, but attacks against you have advantage too.',
       effects: [{ type: 'action', id: 'reckless-attack', name: 'Reckless Attack', kind: 'free', summary: 'Advantage on STR attacks; enemies get advantage on you.' }] },
     { id: 'primal-knowledge', level: 3, name: 'Primal Knowledge', summary: 'One more Barbarian skill. While raging, Acrobatics, Intimidation, Perception, Stealth and Survival checks can use STR.',
@@ -89,12 +92,18 @@ export const BARBARIAN = {
     { id: 'barbarian-extra-attack', level: 5, name: 'Extra Attack', summary: 'Attack twice when you take the Attack action.', effects: [{ type: 'attacks', value: () => 2 }] },
     { id: 'fast-movement', level: 5, name: 'Fast Movement', summary: '+10 ft speed while not in heavy armor.',
       effects: [{ type: 'bonus', target: 'speed', label: 'Fast Movement', value: () => 10, when: notHeavy }] },
-    { id: 'feral-instinct', level: 7, name: 'Feral Instinct', summary: 'Advantage on initiative rolls.' },
+    { id: 'feral-instinct', level: 7, name: 'Feral Instinct', summary: 'Advantage on initiative rolls.', effects: [{ type: 'adv', on: 'initiative', label: 'Feral Instinct' }] },
     { id: 'instinctive-pounce', level: 7, name: 'Instinctive Pounce', summary: 'When you enter a Rage, also move up to half your speed.' },
     ASIS[1],
     { id: 'brutal-strike', level: 9, name: 'Brutal Strike', summary: 'With Reckless Attack, give up advantage on one STR attack: on a hit, extra damage plus Forceful Blow (push 15 ft) or Hamstring Blow (-15 ft speed).',
       effects: [{ type: 'action', id: 'brutal-strike', name: 'Brutal Strike', kind: 'free', summary: (c) => (c.level >= 17 ? 'Two different effects.' : 'One effect.'), roll: { label: 'Extra damage', expr: (c) => (c.level >= 17 ? '2d10' : '1d10'), why: 'Brutal Strike: 1d10 extra (2d10 from level 17), the same type as the weapon.' } }] },
-    { id: 'relentless-rage', level: 11, name: 'Relentless Rage', summary: 'Drop to 0 HP while raging: DC 10 CON save (+5 each later use) to go to twice your barbarian level in HP instead. DC resets on a rest.' },
+    { id: 'relentless-rage', level: 11, name: 'Relentless Rage', summary: 'Drop to 0 HP while raging: DC 10 CON save (+5 each later use) to go to twice your barbarian level in HP instead. DC resets on a rest.' ,
+      // at 0 HP while raging: a CON save, DC 10 and +5 for each use since your last short or long rest
+      effects: [
+        { type: 'resource', id: 'relentless-rage', name: 'Relentless Rage (uses since rest)', max: () => 20, reset: 'short', hidden: true },
+        { type: 'action', id: 'relentless-rage', name: 'Relentless Rage', kind: 'free', needsBuff: 'rage', cost: { resource: 'relentless-rage', amount: 1 }, summary: (c) => `While raging: CON save, then ${2 * c.level} HP instead of 0.`,
+          save: { ability: 'CON', dc: (c) => 10 + 5 * (c.ch?.state?.used?.['relentless-rage'] || 0) }, setHp: (c) => 2 * c.level },
+      ] },
     ASIS[2],
     { id: 'improved-brutal-strike', level: 13, name: 'Improved Brutal Strike', summary: 'New Brutal Strike effects: Staggering Blow (disadvantage on its next save, no opportunity attacks) and Sundering Blow (+5 to the next attack on it).' },
     { id: 'persistent-rage', level: 15, name: 'Persistent Rage', summary: 'On initiative, regain all Rage uses (once per long rest). Rage lasts 10 minutes without extending it.',
@@ -215,7 +224,7 @@ export const CLERIC = {
       choices: [{ key: 'option', label: 'Blessed Strikes', count: 1, options: () => [
         { id: 'divine-strike', name: 'Divine Strike', summary: 'Once a turn, a weapon hit deals +1d8 necrotic or radiant (2d8 at level 14).',
           effects: [{ type: 'action', id: 'divine-strike', name: 'Divine Strike', kind: 'free', summary: 'Once a turn on a weapon hit.', roll: { label: 'Extra damage', expr: (c) => (c.level >= 14 ? '2d8' : '1d8') } }] },
-        { id: 'potent-spellcasting', name: 'Potent Spellcasting', summary: 'Add your WIS modifier to Cleric cantrip damage. At 14, damaging cantrips also give temp HP (twice WIS).' },
+        { id: 'potent-spellcasting', name: 'Potent Spellcasting', summary: 'Add your WIS modifier to Cleric cantrip damage. At 14, damaging cantrips also give temp HP (twice WIS).', effects: [{ type: 'spellDamage', label: 'Potent Spellcasting', ability: 'WIS', cantripOf: 'cleric' }] },
       ] }] },
     ASIS[1],
     { id: 'divine-intervention', level: 10, name: 'Divine Intervention', summary: 'Magic action: cast any Cleric spell of level 5 or lower (no reaction spells) without a slot or material components. Once per long rest.',
@@ -283,7 +292,7 @@ export const DRUID = {
     { id: 'wild-resurgence', level: 5, name: 'Wild Resurgence', summary: 'Out of Wild Shape: once a turn, spend a spell slot for a use. Once per long rest, turn a Wild Shape use into a level 1 slot.' },
     { id: 'elemental-fury', level: 7, name: 'Elemental Fury', summary: 'Potent Spellcasting (+WIS to Druid cantrip damage) or Primal Strike (+1d8 cold, fire, lightning or thunder on a weapon or beast hit, once a turn).',
       choices: [{ key: 'option', label: 'Elemental Fury', count: 1, options: () => [
-        { id: 'potent-spellcasting', name: 'Potent Spellcasting', summary: 'Add your WIS modifier to Druid cantrip damage. At 15, cantrips with 10+ ft range reach 300 ft farther.' },
+        { id: 'potent-spellcasting', name: 'Potent Spellcasting', summary: 'Add your WIS modifier to Druid cantrip damage. At 15, cantrips with 10+ ft range reach 300 ft farther.', effects: [{ type: 'spellDamage', label: 'Potent Spellcasting', ability: 'WIS', cantripOf: 'druid' }] },
         { id: 'primal-strike', name: 'Primal Strike', summary: 'Once a turn, a weapon or Beast-form hit deals +1d8 cold, fire, lightning or thunder (2d8 at level 15).',
           effects: [{ type: 'action', id: 'primal-strike', name: 'Primal Strike', kind: 'free', summary: 'Once a turn on a hit.', roll: { label: 'Extra damage', expr: (c) => (c.level >= 15 ? '2d8' : '1d8') } }] },
       ] }] },
@@ -340,7 +349,7 @@ export const PALADIN = {
     { id: 'paladins-smite', level: 2, name: "Paladin's Smite", summary: 'Divine Smite is always prepared, and you can cast it once per long rest without a slot.', alwaysPrepared: { 2: ['divine-smite'] },
       effects: [
         { type: 'resource', id: 'paladins-smite', name: 'Free Divine Smite', max: () => 1, reset: 'long' },
-        { type: 'action', id: 'divine-smite', name: 'Divine Smite', kind: 'bonus', summary: 'Right after a melee hit: +2d8 radiant (+1d8 per slot level above 1, +1d8 vs Fiends and Undead).', roll: { label: 'Radiant damage', expr: () => '2d8', why: 'Divine Smite with a level 1 slot (or the free use): 2d8 radiant.' } },
+        { type: 'action', id: 'divine-smite', name: 'Divine Smite (free)', kind: 'bonus', cost: { resource: 'paladins-smite', amount: 1 }, summary: 'Right after a melee hit: +2d8 radiant (+1d8 per slot level above 1, +1d8 vs Fiends and Undead).', roll: { label: 'Radiant damage', expr: () => '2d8', why: 'Divine Smite with a level 1 slot (or the free use): 2d8 radiant.' } },
       ] },
     { id: 'paladin-channel-divinity', level: 3, name: 'Channel Divinity', summary: 'Divine Sense, plus options from your oath. One use back on a short rest.',
       effects: [
@@ -399,7 +408,7 @@ export const RANGER = {
     { id: 'favored-enemy', level: 1, name: 'Favored Enemy', summary: "Hunter's Mark is always prepared, and you can cast it a few times per long rest without a slot.", alwaysPrepared: { 1: ['hunters-mark'] },
       effects: [
         { type: 'resource', id: 'favored-enemy', name: "Free Hunter's Mark", max: (c) => scale([[1, 2], [5, 3], [9, 4], [13, 5], [17, 6]])(c.level), reset: 'long' },
-        { type: 'action', id: 'hunters-mark', name: "Hunter's Mark", kind: 'bonus', cost: { resource: 'favored-enemy', amount: 1 }, summary: 'Mark a creature: your attack hits on it deal extra force damage (concentration, 1 hour).', roll: { label: 'Extra damage', expr: (c) => (c.level >= 20 ? '1d10' : '1d6'), why: "Hunter's Mark: 1d6 force on each hit (1d10 with Foe Slayer)." } },
+        { type: 'action', id: 'hunters-mark', name: "Hunter's Mark", kind: 'bonus', cost: { resource: 'favored-enemy', amount: 1 }, summary: 'Mark a creature: your attack hits on it deal extra force damage (concentration, 1 hour).', concentration: 'hunters-mark', roll: { label: 'Extra damage', expr: (c) => (c.level >= 20 ? '1d10' : '1d6'), why: "Hunter's Mark: 1d6 force on each hit (1d10 with Foe Slayer)." } },
       ] },
     { id: 'ranger-mastery', level: 1, name: 'Weapon Mastery', summary: 'Use the mastery property of two weapons you choose. Change them on a long rest.',
       choices: [masteryChoice(() => 2, () => true)] },
@@ -511,7 +520,7 @@ export const SORCERER = {
       { id: 'draconic-spells', level: 3, name: 'Draconic Spells', summary: "Always prepared: Alter Self, Chromatic Orb, Command, Dragon's Breath; Fear, Fly (5); Arcane Eye, Charm Monster (7); Legend Lore, Summon Dragon (9).",
         alwaysPrepared: { 3: ['alter-self', 'chromatic-orb', 'command', 'dragons-breath'], 5: ['fear', 'fly'], 7: ['arcane-eye', 'charm-monster'], 9: ['legend-lore', 'summon-dragon'] } },
       { id: 'elemental-affinity', level: 6, name: 'Elemental Affinity', summary: 'Pick acid, cold, fire, lightning or poison: resistance to it, and add CHA to one damage roll of spells of that type.',
-        choices: [{ key: 'type', label: 'Damage type', count: 1, options: () => ['acid', 'cold', 'fire', 'lightning', 'poison'].map((d) => ({ id: d, name: d[0].toUpperCase() + d.slice(1), effects: [{ type: 'resist', damage: d }] })) }] },
+        choices: [{ key: 'type', label: 'Damage type', count: 1, options: () => ['acid', 'cold', 'fire', 'lightning', 'poison'].map((d) => ({ id: d, name: d[0].toUpperCase() + d.slice(1), effects: [{ type: 'resist', damage: d }, { type: 'spellDamage', label: 'Elemental Affinity', ability: 'CHA', damageType: d }] })) }] },
       { id: 'dragon-wings', level: 14, name: 'Dragon Wings', summary: 'Bonus action: fly speed 60 ft for 1 hour. Once per long rest, or 3 Sorcery Points.',
         effects: [
           { type: 'resource', id: 'dragon-wings', name: 'Dragon Wings', max: () => 1, reset: 'long' },
@@ -554,6 +563,14 @@ const INVOCATIONS = [
   ['whispers-of-the-grave', 'Whispers of the Grave', 7, 'Cast Speak with Dead at will.'],
   ['witch-sight', 'Witch Sight', 15, 'Truesight 30 ft.'],
 ]
+// invocations that change numbers: Agonizing Blast on Eldritch Blast (the usual pick), Eldritch Smite and Lifedrinker
+// after a pact weapon hit (offered in the turn guide)
+const pactLevel = (lvl) => Math.min(5, Math.ceil(lvl / 2))
+const INVOCATION_EFFECTS = {
+  'agonizing-blast': [{ type: 'spellDamage', label: 'Agonizing Blast', ability: 'CHA', ids: ['eldritch-blast'] }],
+  'eldritch-smite': [{ type: 'action', id: 'eldritch-smite', name: 'Eldritch Smite', kind: 'free', cost: { resource: 'pact-slots', amount: 1 }, perTurn: true, summary: 'Once a turn on a pact weapon hit: spend a Pact slot for force damage, and a Huge or smaller target falls Prone.', roll: { label: 'Force damage', expr: (c) => `${1 + pactLevel(c.level)}d8`, why: 'Eldritch Smite: 1d8 + 1d8 per level of your Pact slot.' } }],
+  lifedrinker: [{ type: 'action', id: 'lifedrinker', name: 'Lifedrinker', kind: 'free', perTurn: true, summary: 'Once a turn on a pact weapon hit; you may also spend a Hit Die to heal.', roll: { label: 'Extra damage', expr: () => '1d6', why: 'Lifedrinker: 1d6 necrotic, psychic or radiant.' } }],
+}
 const arcanum = (level, spellLevel) => ({
   id: `mystic-arcanum-${spellLevel}`, level, name: `Mystic Arcanum (level ${spellLevel})`, summary: `One level ${spellLevel} Warlock spell you can cast once per long rest without a slot.`,
   choices: [{ key: 'spell', label: `Level ${spellLevel} arcanum`, count: 1, kind: 'pick', options: () => SPELLS.filter((s) => s.level === spellLevel && s.classes.includes('warlock')).map((s) => ({ id: s.id, name: s.name, summary: s.summary })) }],
@@ -573,7 +590,7 @@ export const WARLOCK = {
   features: [
     { id: 'eldritch-invocations', level: 1, name: 'Eldritch Invocations', summary: 'Pieces of forbidden lore: one at level 1, more as you level (10 at 18). Swap one each level.',
       choices: [{ key: 'invocations', label: 'Eldritch Invocations', count: (c) => scale([[1, 1], [2, 3], [5, 5], [7, 6], [9, 7], [12, 8], [15, 9], [18, 10]])(c.level), kind: 'pick',
-        options: (c) => INVOCATIONS.filter(([, , lvl]) => lvl <= c.level).map(([id, name, lvl, summary]) => ({ id, name, summary: `${lvl > 1 ? `Level ${lvl}+. ` : ''}${summary}` })) }] },
+        options: (c) => INVOCATIONS.filter(([, , lvl]) => lvl <= c.level).map(([id, name, lvl, summary]) => ({ id, name, summary: `${lvl > 1 ? `Level ${lvl}+. ` : ''}${summary}`, ...(INVOCATION_EFFECTS[id] ? { effects: INVOCATION_EFFECTS[id] } : {}) })) }] },
     { id: 'pact-magic', level: 1, name: 'Pact Magic', summary: 'Cast Warlock spells with CHA. All your slots are the same level and come back on a short rest. Swap one prepared spell each level.',
       effects: [pactResource, spellSave('CHA')] },
     { id: 'magical-cunning', level: 2, name: 'Magical Cunning', summary: '1-minute rite: regain up to half your Pact slots (round up). Once per long rest.',
@@ -643,7 +660,7 @@ export const WIZARD = {
       { id: 'evocation-savant', level: 3, name: 'Evocation Savant', summary: 'Two free Evocation spells (level 2 or lower) in your spellbook, plus one free Evocation spell each time you gain a new spell level.' },
       { id: 'potent-cantrip', level: 3, name: 'Potent Cantrip', summary: 'A damaging cantrip that misses or is saved against still deals half damage (no other effect).' },
       { id: 'sculpt-spells', level: 6, name: 'Sculpt Spells', summary: 'Protect 1 + spell level creatures from your Evocation spells: they succeed on the save and take no damage if they would take half.' },
-      { id: 'empowered-evocation', level: 10, name: 'Empowered Evocation', summary: 'Add your INT modifier to one damage roll of your Wizard Evocation spells.' },
+      { id: 'empowered-evocation', level: 10, name: 'Empowered Evocation', summary: 'Add your INT modifier to one damage roll of your Wizard Evocation spells.', effects: [{ type: 'spellDamage', label: 'Empowered Evocation', ability: 'INT', school: 'Evocation', classOf: 'wizard' }] },
       { id: 'overchannel', level: 14, name: 'Overchannel', summary: 'Deal maximum damage with a level 1-5 Wizard spell. Free once per long rest; after that, 2d12 necrotic per slot level (+1d12 each further use) that ignores Resistance and Immunity.',
         effects: [{ type: 'resource', id: 'overchannel', name: 'Overchannel (free use)', max: () => 1, reset: 'long' }] },
     ],

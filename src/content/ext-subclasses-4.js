@@ -158,6 +158,7 @@ const HEXBLADE = {
     { id: 'hexblades-curse', level: 3, name: "Hexblade's Curse", summary: `Bonus action: curse a creature you can see within 30 ft for 1 minute (ends if it dies, you die or you are Incapacitated). Against it: + proficiency bonus to your damage rolls, and your attacks score a critical hit on 19-20. If it dies, regain warlock level + CHA HP (min 1). Once per short or long rest.${was(1)}`,
       effects: [
         { type: 'resource', id: 'hexblades-curse', name: "Hexblade's Curse", max: () => 1, reset: 'short' },
+        { type: 'action', id: 'hexblades-curse-hit', name: "Hexblade's Curse: damage", kind: 'free', summary: (c) => `Each hit on the cursed target: +${c.prof} damage.`, roll: { label: 'Extra damage', expr: (c) => `${c.prof}`, why: "Hexblade's Curse: your proficiency bonus to damage against the cursed target." } },
         { type: 'action', id: 'hexblades-curse', name: "Hexblade's Curse", kind: 'bonus', cost: { resource: 'hexblades-curse', amount: 1 }, summary: (c) => `1 minute: +${c.prof} damage against it, crit on 19-20; heal ${atLeast1(c.level + c.mod.CHA)} if it dies.` },
       ] },
     { id: 'hex-warrior', level: 3, name: 'Hex Warrior', summary: `Training with medium armor and shields, and proficiency with martial weapons. After a long rest, touch one weapon you are proficient with that lacks the Two-Handed property: until your next long rest, its attack and damage rolls can use CHA instead of STR or DEX. With Pact of the Blade, this works with every pact weapon of any kind.${was(1)}` },

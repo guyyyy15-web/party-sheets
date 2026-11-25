@@ -375,6 +375,10 @@ const BUFFS = {
   shield: { self: true, effects: [{ on: 'ac', value: 5 }], until: 'turn', note: '+5 AC until the start of your next turn (also against the attack that triggered it); no damage from Magic Missile.' },
 }
 for (const s of SPELLS) if (BUFFS[s.id]) s.buff = BUFFS[s.id]
+// cast right after you hit (2024 smites): offered in the turn guide after "Hit". 'melee' = a melee weapon or an
+// Unarmed Strike; 'weapon' = any weapon. Extra dice vs a creature type: `vs`.
+const AFTER_HIT = { 'divine-smite': { needs: 'melee', vs: { types: 'Fiend or Undead', dice: '1d8' } }, 'searing-smite': { needs: 'melee' }, 'shining-smite': { needs: 'melee' }, 'ensnaring-strike': { needs: 'weapon', noDamageNow: true } }
+for (const s of SPELLS) if (AFTER_HIT[s.id]) s.afterHit = AFTER_HIT[s.id]
 
 const BY_ID = new Map(SPELLS.map((s) => [s.id, s]))
 export const spellById = (id) => BY_ID.get(id) || null

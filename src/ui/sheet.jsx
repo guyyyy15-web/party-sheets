@@ -11,7 +11,10 @@ import { TurnGuide } from './turn.jsx'
 import { useFight, FightBanner } from './initiative.jsx'
 import { ItemsSection, GiftBanner } from './items.jsx'
 import { newTurn, used as usedTurn, allowed, timeKind, concentrationDC, turnStartPatch, endConcentration } from './turnstate.js'
-import { buffLabel, applyBuff } from '../engine/buffs.js'
+import { buffLabel, applyBuff, cleanBuff, makeBuff } from '../engine/buffs.js'
+import { hurtOptions, finalDamage, DAMAGE_TYPES } from '../engine/riders.js'
+import { AT_ZERO } from '../content/triggers.js'
+import { spellById } from '../content/spells.js'
 import { roomById, endBuffs } from './sync.js'
 import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
 import { levelDiff } from '../engine/levelup.js'
@@ -86,7 +89,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const show = (title, x) => setSources({ title, total: x.value, sources: x.sources })
   const theme = themeOf(ch)
   // spell slots live in the Spells tab
-  const sideRes = d.resources.filter((r) => !(d.spellcasting && (/^slot-\d$/.test(r.id) || r.id === 'pact-slots')))
+  const sideRes = d.resources.filter((r) => !r.hidden && !(d.spellcasting && (/^slot-\d$/.test(r.id) || r.id === 'pact-slots')))
 
   return (
     <main className={`sheet-page theme-${theme}`}>
@@ -236,6 +239,10 @@ function TurnTab({ d, ch, setCh, roll, mode, setMode, used, spend, setState, hp,
     if (a.id === 'action-surge') t = { ...t, action: false } // one more action this turn
     const u = { ...ch.state.used, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}), ...(a.refill ? { [a.refill]: 0 } : {}) }
     const patch = { turn: t, used: u, ...(a.setHp != null ? { hp: a.setHp } : {}) }
+    // a feature that lasts (Rage): a buff on yourself; one that you concentrate on (Hunter's Mark from Favored Enemy)
+    if (a.buff) Object.assign(patch, { buffs: applyBuff(ch.state, cleanBuff({ ...a.buff, id: `b${Date.now().toString(36)}`, spell: a.id, from: ch.id, fromName: ch.name, conc: false, at: Date.now() })).buffs })
+    if (a.endsConcentration && ch.state.concentration) patch.concentration = null
+    if (a.concentration) Object.assign(patch, { concentration: a.concentration, concAt: Date.now() })
     setState(patch)
     if (a.roll) roll({ kind: 'expr', label: `${a.name}: ${a.roll.label}`, expr: a.roll.expr, parts: a.roll.parts, rule: a.roll.why }).then((e) => { if (a.heal && e) setCh({ ...ch, state: { ...ch.state, ...patch, hp: Math.min(d.hp.value, hp + Math.max(a.min || 0, e.total)) } }) })
   }
@@ -243,7 +250,7 @@ function TurnTab({ d, ch, setCh, roll, mode, setMode, used, spend, setState, hp,
     <section className="turn">
       <TurnBar d={d} ch={ch} setState={setState} />
       <button className="btn primary wide big-btn start-turn" onClick={() => { setState(turnStartPatch(ch.state, d)); setGuide(true) }}>▶ Start my turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
-      {guide && <TurnGuide d={d} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} fight={fight}
+      {guide && <TurnGuide d={d} ch={ch} setState={setState} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} fight={fight}
         takeAction={() => { if (!allowed(ch.state.turn, { kind: 'action' })) return false; setState({ turn: usedTurn(ch.state.turn, { kind: 'action' }) }); return true }} />}
       <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>
       <p className="muted small tap-hint">🎲 Tap a number to roll it: first <b>to hit</b> (d20), then <b>damage</b> if it hits.</p>
@@ -366,32 +373,132 @@ function GearTab({ d, ch, setCh, onTerm, roll, hp }) {
 
 export function HpSheet({ d, ch, hp, setState, onClose, roll }) {
   const [n, setN] = useState('')
+  const [type, setType] = useState('') // damage type: resistance, vulnerability, immunity
+  const [attack, setAttack] = useState(true) // from an attack (reactions, Heavy Armor Master) or not (a spell's save…)
+  const [react, setReact] = useState({}) // reactions used against this hit: { halve, reduce: [{label,value}], missed, id }
+  const [ask, setAsk] = useState(null) // a +AC reaction: "does it miss now?"
+  const [zero, setZero] = useState(null) // the hit took you to 0: features that step in
   const v = parseInt(n, 10) || 0
+  const t = ch.state.turn || {}
+  const opts = hurtOptions(d, ch.state).filter((o) => (!o.types || !type || o.types.includes(type)))
+  const fin = react.missed ? { total: 0, steps: [`${react.missedBy}: the attack misses`] }
+    : finalDamage(v, { type: type || null, resistances: d.resistances, vulnerabilities: d.vulnerabilities, immunities: d.immunities, halve: !!react.halve, reduce: react.reduce || [], reductions: d.reductions, attack })
+  const atZero = d.actions.filter((a) => AT_ZERO.includes(a.id) && (!a.needsBuff || (ch.state.buffs || []).some((b) => b.spell === a.needsBuff)) && (!a.cost || d.resources.find((r) => r.id === a.cost.resource)?.max - (ch.state.used?.[a.cost.resource] || 0) >= a.cost.amount))
+  // the reaction itself: your reaction for the round, and its cost (a slot for Shield, a die for Parry…)
+  const useReaction = (o, extra = {}) => {
+    // (the one-slot-a-turn rule is about your own turn: Shield on an enemy's turn doesn't count against it)
+    if (!allowed(t, { kind: 'reaction' })) return null
+    const used = { ...ch.state.used }
+    if (o.cost) used[o.cost.resource] = (used[o.cost.resource] || 0) + o.cost.amount
+    if (o.spell && o.slot) used[o.slot.id] = (used[o.slot.id] || 0) + 1
+    return { turn: usedTurn(t, { kind: 'reaction', spend: o.cost ? { [o.cost.resource]: o.cost.amount } : o.slot ? { [o.slot.id]: 1 } : null }), used, ...extra }
+  }
+  const pick = async (o) => {
+    if (o.effect === 'halve') { const p = useReaction(o); if (p) { setState(p); setReact({ ...react, halve: o.name, id: o.id }) } return }
+    if (o.effect === 'reduce') {
+      const p = useReaction(o); if (!p) return
+      setState(p)
+      const e = o.roll && await roll({ kind: 'expr', label: `${o.name}: ${o.roll.label || 'reduce by'}`, expr: o.roll.expr, parts: o.roll.parts, rule: o.roll.why })
+      if (e) setReact({ ...react, reduce: [...(react.reduce || []), { label: o.name, value: e.total }], id: o.id })
+      return
+    }
+    if (o.effect === 'ac') setAsk(o)
+  }
+  const acReaction = (o, misses) => {
+    // Shield (+5) and Parry (+PB) last until your next turn: a buff; Arcane Deflection only against this attack
+    const lasting = o.id === 'spell:shield' ? makeBuff(spellById('shield'), { caster: { id: ch.id, name: ch.name, mod: 0 } })
+      : o.id === 'parry' ? cleanBuff({ id: `b${Date.now().toString(36)}`, spell: 'parry', name: 'Parry', from: ch.id, fromName: ch.name, effects: [{ on: 'ac', value: o.value }], until: 'turn', at: Date.now() }) : null
+    const p = useReaction(o, lasting ? { buffs: applyBuff(ch.state, lasting).buffs } : {})
+    setAsk(null)
+    if (!p) return
+    setState(p)
+    setReact(misses ? { missed: true, missedBy: `${o.name} (AC ${d.ac.value} → ${d.ac.value + o.value})`, id: o.id } : { ...react, id: o.id })
+  }
   const damage = async () => {
-    let left = v, temp = ch.state.temp || 0; const fromTemp = Math.min(temp, left); temp -= fromTemp; left -= fromTemp
+    const amount = fin.total
+    let left = amount, temp = ch.state.temp || 0; const fromTemp = Math.min(temp, left); temp -= fromTemp; left -= fromTemp
     const patch = { temp, hp: Math.max(0, hp - left) }
+    if (patch.hp === 0 && hp > 0 && atZero.length && amount > 0) { setZero({ patch }); return }
+    await finish(patch, amount)
+  }
+  const finish = async (patch, amount) => {
     const conc = ch.state.concentration
-    if (conc && v > 0) {
+    if (conc && amount > 0) {
       // Concentration: any damage → CON save, DC 10 or half the damage (higher), at most 30; at 0 HP it simply ends
-      const dc = concentrationDC(v)
+      const dc = concentrationDC(amount)
       if (patch.hp === 0) patch.concentration = null
       else if (roll) {
         onClose()
-        const e = await roll({ kind: 'd20', label: `Concentration: CON save, DC ${dc}`, bonus: d.saves.CON.value, parts: d.saves.CON.parts, dice: d.saves.CON.dice, adv: d.saves.CON.adv, rule: `Took ${v} damage while concentrating: CON save against DC ${dc} (10, or half the damage if higher). Fail and the spell ends.` })
+        const e = await roll({ kind: 'd20', label: `Concentration: CON save, DC ${dc}`, bonus: d.saves.CON.value, parts: d.saves.CON.parts, dice: d.saves.CON.dice, adv: d.saves.CON.adv, rule: `Took ${amount} damage while concentrating: CON save against DC ${dc} (10, or half the damage if higher). Fail and the spell ends.` })
         if (e && e.total < dc) patch.concentration = null
         setState(patch); return
       }
     }
     setState(patch); onClose()
   }
+  const saveMe = async (a) => {
+    // a feature that keeps you up at 0 HP (Relentless Endurance: 1 HP)
+    const patch = { ...zero.patch, used: { ...ch.state.used, ...(a.cost ? { [a.cost.resource]: (ch.state.used?.[a.cost.resource] || 0) + a.cost.amount } : {}) } }
+    if (a.save) {
+      const e = await roll({ kind: 'd20', label: `${a.name}: ${a.save.ability} save, DC ${a.save.dc}`, bonus: d.saves[a.save.ability].value, parts: d.saves[a.save.ability].parts, dice: d.saves[a.save.ability].dice, adv: d.saves[a.save.ability].adv, rule: 'save' })
+      if (!e) return
+      if (e.total < a.save.dc) { setZero(null); return finish(patch, fin.total) }
+    }
+    if (a.setHp != null) patch.hp = a.setHp
+    setZero(null)
+    return finish(patch, fin.total)
+  }
+  if (zero) {
+    return (
+      <Sheet title="Down to 0 HP" onClose={() => finish(zero.patch, fin.total)}>
+        <p className="warn-line">That hit takes you to 0 HP. Something can stop it:</p>
+        <div className="guide-options">
+          {atZero.map((a) => <button key={a.id} className="guide-opt" onClick={() => saveMe(a)}><span><b>{a.name}</b><small>{a.summary}{a.cost ? ` · costs ${a.cost.amount}` : ''}</small></span></button>)}
+        </div>
+        <button className="btn ghost wide" onClick={() => finish(zero.patch, fin.total)}>No: I drop to 0</button>
+      </Sheet>
+    )
+  }
   return (
     <Sheet title={`Hit points: ${hp} / ${d.hp.value}`} onClose={onClose}>
-      <input className="input big" inputMode="numeric" value={n} onChange={(e) => setN(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="Amount" autoFocus aria-label="Amount" />
+      <input className="input big" inputMode="numeric" value={n} onChange={(e) => { setN(e.target.value.replace(/\D/g, '').slice(0, 3)); setReact({}) }} placeholder="Amount" autoFocus aria-label="Amount" />
+      {v > 0 && (
+        <div className="hurt">
+          <label className="field"><span>Damage type</span>
+            <select className="input" value={type} onChange={(e) => setType(e.target.value)} aria-label="Damage type">
+              <option value="">Not sure / doesn't matter</option>
+              {DAMAGE_TYPES.map((x) => <option key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}{d.immunities.includes(x) ? ' (immune)' : d.resistances.includes(x) ? ' (you resist)' : d.vulnerabilities.includes(x) ? ' (vulnerable)' : ''}</option>)}
+            </select>
+          </label>
+          {(opts.length > 0 || d.reductions.length > 0) && (
+            <label className="row toggle small"><input type="checkbox" checked={attack} onChange={(e) => setAttack(e.target.checked)} /><span>From an attack that hit me</span></label>
+          )}
+          {attack && opts.length > 0 && !react.missed && (
+            <div className="react-opts" role="group" aria-label="Reactions">
+              <p className="small muted">You were hit. Use your reaction?{t.reaction ? ' (already used this round)' : ''}</p>
+              {opts.map((o) => (
+                <button key={o.id} className={`btn small ${react.id === o.id ? 'ok' : 'ghost'}`} disabled={!o.canPay || !!react.id} onClick={() => pick(o)}>
+                  {o.name}{o.effect === 'halve' ? ': half' : o.effect === 'ac' ? `: +${o.value} AC` : o.roll ? `: −${o.roll.expr}` : ''}{o.melee ? ' (melee)' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+          {ask && (
+            <div className="panel small" role="alertdialog" aria-label={`${ask.name}: does it miss?`}>
+              <p><b>{ask.name}</b>: your AC becomes <b>{d.ac.value + ask.value}</b> against this attack. Does it miss now?</p>
+              <div className="row"><button className="btn primary grow" onClick={() => acReaction(ask, true)}>It misses</button><button className="btn ghost grow" onClick={() => acReaction(ask, false)}>Still hits</button></div>
+              <button className="btn ghost wide small" onClick={() => setAsk(null)}>Don't use it</button>
+            </div>
+          )}
+          <p className={`dmg-final ${fin.total !== v ? 'changed' : ''}`} role="status">You take <b className="mono">{fin.total}</b>{fin.steps.length ? <small>{fin.steps.join(' · ')}</small> : null}</p>
+        </div>
+      )}
       <div className="row">
-        <button className="btn danger grow" disabled={!v} onClick={damage}>Damage</button>
+        <button className="btn danger grow" disabled={!v} onClick={damage}>Damage{v && fin.total !== v ? ` ${fin.total}` : ''}</button>
         <button className="btn ok grow" disabled={!v} onClick={() => { setState({ hp: Math.min(d.hp.value, hp + v) }); onClose() }}>Heal</button>
         <button className="btn ghost grow" disabled={!v} onClick={() => { setState({ temp: Math.max(ch.state.temp || 0, v) }); onClose() }}>Temp HP</button>
       </div>
+      {(d.resistances.length > 0 || d.immunities.length > 0) && <p className="muted small">You resist: {d.resistances.join(', ') || 'nothing'}{d.immunities.length ? ` · immune: ${d.immunities.join(', ')}` : ''}</p>}
       {ch.state.concentration && <p className="warn-line">Concentrating: taking damage means a CON save (DC 10 or half the damage, whichever is higher) or the spell ends.</p>}
       {hp === 0 && (
         <div className="panel"><h2>Death saves</h2>

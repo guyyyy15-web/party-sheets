@@ -1,7 +1,7 @@
 // Dice for every screen: the tray behind the 🎲 button, and one roll() that throws them on screen (physics) when
 // that's on. Same rules as Katsebushi: the faces come from the physics, never a separate random number.
 import React from 'react'
-import { rollDice, rollD20, rollPool, poolSides, poolLabel, diceNeeded, d20Needed, signed } from '../dice.js'
+import { rollDice, rollD20With, d20WithNeeded, rollPool, poolSides, poolLabel, diceNeeded, signed } from '../dice.js'
 
 export const webglOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')) } catch { return false } }
 export const throwDefault = () => webglOk() // on by default (Guy), even with Reduce motion; the tray can turn it off
@@ -60,23 +60,16 @@ function stepsFor(req, r) {
 
 /** req: {kind:'d20',label,bonus,mode,attack,parts,rule} | {kind:'expr',label,expr,crit,parts,rule} | {kind:'pool',pool,mod} → a log entry. */
 export async function performRoll(req, throwOn) {
-  const extra = req.kind === 'd20' ? (req.dice || []).filter((x) => x && x.dice) : []
-  const sides = req.kind === 'd20' ? [...d20Needed(req.mode), ...extra.flatMap((x) => diceNeeded(x.dice.replace('-', '')))] : req.kind === 'expr' ? diceNeeded(req.expr, { crit: req.crit }) : poolSides(req.pool)
+  const sides = req.kind === 'd20' ? d20WithNeeded(req.mode, req.dice) : req.kind === 'expr' ? diceNeeded(req.expr, { crit: req.crit }) : poolSides(req.pool)
   let faces = null, D = null
   if (throwOn && sides.length) { try { D = await load3d(); faces = await D.throwDice(sides) } catch { D = null; faces = null } }
   let e
   if (req.kind === 'd20') {
-    const r = rollD20(req.bonus, req.mode, Math.random, faces)
-    // Bless/Bane dice: thrown with the d20, added (or taken off) after it
-    let rest = faces ? faces.slice(r.faces.length) : null
-    const ex = extra.map((x) => {
-      const rr = rollDice(x.dice.replace('-', ''), { faces: rest })
-      if (rest) rest = rest.slice(rr.rolls.reduce((t, g) => t + g.faces.length, 0))
-      return { dice: x.dice, label: x.label, sign: x.dice.startsWith('-') ? -1 : 1, total: rr.total, faces: rr.rolls.flatMap((g) => g.faces) }
-    })
-    const exSum = ex.reduce((t, x) => t + x.sign * x.total, 0)
+    // Bless/Bane dice are thrown with the d20 and added (or taken off) after it
+    const r = rollD20With(req.bonus, req.mode, req.dice, Math.random, faces)
+    const ex = r.extra
     const f = r.faces.length > 1 ? `[${r.faces.join(', ')}] keep ${r.kept}` : `${r.kept}`
-    e = { label: req.label, total: r.total + exSum, text: `d20 ${f}${ex.map((x) => ` ${x.sign < 0 ? '-' : '+'} ${x.dice.replace('-', '')}[${x.faces.join(', ')}]`).join('')} ${signed(req.bonus)}`, flag: r.nat20 ? 'NAT 20' : r.nat1 ? 'NAT 1' : null, crit: !!req.attack && r.kept >= (req.critOn || 20), faces: r.faces, kept: r.kept, extra: ex }
+    e = { label: req.label, total: r.total, text: `d20 ${f}${ex.map((x) => ` ${x.sign < 0 ? '-' : '+'} ${x.dice.replace('-', '')}[${x.faces.join(', ')}]`).join('')} ${signed(req.bonus)}`, flag: r.nat20 ? 'NAT 20' : r.nat1 ? 'NAT 1' : null, crit: !!req.attack && r.kept >= (req.critOn || 20), faces: r.faces, kept: r.kept, extra: ex }
   } else if (req.kind === 'expr') {
     const r = rollDice(req.expr, { crit: req.crit, faces })
     e = { label: req.crit ? `${req.label} (crit)` : req.label, total: r.total, text: `${r.rolls.map((g) => `d${g.sides}[${g.faces.join(', ')}]`).join(' ')} ${r.bonus ? signed(r.bonus) : ''}`.trim(), flag: req.crit ? 'CRIT' : null, raw: r }
