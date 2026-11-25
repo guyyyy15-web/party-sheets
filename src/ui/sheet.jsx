@@ -6,6 +6,8 @@ import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTER
 import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend, themeOf, GameIcon } from './common.jsx'
 import { ChoicesStep, Portrait } from './wizard.jsx'
 import { LookSheet } from './avatar.jsx'
+import { LiveAvatar, TONE_WORD } from './live-avatar.jsx'
+import { avatarState } from '../engine/avatar-state.js'
 import { SyncBadge } from './rooms.jsx'
 import { SpellsTab, FeatSpells } from './spells.jsx'
 import { TurnGuide } from './turn.jsx'
@@ -113,6 +115,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       <div className="sheet-grid">
       <aside className="sheet-side" aria-label="Vitals and resources">
+      <HeroStrip ch={ch} d={d} myTurn={!!turnKey} onConc={() => pickTab('spells')} onCond={() => setCondOpen(true)} />
       <section className="vitals">
         <button className="hp" onClick={() => setHpOpen(true)} aria-label="Hit points">
           <span className="lbl">HP</span><b className="mono">{hp}<small>/{d.hp.value}</small></b>{ch.state.temp > 0 && <span className="temp">+{ch.state.temp} temp</span>}
@@ -161,7 +164,6 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       <FightBanner fight={fight} onRoll={rollInit} bonus={d.initiative.value} />
       <GiftBanner ch={ch} setCh={setCh} />
       <BuffList d={d} ch={ch} setState={setState} />
-      {d.spellcasting?.concentration && <button className="banner conc-banner" onClick={() => setTab('spells')}>◎ Concentrating: {d.spellcasting.concentration.name} ›</button>}
       {d.pending.length > 0 && <button className="banner" onClick={() => setLevelUp('choices')}>⚠ {d.pending.length} choice{d.pending.length > 1 ? 's' : ''} to make ›</button>}
 
       {ch.level < 20 && <NextLevelLine ch={ch} onOpen={(diff) => setPeek({ diff, preview: true })} />}
@@ -175,7 +177,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       <div className="sheet-main">
       <nav className="tabs" role="tablist">
-        {[['turn', 'Your Turn'], ...(d.spellcasting || d.featSpells.length ? [['spells', 'Spells']] : []), ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
+        {[['turn', 'Turn'], ...(d.spellcasting || d.featSpells.length ? [['spells', 'Spells']] : []), ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => pickTab(id)}>{l}</button>
         ))}
       </nav>
@@ -748,6 +750,25 @@ function BuffList({ d, ch, setState }) {
           <button className="btn ghost small" onClick={() => remove(b)} aria-label={`End ${b.name}`}>End</button>
         </div>
       ))}
+    </section>
+  )
+}
+
+/** The top of the sheet: the living avatar, how hurt the hero is in a word, and what is on them right now. */
+function HeroStrip({ ch, d, myTurn, onConc, onCond }) {
+  const s = avatarState(d, ch, { myTurn })
+  const conc = d.spellcasting?.concentration
+  return (
+    <section className="hero-strip" aria-label="How your hero is doing">
+      <LiveAvatar ch={ch} d={d} size={84} myTurn={myTurn} live />
+      <div className="strip-info">
+        <span className={`strip-tone ${s.tone}`}>{myTurn ? 'Your turn!' : TONE_WORD[s.tone] || 'Ready for anything'}</span>
+        <div className="strip-chips">
+          {conc && <button className="strip-chip conc-banner" onClick={onConc}>◎ {conc.name}</button>}
+          {s.raging && <span className="strip-chip rage">🔥 Raging</span>}
+          {s.conditions.length > 0 && <button className="strip-chip" onClick={onCond}>{s.conditions.join(', ')}</button>}
+        </div>
+      </div>
     </section>
   )
 }

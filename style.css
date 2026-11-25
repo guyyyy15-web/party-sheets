@@ -684,3 +684,49 @@ button.fight-banner { flex-direction: row; align-items: center; min-height: 48px
   body:has(.sheet-page) .toast { bottom: calc(132px + env(safe-area-inset-bottom)); }
   body:has(.sheet-page) #root { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
 }
+/* the living avatar: the ring is the HP, badges show what is on the character, effects play once */
+.live-avatar { position: relative; display: inline-grid; place-items: center; width: var(--size); height: var(--size); flex: none; border-radius: 50%; }
+.la-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.la-track { fill: none; stroke: color-mix(in srgb, var(--text) 14%, transparent); stroke-width: 6; }
+.la-hp { fill: none; stroke: var(--ok); stroke-width: 6; stroke-linecap: round; transition: stroke-dasharray .5s ease, stroke .3s; }
+.tone-bloodied .la-hp { stroke: #d6a548; } .tone-critical .la-hp { stroke: var(--bad); } .tone-down .la-hp { stroke: var(--muted); }
+.la-face { position: absolute; inset: 9%; border-radius: 50%; overflow: hidden; background: var(--cls); display: grid; place-items: center; }
+.la-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.la-emoji { font-size: calc(var(--size) * .42); }
+.tone-down .la-face { filter: grayscale(1) brightness(.75); }
+.tone-critical .la-ring { animation: la-pulse 1.1s ease-in-out infinite; }
+.my-turn { box-shadow: 0 0 0 3px var(--accent), 0 0 18px 4px color-mix(in srgb, var(--accent) 60%, transparent); animation: la-halo 1.6s ease-in-out infinite; }
+.raging .la-face { box-shadow: inset 0 0 0 3px #e0533f; }
+.concentrating::after { content: ''; position: absolute; inset: 3%; border-radius: 50%; border: 2px dashed var(--info); animation: la-spin 8s linear infinite; pointer-events: none; }
+.la-badge { position: absolute; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 11px; display: grid; place-items: center; font: 700 12px var(--font); color: var(--accent-ink); border: 2px solid var(--ink); }
+.la-conc { right: -2px; top: -2px; background: var(--info); color: #0e1a26; }
+.la-rage { left: -2px; top: -2px; background: #e0533f; }
+.la-buffs { right: -2px; bottom: -2px; background: var(--accent); }
+.la-cond { left: -2px; bottom: -2px; background: #e0867c; }
+.la-saves { position: absolute; bottom: -8px; display: flex; gap: 2px; } .la-saves i { width: 8px; height: 8px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--muted); }
+.la-saves i.ok { background: var(--ok); } .la-saves i.bad { background: var(--bad); } .la-saves i.f:first-of-type { margin-left: 4px; }
+.la-float { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); font: 700 18px var(--mono); white-space: nowrap; pointer-events: none; animation: la-float 1.3s ease-out forwards; background: rgba(10, 7, 5, .82); padding: 1px 8px; border-radius: 10px; }
+.la-float.hurt, .la-float.down { color: #ff8f80; } .la-float.heal, .la-float.up { color: #9fe39a; } .la-float.crit, .la-float.turn, .la-float.level { color: #f2d16b; }
+.la-float.conc-broke, .la-float.fumble { color: #a9c8ea; font-size: 13px; font-family: var(--font); }
+.fx-hurt, .fx-down { animation: la-shake .4s ease; } .fx-heal .la-face, .fx-up .la-face { box-shadow: 0 0 0 4px #7fd17a, 0 0 22px #7fd17a; }
+.fx-crit, .fx-level { animation: la-burst .6s ease; } .fx-conc-broke::after { border-color: #fff; animation: la-break .5s ease forwards; }
+@keyframes la-shake { 0%, 100% { transform: translateX(0) } 20% { transform: translateX(-6px) } 40% { transform: translateX(5px) } 60% { transform: translateX(-4px) } 80% { transform: translateX(2px) } }
+@keyframes la-float { from { opacity: 1; transform: translate(-50%, 0) } to { opacity: 0; transform: translate(-50%, -34px) } }
+@keyframes la-burst { 0% { transform: scale(1) } 40% { transform: scale(1.14) } 100% { transform: scale(1) } }
+@keyframes la-halo { 0%, 100% { box-shadow: 0 0 0 3px var(--accent), 0 0 10px 2px color-mix(in srgb, var(--accent) 45%, transparent) } 50% { box-shadow: 0 0 0 3px var(--accent), 0 0 22px 7px color-mix(in srgb, var(--accent) 70%, transparent) } }
+@keyframes la-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+@keyframes la-spin { to { transform: rotate(360deg) } }
+@keyframes la-break { to { opacity: 0; transform: scale(1.3) } }
+@media (prefers-reduced-motion: reduce) {
+  .live-avatar, .live-avatar *, .live-avatar::after { animation: none !important; transition: none !important; }
+  .la-float { opacity: 1; transform: translate(-50%, -24px); }
+}
+/* the sheet's hero strip: the living avatar and, beside it, what is on the character right now */
+.hero-strip { display: flex; align-items: center; gap: 14px; margin: 4px 0 12px; }
+.hero-strip .strip-info { display: grid; gap: 6px; min-width: 0; }
+.strip-tone { font: 700 15px var(--display); } .strip-tone.bloodied { color: #d6a548; } .strip-tone.critical, .strip-tone.down { color: #ff8f80; }
+.strip-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.strip-chip { min-height: 44px; padding: 4px 12px; border-radius: 22px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 13px; }
+.strip-chip.conc-banner { border-color: var(--info); color: #a9c8ea; } .strip-chip.rage { border-color: #e0533f; color: #ffb3a8; }
+.init-row .live-avatar { align-self: center; }
+@media (max-width: 599px) { .sheet-page .tabs { gap: 0; } .sheet-page .tabs button { font-size: 13.5px; padding: 0 2px; letter-spacing: -.01em; } }

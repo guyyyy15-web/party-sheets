@@ -10,6 +10,7 @@ import { ABILITIES } from '../content/basics.js'
 import { spellById } from '../content/spells.js'
 import { buffLabel } from '../engine/buffs.js'
 import { Portrait } from './wizard.jsx'
+import { LiveAvatar } from './live-avatar.jsx'
 import { fetchRoom, fetchEncounter, putEncounter, runnerPatch, sendInitiative, sendClaim, roomById as roomOf } from './sync.js'
 import { setLook, ENEMY_ICONS, ENEMY_COLORS } from '../encounter-core.js'
 import { newEncounter, addPc, addGroup, order, setInit, rollMissing, next, prev, hurt, setDead, toggleCondition, remove, clone, d20, placeOf, applyClaim, dropClaim, setAuto, targetsFor } from '../encounter-core.js'
@@ -134,6 +135,7 @@ export function InitiativeView({ room, onBack }) {
               return (
                 <li key={c.id} className={`init-row ${c.kind} ${c.color ? `ec-${c.color}` : ''} ${data.turn === c.id ? 'now' : ''} ${down ? 'down' : ''}`}>
                   <button className={`init-num ${c.init == null ? 'empty' : ''}`} onClick={() => setEditInit(c.id)} aria-label={`${c.name}: initiative ${c.init ?? 'not rolled'}. Change it`}>{c.init ?? '?'}</button>
+                  {p && <LiveAvatar ch={p.ch} d={p.d} size={44} myTurn={data.turn === c.id} />}
                   <button className="init-main" onClick={() => (p ? setPcHp(c.charId) : setOpen(c.id))}>
                     <span className="init-name">{c.icon && <span className="e-icon" aria-hidden>{c.icon}</span>}<b>{c.name}</b>{c.kind === 'pc' ? <span className="tag-pc">player</span> : null}{down && <span className="tag-down">{p ? 'down' : 'fell'}</span>}</span>
                     {c.note && <span className="e-note small">{c.note}</span>}
@@ -389,6 +391,7 @@ function PartyOrder({ enc, me, room, onClose }) {
           return (
             <li key={c.id} className={`init-row ${c.kind} ${c.color ? `ec-${c.color}` : ''} ${enc.turn === c.id ? 'now' : ''} ${c.dead ? 'down' : ''}`}>
               <span className="init-num">{c.init ?? '?'}</span>
+              {i && <LiveAvatar ch={i.ch} d={i.d} size={44} myTurn={enc.turn === c.id} />}
               {i ? <button className="init-main" onClick={() => setPeek(c.charId)} aria-label={`${c.name}: HP ${i.hp} of ${i.max}. Open the sheet`}>{head}</button> : <span className="init-main">{head}</span>}
             </li>
           )

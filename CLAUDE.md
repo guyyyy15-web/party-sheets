@@ -24,6 +24,14 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   layer }`; with none, the look comes from its id (same on every phone). A photo or emoji (`portrait`) still wins when
   chosen. "Your look" in the wizard's first step and in the character settings. After drawing layers: `node
   scripts/avatars.mjs` → screenshots/avatars.png, check it by eye.
+- Living avatar (release 2; `src/engine/avatar-state.js` pure + tests, UI `src/ui/live-avatar.jsx`): the ring is the
+  HP (green → gold at half → red at a quarter → grey at 0, death-save pips), badges for concentration, Rage, spells
+  on them and conditions; one-time effects with words (−7, +5, Your turn!, Critical!, Bless ends, Level 6!) from
+  `avatarEvents(prev, next)`. Only the phone's own sheet (`live`) plays sounds and listens for `tt-fx` (criticals and
+  natural 1s from app.jsx roll()). Sounds are Web Audio tones (`src/ui/fx.js`, no files), on by default, with a
+  short buzz on Android; Tavern settings turns both off. Reduce motion: no movement, the words stay. The sheet opens
+  with the hero strip (avatar, how hurt in a word, concentration/Rage/conditions chips); the avatar also shows in the
+  fight order, the runner's list and the DM cards.
 - Icons: game-icons.net (CC BY 3.0, credited on the home page). `node scripts/pick-icons.mjs` copies the ones in use
   into `src/content/icons-data.js` (the page carries only those; no CDN). Use `<GameIcon id="w.longsword" />`.
 - Saves: IndexedDB `party-sheets` (localStorage fallback). The character shape has `v: 1`; a change to it must read

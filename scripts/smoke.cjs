@@ -147,7 +147,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   ok(!/Advantage: two d20/.test(await p.textContent('.roll-card')), '"No" rolls one d20')
   await p.click('button[aria-label="Close the roll"]')
   await p.click('.edge button:has-text("Clear")')
-  await p.click('[role=tab]:has-text("Your Turn")')
+  await p.click('[role=tab]:text-is("Turn")')
   // the guided turn: pick an attack, roll to hit, hit, roll damage
   await p.click('button.start-turn')
   await p.click('.guide-opt:has-text("Unarmed Strike")')
@@ -366,6 +366,11 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
     await r.click('.sheet button.danger')
     ok(Number(await r.textContent('.vitals .stat b >> nth=0')) === ac + 5, 'rules: Shield gives +5 AC until the next turn')
     ok(await r.isVisible('.buff:has-text("Shield")'), 'rules: Shield shows as an active effect')
+    // the living avatar: a hit shakes it and shows the damage; the ring is the HP
+    await r.click('.vitals .hp'); await r.fill('input[aria-label="Amount"]', '9'); await r.click('.sheet button.danger')
+    ok(await r.waitForSelector('.hero-strip .la-float.hurt', { timeout: 3000 }).then(async (el) => (await el.textContent()) === '−9').catch(() => false), 'avatar: a hit shows −9 on the avatar')
+    ok(/Bloodied|Badly hurt/.test(await r.textContent('.hero-strip .strip-tone')), 'avatar: the strip says how hurt (17 → 8 HP)')
+    await r.screenshot({ path: `${shots}/16-avatar-hurt.png` })
     await rctx.close()
   }
 

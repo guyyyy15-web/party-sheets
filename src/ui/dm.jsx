@@ -5,7 +5,7 @@ import { derive } from '../engine/engine.js'
 import { CONDITIONS } from '../content/conditions.js'
 import { ABILITIES } from '../content/basics.js'
 import { signed, Num, themeOf } from './common.jsx'
-import { Portrait } from './wizard.jsx'
+import { LiveAvatar } from './live-avatar.jsx'
 import { HpSheet, ConditionsSheet } from './sheet.jsx'
 import { fetchRoom, dmPatch, updateRoom, roomById } from './sync.js'
 import { Sheet } from './common.jsx'
@@ -88,7 +88,7 @@ function DmCard({ c, onHp, onCond, onGift, act }) {
   return (
     <li className={`dm-card theme-${theme}`}>
       <div className="dm-head">
-        <Portrait ch={ch} size={48} />
+        <LiveAvatar ch={ch} d={d} size={52} />
         <span className="grow"><b>{ch.name}</b><span className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}</span></span>
         <span className="muted small" title="Last change">{ago(c.updatedAt)}</span>
       </div>

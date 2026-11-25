@@ -176,6 +176,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     ok(await until(() => A.p.isVisible('text=Your turn!'), 15000), 'phone A: "Your turn!"')
     // the turn guide opens by itself: whom, to hit, damage, sent to the runner
     ok(await until(() => A.p.isVisible('.sheet[aria-label="Your turn"]'), 15000), 'phone A: the turn guide opened by itself')
+    ok(await A.p.locator('.hero-strip .live-avatar.my-turn').count() === 1, 'phone A: the avatar glows: your turn')
     let claimed = 0
     for (let tryN = 0; tryN < 6 && !claimed; tryN++) {
       if (!(await A.p.isVisible('.sheet[aria-label="Your turn"]'))) await A.p.click('button.start-turn')
