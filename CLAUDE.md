@@ -56,6 +56,9 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   (`Deliver`: heal yourself at once, others/enemies as claims). After a slot spell, features with `onCast` are offered
   (`AfterCast`: Glamour's Beguiling Magic after Enchantment/Illusion, paid with its use or `alt` Bardic Inspiration,
   the condition sent as a claim). Claims carry `heal` / `condition`; those never apply automatically.
+  Once-per-turn features (`perTurn`: set by the content, else read from "once per turn" in the summary) lock in
+  `turn.once` until the next turn. Damage while concentrating rolls the CON save first (`concentrationDC`: 10 or half
+  the damage, ≤ 30) and ends the spell on a fail; at 0 HP it simply ends.
 - Phones (≤ 599 px): the sheet's top is a sticky app bar (`.char-top`; the tabs stick under it at `--bar-h`, measured
   by a ResizeObserver), tighter spacing, and each attack folds its math/properties/mastery behind ⓘ (`.attack.open`).
   Design for the iPhone 13 Pro (390 px, Guy); live.cjs also checks the SE so nothing breaks there.

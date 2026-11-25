@@ -10,7 +10,7 @@ import { SpellsTab, FeatSpells } from './spells.jsx'
 import { TurnGuide } from './turn.jsx'
 import { useFight, FightBanner } from './initiative.jsx'
 import { ItemsSection, GiftBanner } from './items.jsx'
-import { newTurn, used as usedTurn, allowed, timeKind } from './turnstate.js'
+import { newTurn, used as usedTurn, allowed, timeKind, concentrationDC } from './turnstate.js'
 import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
 import { levelDiff } from '../engine/levelup.js'
 import { pathsFor } from '../engine/advice.js'
@@ -160,7 +160,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       {term && <TermCard id={term} ch={ch} onClose={() => setTerm(null)} onOpen={setTerm} onWear={(armor) => setCh({ ...ch, equipment: { ...ch.equipment, armor } })} />}
       {shortRest && <ShortRest ch={ch} setCh={setCh} roll={roll} onClose={() => setShortRest(false)} />}
       {condOpen && <ConditionsSheet d={d} ch={ch} setState={setState} onClose={() => setCondOpen(false)} onTerm={(id) => { setCondOpen(false); setTerm(id) }} />}
-      {hpOpen && <HpSheet d={d} ch={ch} hp={hp} setState={setState} onClose={() => setHpOpen(false)} />}
+      {hpOpen && <HpSheet d={d} ch={ch} hp={hp} setState={setState} onClose={() => setHpOpen(false)} roll={roll} />}
       {levelUp && <LevelUp ch={ch} setCh={setCh} start={levelUp} roll={roll} onClose={() => setLevelUp(false)} onSpells={() => { setLevelUp(false); setTab('spells'); setSpellPick(true) }} />}
       {peek && (
         <Sheet title={peek.preview ? `At level ${peek.diff.level}` : `Level ${peek.diff.level}: what's new`} onClose={() => setPeek(null)}>
@@ -206,9 +206,10 @@ function TurnTab({ d, ch, setCh, roll, mode, setMode, used, spend, setState, hp,
   const turn = ch.state.turn
   const doAction = (a) => {
     const kind = ['action', 'bonus', 'reaction'].includes(a.kind) ? a.kind : null
-    if (!allowed(turn, { kind })) return
+    const once = a.perTurn ? { id: a.id, name: a.name } : null
+    if (!allowed(turn, { kind, once })) return
     // one update for everything (separate updates would overwrite each other)
-    let t = usedTurn(turn, { kind, spend: a.cost ? { [a.cost.resource]: a.cost.amount } : null })
+    let t = usedTurn(turn, { kind, once, spend: a.cost ? { [a.cost.resource]: a.cost.amount } : null })
     if (a.id === 'action-surge') t = { ...t, action: false } // one more action this turn
     const u = { ...ch.state.used, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}), ...(a.refill ? { [a.refill]: 0 } : {}) }
     const patch = { turn: t, used: u, ...(a.setHp != null ? { hp: a.setHp } : {}) }
@@ -340,10 +341,26 @@ function GearTab({ d, ch, setCh, onTerm, roll, hp }) {
   )
 }
 
-export function HpSheet({ d, ch, hp, setState, onClose }) {
+export function HpSheet({ d, ch, hp, setState, onClose, roll }) {
   const [n, setN] = useState('')
   const v = parseInt(n, 10) || 0
-  const damage = () => { let left = v, temp = ch.state.temp || 0; const fromTemp = Math.min(temp, left); temp -= fromTemp; left -= fromTemp; setState({ temp, hp: Math.max(0, hp - left) }); onClose() }
+  const damage = async () => {
+    let left = v, temp = ch.state.temp || 0; const fromTemp = Math.min(temp, left); temp -= fromTemp; left -= fromTemp
+    const patch = { temp, hp: Math.max(0, hp - left) }
+    const conc = ch.state.concentration
+    if (conc && v > 0) {
+      // Concentration: any damage → CON save, DC 10 or half the damage (higher), at most 30; at 0 HP it simply ends
+      const dc = concentrationDC(v)
+      if (patch.hp === 0) patch.concentration = null
+      else if (roll) {
+        onClose()
+        const e = await roll({ kind: 'd20', label: `Concentration: CON save, DC ${dc}`, bonus: d.saves.CON.value, parts: d.saves.CON.parts, rule: `Took ${v} damage while concentrating: CON save against DC ${dc} (10, or half the damage if higher). Fail and the spell ends.` })
+        if (e && e.total < dc) patch.concentration = null
+        setState(patch); return
+      }
+    }
+    setState(patch); onClose()
+  }
   return (
     <Sheet title={`Hit points: ${hp} / ${d.hp.value}`} onClose={onClose}>
       <input className="input big" inputMode="numeric" value={n} onChange={(e) => setN(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="Amount" autoFocus aria-label="Amount" />
