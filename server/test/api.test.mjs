@@ -240,3 +240,42 @@ test('the DM deletes a group: links stop working, characters stay saved in no gr
   const mine = (await call('/me/characters', { owner: own })).body.characters
   assert.ok(mine.some((c) => c.id === 'gone0001' && c.roomId === null), 'the character is still saved, in no group')
 })
+
+test('spells on a friend: a member adds a buff from their own caster; it ends everywhere; limits', async () => {
+  const { room, playerKey, dmKey } = (await call('/rooms', { method: 'POST', body: { name: 'Buffs' } })).body
+  const mira = key(), aria = key(), brom = key()
+  for (const [id, owner, name] of [['char_mira1', mira, 'Mira'], ['char_aria2', aria, 'Aria'], ['char_brom1', brom, 'Brom']]) {
+    assert.equal((await call(`/rooms/${room.id}/characters/${id}`, { method: 'PUT', auth: playerKey, owner, body: { patch: hero(name) } })).status, 201)
+  }
+  const bless = { id: 'b1', spell: 'bless', name: 'Bless', from: 'char_mira1', fromName: 'Mira', conc: true, effects: [{ on: 'attack', dice: '1d4' }, { on: 'save', dice: '1d4' }] }
+  const add = (target, buff, owner = mira, auth = playerKey) => call(`/rooms/${room.id}/characters/${target}/buffs`, { method: 'POST', auth, owner, body: { buff } })
+  for (const t of ['char_aria2', 'char_brom1']) { const r = await add(t, bless); assert.equal(r.status, 200); assert.equal(r.body.buffs[0].spell, 'bless') }
+  // only for your own caster
+  assert.equal((await add('char_aria2', { ...bless, from: 'char_brom1' }, mira)).status, 403)
+  assert.equal((await add('char_aria2', bless, aria)).status, 403)
+  // cleaned and validated
+  assert.equal((await add('char_aria2', { ...bless, effects: [{ on: 'attack', dice: '99d100' }] })).status, 400)
+  assert.equal((await add('char_aria2', { ...bless, effects: [{ on: 'level', value: 20 }] })).status, 400)
+  assert.equal((await add('char_aria2', { ...bless, note: 'x'.repeat(9000) })).status, 413)
+  // the same spell again replaces it (no stacking); the target's own data is untouched otherwise
+  await add('char_aria2', bless)
+  let a = await call(`/rooms/${room.id}/characters/char_aria2`, { auth: playerKey, owner: aria })
+  assert.equal(a.body.data.state.buffs.length, 1); assert.equal(a.body.data.state.hp, 28); assert.equal(a.body.data.name, 'Aria')
+  // Aid raises current HP too
+  await add('char_aria2', { id: 'b2', spell: 'aid', name: 'Aid', from: 'char_mira1', fromName: 'Mira', conc: false, effects: [{ on: 'hpMax', value: 5 }] })
+  a = await call(`/rooms/${room.id}/characters/char_aria2`, { auth: playerKey, owner: aria })
+  assert.equal(a.body.data.state.hp, 33)
+  // concentration ends: only the concentration buffs go, on every target
+  const end = (target, owner = mira) => call(`/rooms/${room.id}/characters/${target}/buffs?from=char_mira1&conc=1`, { method: 'DELETE', auth: playerKey, owner })
+  assert.equal((await end('char_aria2', brom)).status, 403)
+  for (const t of ['char_aria2', 'char_brom1']) assert.equal((await end(t)).status, 200)
+  a = await call(`/rooms/${room.id}/characters/char_aria2`, { auth: playerKey, owner: aria })
+  assert.deepEqual(a.body.data.state.buffs.map((b) => b.spell), ['aid'])
+  assert.equal((await end('char_aria2')).body.changed, false)
+  // the DM may take any off; strangers can't
+  assert.equal((await call(`/rooms/${room.id}/characters/char_aria2/buffs?from=char_mira1`, { method: 'DELETE', auth: dmKey })).status, 200)
+  assert.equal((await call(`/rooms/${room.id}/characters/char_aria2/buffs?from=char_mira1`, { method: 'DELETE', auth: key() })).status, 403)
+  // not in this room → 404
+  const other = (await call('/rooms', { method: 'POST', body: { name: 'Other' } })).body
+  assert.equal((await call(`/rooms/${other.room.id}/characters/char_aria2/buffs`, { method: 'POST', auth: other.playerKey, owner: mira, body: { buff: bless } })).status, 404)
+})

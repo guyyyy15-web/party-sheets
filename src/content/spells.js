@@ -353,6 +353,29 @@ export const SPELLS = [
   { id: 'wish', name: 'Wish', level: 9, school: 'Conjuration', time: 'Action', range: 'Self', components: 'V', duration: 'Instantaneous', concentration: false, ritual: false, classes: ['sorcerer', 'wizard'], summary: 'Copy any spell of level 8 or lower, or reshape reality with great risk.' },
 ]
 
+// Spells that change a target's numbers while they last (checked against the SRD 5.2.1 spell text). Casting one picks
+// targets (yourself and the party): `targets` + `perSlot` for each slot level above the spell's; `enemy` = what it
+// does to an enemy (sent to the initiative runner as a condition); `enemyOnly` = never on allies. See src/engine/buffs.js.
+const BUFFS = {
+  bless: { targets: 3, perSlot: 1, effects: [{ on: 'attack', dice: '1d4' }, { on: 'save', dice: '1d4' }], note: '+1d4 on attack rolls and saving throws.' },
+  bane: { targets: 3, perSlot: 1, enemyOnly: true, enemy: { condition: 'bane', note: 'CHA save or -1d4 on its attack rolls and saves' }, effects: [{ on: 'attack', dice: '-1d4' }, { on: 'save', dice: '-1d4' }], note: '-1d4 on attack rolls and saving throws.' },
+  'shield-of-faith': { targets: 1, effects: [{ on: 'ac', value: 2 }], note: '+2 AC.' },
+  haste: { targets: 1, effects: [{ on: 'ac', value: 2 }, { on: 'speed', mult: 2 }, { on: 'save', ability: 'DEX', adv: true }],
+    note: '+2 AC, double speed, advantage on DEX saves, and one extra action each turn: Attack (one attack only), Dash, Disengage, Hide or Utilize.',
+    after: { name: 'Haste: lethargy', effects: [{ on: 'speed', zero: true }], note: 'Haste ended: Incapacitated and Speed 0 until the end of your next turn.', until: 'turn-end' } },
+  heroism: { targets: 1, perSlot: 1, effects: [{ on: 'tempHp', value: 'mod' }], note: 'Immune to Frightened. Temporary HP at the start of each of your turns.' },
+  aid: { targets: 3, effects: [{ on: 'hpMax', value: 5, perSlot: 5 }], hpGain: true, note: 'Max HP and current HP up for 8 hours.' },
+  longstrider: { targets: 1, perSlot: 1, effects: [{ on: 'speed', value: 10 }], note: '+10 ft speed for 1 hour.' },
+  'enlarge-reduce': { targets: 1, name: 'Enlarge', effects: [{ on: 'damage', dice: '1d4' }, { on: 'save', ability: 'STR', adv: true }, { on: 'check', ability: 'STR', adv: true }],
+    note: 'One size larger, advantage on STR checks and saves, +1d4 damage with weapons and Unarmed Strikes.',
+    enemy: { condition: 'reduced', label: 'Reduce', note: 'CON save or one size smaller, disadvantage on STR checks and saves, -1d4 weapon damage (min 1)' } },
+  'protection-from-evil-and-good': { targets: 1, note: 'Aberrations, Celestials, Elementals, Fey, Fiends and Undead have disadvantage to hit you and can\'t charm, frighten or possess you.' },
+  barkskin: { targets: 1, effects: [{ on: 'acMin', value: 17 }], note: 'AC is at least 17 for 1 hour.' },
+  'mage-armor': { targets: 1, effects: [{ on: 'acBase', value: 13 }], note: 'Without armor, base AC 13 + DEX for 8 hours. Ends if you put on armor.' },
+  shield: { self: true, effects: [{ on: 'ac', value: 5 }], until: 'turn', note: '+5 AC until the start of your next turn (also against the attack that triggered it); no damage from Magic Missile.' },
+}
+for (const s of SPELLS) if (BUFFS[s.id]) s.buff = BUFFS[s.id]
+
 const BY_ID = new Map(SPELLS.map((s) => [s.id, s]))
 export const spellById = (id) => BY_ID.get(id) || null
 /** Spells on a class list up to a spell level (0 = cantrips only). */

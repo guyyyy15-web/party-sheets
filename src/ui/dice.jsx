@@ -40,11 +40,13 @@ function stepsFor(req, r) {
   if (req.kind === 'd20') {
     if (r.faces.length > 1) steps.push({ text: `${req.mode === 'adv' ? 'Advantage' : 'Disadvantage'}: two d20 rolled ${r.faces.join(' and ')}, keep the ${req.mode === 'adv' ? 'higher' : 'lower'}`, value: String(r.kept), kind: 'dice' })
     else steps.push({ text: 'Roll a d20', value: String(r.kept), kind: 'dice' })
+    for (const x of r.extra || []) steps.push({ text: `${x.label}: ${x.sign < 0 ? 'minus ' : ''}${x.dice.replace('-', '')}`, value: `${x.sign < 0 ? '-' : '+'}${x.total}`, kind: 'dice' })
   } else if (req.kind === 'expr') {
-    for (const g of r.rolls) {
+    r.rolls.forEach((g, i) => {
       const n = g.faces.length
-      steps.push({ text: `${req.crit ? 'Critical: twice the dice, roll' : 'Roll'} ${n}d${g.sides}${req.dieWhy ? ` (${req.dieWhy})` : ''}${n > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: String(g.faces.reduce((a, b) => a + b, 0)), kind: 'dice' })
-    }
+      const why = req.dieWhys ? req.dieWhys[i] : req.dieWhy
+      steps.push({ text: `${req.crit ? 'Critical: twice the dice, roll' : 'Roll'} ${g.sign < 0 ? 'minus ' : ''}${n}d${g.sides}${why ? ` (${why})` : ''}${n > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: `${g.sign < 0 ? '-' : ''}${g.faces.reduce((a, b) => a + b, 0)}`, kind: 'dice' })
+    })
   } else {
     for (const g of r.groups) steps.push({ text: `Roll ${g.faces.length}d${g.sides}${g.faces.length > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: String(g.faces.reduce((a, b) => a + b, 0)), kind: 'dice' })
   }
@@ -58,14 +60,23 @@ function stepsFor(req, r) {
 
 /** req: {kind:'d20',label,bonus,mode,attack,parts,rule} | {kind:'expr',label,expr,crit,parts,rule} | {kind:'pool',pool,mod} → a log entry. */
 export async function performRoll(req, throwOn) {
-  const sides = req.kind === 'd20' ? d20Needed(req.mode) : req.kind === 'expr' ? diceNeeded(req.expr, { crit: req.crit }) : poolSides(req.pool)
+  const extra = req.kind === 'd20' ? (req.dice || []).filter((x) => x && x.dice) : []
+  const sides = req.kind === 'd20' ? [...d20Needed(req.mode), ...extra.flatMap((x) => diceNeeded(x.dice.replace('-', '')))] : req.kind === 'expr' ? diceNeeded(req.expr, { crit: req.crit }) : poolSides(req.pool)
   let faces = null, D = null
   if (throwOn && sides.length) { try { D = await load3d(); faces = await D.throwDice(sides) } catch { D = null; faces = null } }
   let e
   if (req.kind === 'd20') {
     const r = rollD20(req.bonus, req.mode, Math.random, faces)
+    // Bless/Bane dice: thrown with the d20, added (or taken off) after it
+    let rest = faces ? faces.slice(r.faces.length) : null
+    const ex = extra.map((x) => {
+      const rr = rollDice(x.dice.replace('-', ''), { faces: rest })
+      if (rest) rest = rest.slice(rr.rolls.reduce((t, g) => t + g.faces.length, 0))
+      return { dice: x.dice, label: x.label, sign: x.dice.startsWith('-') ? -1 : 1, total: rr.total, faces: rr.rolls.flatMap((g) => g.faces) }
+    })
+    const exSum = ex.reduce((t, x) => t + x.sign * x.total, 0)
     const f = r.faces.length > 1 ? `[${r.faces.join(', ')}] keep ${r.kept}` : `${r.kept}`
-    e = { label: req.label, total: r.total, text: `d20 ${f} ${signed(req.bonus)}`, flag: r.nat20 ? 'NAT 20' : r.nat1 ? 'NAT 1' : null, crit: !!req.attack && r.kept >= (req.critOn || 20), faces: r.faces, kept: r.kept }
+    e = { label: req.label, total: r.total + exSum, text: `d20 ${f}${ex.map((x) => ` ${x.sign < 0 ? '-' : '+'} ${x.dice.replace('-', '')}[${x.faces.join(', ')}]`).join('')} ${signed(req.bonus)}`, flag: r.nat20 ? 'NAT 20' : r.nat1 ? 'NAT 1' : null, crit: !!req.attack && r.kept >= (req.critOn || 20), faces: r.faces, kept: r.kept, extra: ex }
   } else if (req.kind === 'expr') {
     const r = rollDice(req.expr, { crit: req.crit, faces })
     e = { label: req.crit ? `${req.label} (crit)` : req.label, total: r.total, text: `${r.rolls.map((g) => `d${g.sides}[${g.faces.join(', ')}]`).join(' ')} ${r.bonus ? signed(r.bonus) : ''}`.trim(), flag: req.crit ? 'CRIT' : null, raw: r }
@@ -74,7 +85,7 @@ export async function performRoll(req, throwOn) {
     e = { label: poolLabel(req.pool, req.mod), total: r.total, text: r.text, flag: null, raw: r }
   }
   // the math, for players learning to do it with real dice
-  e.steps = stepsFor(req, req.kind === 'd20' ? { faces: e.faces, kept: e.kept } : e.raw)
+  e.steps = stepsFor(req, req.kind === 'd20' ? { faces: e.faces, kept: e.kept, extra: e.extra } : e.raw)
   const rules = [req.rule ? RULES[req.rule] || req.rule : null, req.kind === 'd20' && req.mode !== 'normal' ? RULES[req.mode] : null, req.crit ? RULES.crit : null].filter(Boolean)
   if (req.kind === 'pool') rules.push(RULES.pool)
   e.rules = rules

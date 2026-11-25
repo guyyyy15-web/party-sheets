@@ -1,12 +1,14 @@
 // The Spells tab: spell save DC and spell attack (with their math), slots, concentration, cantrips and prepared
 // spells, casting with a chosen slot, and a picker for the spells you prepare.
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { spellRoll } from '../engine/spells.js'
 import { recommendSpells } from '../engine/advice.js'
 import { Sheet, Num, Breakdown, signed, GameIcon } from './common.jsx'
 import { allowed, used as usedTurn, timeKind } from './turnstate.js'
 import { TurnBar } from './sheet.jsx'
 import { CONDITIONS } from '../content/conditions.js'
+import { makeBuff, buffTargets, applyBuff } from '../engine/buffs.js'
+import { roomById, fetchRoom, sendBuff } from './sync.js'
 
 const isSlot = (id) => !!id && (/^slot-\d$/.test(id) || id === 'pact-slots')
 /** Cast: takes its part of the turn (and the turn's one slot); false when the player stops it. */
@@ -15,7 +17,7 @@ export function castPatch(ch, used, s, slotId, { ritual = false } = {}) {
   if (!allowed(ch.state.turn, { kind, slot })) return null
   const patch = { turn: usedTurn(ch.state.turn, { kind, slot, spend: slotId ? { [slotId]: 1 } : null }) }
   if (slotId) patch.used = { ...ch.state.used, [slotId]: used(slotId) + 1 }
-  if (s.concentration) patch.concentration = s.id
+  if (s.concentration) { patch.concentration = s.id; patch.concAt = Date.now() } // a new casting ends the old one, even of the same spell
   return patch
 }
 
@@ -45,7 +47,7 @@ export function SpellsTab({ d, ch, setCh, setState, roll, mode, show, openPicker
   }, [sc])
   const short = sc.cantripsChosen < sc.cantripsMax || sc.preparedChosen < sc.preparedMax
 
-  const attack = (s) => roll({ kind: 'd20', label: `${s ? s.name : 'Spell'}: spell attack`, bonus: sc.attack.value, mode, attack: true, parts: sc.attack.parts, rule: SPELL_RULES.spellAttack })
+  const attack = (s) => roll({ kind: 'd20', label: `${s ? s.name : 'Spell'}: spell attack`, bonus: sc.attack.value, mode, attack: true, parts: sc.attack.parts, dice: sc.attack.dice, rule: SPELL_RULES.spellAttack })
   const effect = (s, castLevel) => {
     const r = spellRoll(s, { level: ch.level, castLevel, mod: sc.mod, ability: sc.ability })
     if (!r) return null
@@ -180,6 +182,7 @@ function CastSheet({ s, sc, used, onClose, cast, attack, effect, free, d, ch, se
             {s.attack && <button className="btn primary grow" onClick={() => attack(s)}>Spell attack {signed(sc.attack.value)}</button>}
             {r && !rolled && <button className="btn primary grow" onClick={async () => { const e = await effect(s, done); if (e) setRolled({ total: e.total, heal: r.heal }) }}>{r.heal ? 'Heal' : 'Damage'} {r.expr}</button>}
           </div>
+          {d && s.buff && ch && <BuffTargets s={s} slot={done} sc={sc} d={d} ch={ch} setState={setState} fight={fight} />}
           {rolled && d && <Deliver s={s} rolled={rolled} d={d} ch={ch} setState={setState} fight={fight} hp={hp} />}
           {d && withSlot && <AfterCast s={s} d={d} ch={ch} setState={setState} used={used} fight={fight} />}
           <button className="btn ghost wide" onClick={onClose}>Done</button>
@@ -246,7 +249,7 @@ export function FeatSpells({ d, ch, setState, roll, mode, fight, hp }) {
   const sc0 = d.spellcasting
   const res = (id) => d.resources.find((r) => r.id === id)
   const scOf = (fs) => ({ mod: fs.mod, ability: fs.ability, dc: fs.dc, attack: fs.attack, ritual: fs.ritual || !!sc0?.ritual, always: new Map([[fs.spell.id, fs.from]]), slots: sc0?.slots || [], pact: sc0?.pact || null })
-  const attack = (fs) => (s) => roll({ kind: 'd20', label: `${s.name}: spell attack`, bonus: fs.attack.value, mode, attack: true, parts: fs.attack.parts, rule: SPELL_RULES.spellAttack })
+  const attack = (fs) => (s) => roll({ kind: 'd20', label: `${s.name}: spell attack`, bonus: fs.attack.value, mode, attack: true, parts: fs.attack.parts, dice: fs.attack.dice, rule: SPELL_RULES.spellAttack })
   const effect = (fs) => (s, castLevel) => {
     const r = spellRoll(s, { level: ch.level, castLevel, mod: fs.mod, ability: fs.ability })
     return r && roll({ kind: 'expr', label: `${s.name}: ${r.heal ? 'healing' : `${r.type} damage`}`, expr: r.expr, parts: r.parts, rule: r.why || (r.heal ? 'Healing: roll the dice and add any bonus.' : 'Damage: roll the spell\'s dice and add any bonus.') })
@@ -325,4 +328,67 @@ function AfterCast({ s, d, ch, setState, used, fight }) {
       </div>
     )
   })
+}
+
+/**
+ * A spell that changes numbers (Bless, Shield of Faith, Haste, Aid…): pick who gets it. You at once; a party member
+ * through the server (it shows on their sheet and ends when your concentration does); an enemy as a condition the
+ * initiative runner confirms (Bane, Reduce).
+ */
+function BuffTargets({ s, slot, sc, d, ch, setState, fight }) {
+  const b = s.buff
+  const max = buffTargets(s, slot)
+  const r = ch.roomId ? roomById(ch.roomId) : null
+  const [party, setParty] = useState(r ? null : [])
+  const [sent, setSent] = useState({})
+  const buff = useMemo(() => makeBuff(s, { slot, caster: { id: ch.id, name: ch.name, mod: sc.mod } }), [s.id, slot])
+  const others = useRef([])
+  useEffect(() => {
+    if (!r) return
+    let live = true
+    fetchRoom(r, false).then((j) => live && setParty((j.characters || []).filter((c) => c.id !== ch.id)), () => live && setParty([]))
+    return () => { live = false }
+  }, [r?.id])
+  // a spell only on yourself (Shield): it's on you as soon as it's cast
+  useEffect(() => { if (b.self && !sent.me) { setState(applyBuff(ch.state, buff)); setSent({ me: 'ok' }) } }, [])
+  const used = Object.values(sent).filter((v) => v === 'ok' || v === 'sending').length
+  const full = used >= max
+  const meNow = () => { setState(applyBuff(ch.state, buff)); setSent((x) => ({ ...x, me: 'ok' })) }
+  const give = async (c) => {
+    setSent((x) => ({ ...x, [c.id]: 'sending' }))
+    try {
+      await sendBuff(r, ch, c.id, buff)
+      if (s.concentration) { others.current = [...new Set([...others.current, c.id])]; setState({ concTargets: [...new Set([...(ch.state.concTargets || []), ...others.current])] }) }
+      setSent((x) => ({ ...x, [c.id]: 'ok' }))
+    } catch { setSent((x) => ({ ...x, [c.id]: 'failed' })) }
+  }
+  const enemy = async (c) => {
+    setSent((x) => ({ ...x, [c.id]: 'sending' }))
+    const res = await fight.claim(c.id, 0, b.enemy.label || s.name, { condition: b.enemy.condition })
+    setSent((x) => ({ ...x, [c.id]: res ? 'ok' : 'failed' }))
+  }
+  if (b.self) return <p className="ok-line" role="status">✓ {s.name} is on you: {b.note}</p>
+  const enemies = b.enemy ? (fight?.targets || []).filter((c) => c.kind === 'npc') : []
+  const line = (v, idle) => (v === 'ok' ? '✓ on their sheet' : v === 'sending' ? 'Sending…' : v === 'failed' ? "Couldn't send: tell them" : idle)
+  return (
+    <div className="buff-targets">
+      <p className="guide-result" role="status"><b>Who gets it?</b> <span className="muted small">{used} of {max}{max > 1 ? ' creatures' : ' creature'}{s.concentration ? ' · ends with your concentration' : ''}</span></p>
+      {b.note && <p className="muted small">{b.note}</p>}
+      <div className="guide-options">
+        {!b.enemyOnly && <button className="guide-opt" disabled={!!sent.me || full} onClick={meNow}><span><b>Me</b><small>{sent.me ? '✓ on your sheet' : ch.name}</small></span></button>}
+        {!b.enemyOnly && (party || []).map((c) => (
+          <button key={c.id} className="guide-opt" disabled={!!sent[c.id] && sent[c.id] !== 'failed' || (full && !sent[c.id])} onClick={() => give(c)}>
+            <span><b>{c.name}</b><small>{line(sent[c.id], 'in your party')}</small></span>
+          </button>
+        ))}
+        {enemies.map((c) => (
+          <button key={c.id} className="guide-opt npc" disabled={!!sent[c.id] && sent[c.id] !== 'failed' || (full && !sent[c.id])} onClick={() => enemy(c)}>
+            <span><b>{c.name}</b><small>{sent[c.id] === 'ok' ? '✓ sent: the DM confirms it' : line(sent[c.id], `${b.enemy.label || s.name}: ${b.enemy.note}`)}</small></span>
+          </button>
+        ))}
+      </div>
+      {party === null && r && <p className="muted small">Loading your party…</p>}
+      {b.enemyOnly && !enemies.length && <p className="muted small">Tell the DM who is affected: {b.enemy.note}.</p>}
+    </div>
+  )
 }

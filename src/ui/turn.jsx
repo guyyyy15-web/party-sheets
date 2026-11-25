@@ -11,7 +11,7 @@ const OTHER = 'Dash (move again), Dodge, Disengage, Help, Hide, Ready, Search or
 export function turnOptions(d) {
   const out = d.attacks.map((a) => ({
     key: `w:${a.id}`, kind: 'attack', name: a.name, icon: `w.${a.icon || a.id}`, count: d.attacksPerAction, critOn: d.crit,
-    toHit: a.toHit, toHitParts: a.toHitSources, damage: a.damage, damageParts: a.damageParts, dieWhy: a.dieWhy, type: a.type,
+    toHit: a.toHit, toHitParts: a.toHitSources, toHitDice: a.toHitDice, damage: a.damage, damageParts: a.damageParts, dieWhy: a.dieWhy, dieWhys: a.dieWhys, type: a.type, weapon: a.id !== 'unarmed' ? a.icon || a.id : null, unarmed: a.id === 'unarmed', ability: a.ability, props: a.props, range: a.range,
     sub: `${signed(a.toHit)} to hit · ${a.damage} ${a.type}`,
   }))
   const spells = [
@@ -24,7 +24,7 @@ export function turnOptions(d) {
     seen.add(s.id)
     const r = spellRoll(s, { level: d.level, castLevel: 0, mod, ability })
     if (!r || r.heal || s.time !== 'Action') continue
-    if (s.attack) out.push({ key: `s:${s.id}`, kind: 'attack', name: s.name, icon: `school.${s.school.toLowerCase()}`, count: s.beams ? cantripDice(d.level) : 1, critOn: 20, toHit: atk.value, toHitParts: atk.parts, damage: r.expr, damageParts: r.parts, dieWhy: r.why, type: r.type, spell: true, sub: `cantrip · ${signed(atk.value)} to hit · ${r.expr} ${r.type}` })
+    if (s.attack) out.push({ key: `s:${s.id}`, kind: 'attack', name: s.name, icon: `school.${s.school.toLowerCase()}`, count: s.beams ? cantripDice(d.level) : 1, critOn: 20, toHit: atk.value, toHitParts: atk.parts, toHitDice: atk.dice, damage: r.expr, damageParts: r.parts, dieWhy: r.why, type: r.type, spell: true, sub: `cantrip · ${signed(atk.value)} to hit · ${r.expr} ${r.type}` })
     else if (s.save) out.push({ key: `s:${s.id}`, kind: 'save', name: s.name, icon: `school.${s.school.toLowerCase()}`, count: 1, save: s.save, dc, damage: r.expr, damageParts: r.parts, dieWhy: r.why, type: r.type, spell: true, sub: `cantrip · ${s.save} save DC ${dc} · ${r.expr} ${r.type}` })
   }
   return out
@@ -49,11 +49,11 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
   const attackPhase = (o) => (o.kind === 'save' ? 'save' : 'hit')
   const choose = (o) => { if (n === 1 && takeAction && !takeAction()) return; setT(o); setHit(null); setDmg(null); setCrit(false); setSent(null); setPhase(inFight && fight.targets.length && !target ? 'target' : attackPhase(o)) }
   const rollHit = () => go(async () => {
-    const e = await roll({ kind: 'd20', label: `${t.name} to hit`, bonus: t.toHit, mode, attack: true, critOn: t.critOn, parts: t.toHitParts, rule: t.spell ? 'Spell attack: d20 + your spellcasting modifier + proficiency bonus.' : 'attack' })
+    const e = await roll({ kind: 'd20', label: `${t.name} to hit`, bonus: t.toHit, mode, attack: true, critOn: t.critOn, parts: t.toHitParts, dice: t.toHitDice, rule: t.spell ? 'Spell attack: d20 + your spellcasting modifier + proficiency bonus.' : 'attack' })
     if (e) { setHit(e); setCrit(!!e.crit) }
   })
   const rollDmg = () => go(async () => {
-    const e = await roll({ kind: 'expr', label: `${t.name} damage`, expr: t.damage, crit, parts: t.damageParts, dieWhy: t.dieWhy, rule: 'damage' })
+    const e = await roll({ kind: 'expr', label: `${t.name} damage`, expr: t.damage, crit, parts: t.damageParts, dieWhy: t.dieWhy, dieWhys: t.dieWhys, rule: 'damage' })
     if (e) {
       setDmg(e); setPhase('next'); setSent(null)
       if (inFight && target) { const r = await fight.claim(target, e.total, t.name); setSent(r || 'failed') }

@@ -10,7 +10,9 @@ import { SpellsTab, FeatSpells } from './spells.jsx'
 import { TurnGuide } from './turn.jsx'
 import { useFight, FightBanner } from './initiative.jsx'
 import { ItemsSection, GiftBanner } from './items.jsx'
-import { newTurn, used as usedTurn, allowed, timeKind, concentrationDC } from './turnstate.js'
+import { newTurn, used as usedTurn, allowed, timeKind, concentrationDC, turnStartPatch, endConcentration } from './turnstate.js'
+import { buffLabel, applyBuff } from '../engine/buffs.js'
+import { roomById, endBuffs } from './sync.js'
 import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
 import { levelDiff } from '../engine/levelup.js'
 import { pathsFor } from '../engine/advice.js'
@@ -33,8 +35,28 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const [settings, setSettings] = useState(false)
   const [shortRest, setShortRest] = useState(false)
   const [condOpen, setCondOpen] = useState(false)
-  const hp = ch.state.hp ?? d.hp.value
-  const setState = (patch) => setCh({ ...ch, state: { ...ch.state, ...patch } })
+  // (a buff that raised max HP and ended leaves current HP at the new max)
+  const hp = Math.min(ch.state.hp ?? d.hp.value, d.hp.value)
+  // every state change goes through here: when concentration ends or changes, the caster's buffs end everywhere
+  const setState = (patch) => {
+    const was = ch.state.concentration
+    const p = was && 'concentration' in patch && (patch.concentration !== was || patch.concAt) ? { ...endConcentration(ch.state, ch.id), ...patch } : patch
+    setCh({ ...ch, state: { ...ch.state, ...p } })
+  }
+  // buffs this character put on others that still have to come off (retried until the server answers)
+  const ends = ch.state.concEnds || []
+  const latest = useRef(ch)
+  latest.current = ch
+  useEffect(() => {
+    const r = ch.roomId && roomById(ch.roomId)
+    if (!ends.length || !r) return
+    let live = true
+    Promise.all(ends.map((t) => endBuffs(r, ch, t).then(() => t, (e) => (e.status === 404 || e.status === 403 ? t : null)))).then((done) => {
+      const cur = latest.current
+      if (live && done.some(Boolean)) setCh({ ...cur, state: { ...cur.state, concEnds: (cur.state.concEnds || []).filter((t) => !done.includes(t)) } })
+    })
+    return () => { live = false }
+  }, [ends.join(','), ch.roomId])
   // a fight in the group: the initiative rolled here goes to the Initiative screen by itself
   const fight = useFight(ch)
   // in a group fight, the turn guide opens by itself when this character's turn comes
@@ -47,7 +69,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
     const first = lastTurn.current === undefined
     if (lastTurn.current === turnKey) return
     lastTurn.current = turnKey
-    if (turnKey && !first) { setState({ turn: newTurn() }); setTab('turn'); setGuideReq((n) => n + 1) }
+    if (turnKey && !first) { setState(turnStartPatch(ch.state, d)); setTab('turn'); setGuideReq((n) => n + 1) }
   }, [turnKey, fight.loaded])
   // the tabs stick right under the app bar, whatever its height (a "Save now" makes it taller)
   const barRef = useRef(null)
@@ -58,7 +80,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  const rollInit = () => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode, parts: d.initiative.sources, rule: 'initiative' }).then((e) => { if (e && fight.enc) fight.send(e.total) })
+  const rollInit = () => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode, parts: d.initiative.sources, adv: d.initiative.adv, rule: 'initiative' }).then((e) => { if (e && fight.enc) fight.send(e.total) })
   const used = (id) => ch.state.used?.[id] || 0
   const spend = (id, n = 1) => setState({ used: { ...ch.state.used, [id]: Math.max(0, used(id) + n) } })
   const show = (title, x) => setSources({ title, total: x.value, sources: x.sources })
@@ -125,6 +147,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       <FightBanner fight={fight} onRoll={rollInit} bonus={d.initiative.value} />
       <GiftBanner ch={ch} setCh={setCh} />
+      <BuffList d={d} ch={ch} setState={setState} />
       {d.spellcasting?.concentration && <button className="banner conc-banner" onClick={() => setTab('spells')}>◎ Concentrating: {d.spellcasting.concentration.name} ›</button>}
       {d.pending.length > 0 && <button className="banner" onClick={() => setLevelUp('choices')}>⚠ {d.pending.length} choice{d.pending.length > 1 ? 's' : ''} to make ›</button>}
 
@@ -219,7 +242,7 @@ function TurnTab({ d, ch, setCh, roll, mode, setMode, used, spend, setState, hp,
   return (
     <section className="turn">
       <TurnBar d={d} ch={ch} setState={setState} />
-      <button className="btn primary wide big-btn start-turn" onClick={() => { setState({ turn: newTurn() }); setGuide(true) }}>▶ Start my turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
+      <button className="btn primary wide big-btn start-turn" onClick={() => { setState(turnStartPatch(ch.state, d)); setGuide(true) }}>▶ Start my turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
       {guide && <TurnGuide d={d} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} fight={fight}
         takeAction={() => { if (!allowed(ch.state.turn, { kind: 'action' })) return false; setState({ turn: usedTurn(ch.state.turn, { kind: 'action' }) }); return true }} />}
       <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>
@@ -236,9 +259,9 @@ function TurnTab({ d, ch, setCh, roll, mode, setMode, used, spend, setState, hp,
             {a.mastery && <details className="mastery atk-mastery"><summary>Mastery: {a.mastery.name}</summary>{a.mastery.text} {termById(a.mastery.name.toLowerCase()) && <button className="linkish" onClick={() => setTerm(a.mastery.name.toLowerCase())}>More</button>}</details>}
           </div>
           <div className="roll-row">
-          <button className="roll-btn" aria-label={`${a.name}: roll to hit, ${signed(a.toHit)}`} onClick={() => roll({ kind: 'd20', label: `${a.name} to hit`, bonus: a.toHit, mode, attack: true, critOn: d.crit, parts: a.toHitSources, rule: 'attack' })}>{signed(a.toHit)}<small>to hit</small></button>
-          <button className="roll-btn" aria-label={`${a.name}: roll damage, ${a.damage}`} onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, parts: a.damageParts, dieWhy: a.dieWhy, rule: 'damage' })}>{a.damage}<small>damage</small></button>
-          <button className="roll-btn ghost" onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, crit: true, parts: a.damageParts, dieWhy: a.dieWhy, rule: 'damage' })} aria-label={`${a.name} critical damage`}>×2<small>crit</small></button>
+          <button className="roll-btn" aria-label={`${a.name}: roll to hit, ${signed(a.toHit)}`} onClick={() => roll({ kind: 'd20', label: `${a.name} to hit`, bonus: a.toHit, mode, attack: true, critOn: d.crit, parts: a.toHitSources, dice: a.toHitDice, rule: 'attack' })}>{signed(a.toHit)}<small>to hit</small></button>
+          <button className="roll-btn" aria-label={`${a.name}: roll damage, ${a.damage}`} onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, parts: a.damageParts, dieWhy: a.dieWhy, dieWhys: a.dieWhys, rule: 'damage' })}>{a.damage}<small>damage</small></button>
+          <button className="roll-btn ghost" onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, crit: true, parts: a.damageParts, dieWhy: a.dieWhy, dieWhys: a.dieWhys, rule: 'damage' })} aria-label={`${a.name} critical damage`}>×2<small>crit</small></button>
           </div>
         </div>
       ))}
@@ -272,15 +295,15 @@ function ChecksTab({ d, roll, mode, show }) {
         {ABILITIES.map((a) => (
           <div key={a} className="abil-card">
             <button className="ab-top" onClick={() => show(`${ABILITY_NAMES[a]} score`, { value: d.scores[a].total, sources: d.scores[a].sources })} aria-label={`${ABILITY_NAMES[a]} score ${d.scores[a].total}: how it's made`}><small>{ABILITY_NAMES[a]}</small><b>{d.scores[a].total}</b><Num kind="ability" value={d.mod[a]} /></button>
-            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.checks[a], mode, parts: d.checkParts[a], rule: 'check' })} aria-label={`${ABILITY_NAMES[a]} check, ${signed(d.checks[a])}`}><span>Check</span><b>{signed(d.checks[a])}</b></button>
-            <button className={`ab-roll ${d.saves[a].prof ? 'prof' : ''}`} onClick={() => roll({ kind: 'd20', label: `${a} save`, bonus: d.saves[a].value, mode, parts: d.saves[a].parts, rule: 'save' })} aria-label={`${a} saving throw, ${signed(d.saves[a].value)}${d.saves[a].prof ? ', proficient' : ''}`}><span>Save{d.saves[a].prof ? ' ●' : ''}</span><b>{signed(d.saves[a].value)}</b><Breakdown parts={d.saves[a].parts} label="Save" /></button>
+            <button className="ab-roll" onClick={() => roll({ kind: 'd20', label: `${ABILITY_NAMES[a]} check`, bonus: d.checks[a], mode, parts: d.checkParts[a], adv: d.checkAdv[a], rule: 'check' })} aria-label={`${ABILITY_NAMES[a]} check, ${signed(d.checks[a])}`}><span>Check</span><b>{signed(d.checks[a])}</b></button>
+            <button className={`ab-roll ${d.saves[a].prof ? 'prof' : ''}`} onClick={() => roll({ kind: 'd20', label: `${a} save`, bonus: d.saves[a].value, mode, parts: d.saves[a].parts, dice: d.saves[a].dice, adv: d.saves[a].adv, rule: 'save' })} aria-label={`${a} saving throw, ${signed(d.saves[a].value)}${d.saves[a].prof ? ', proficient' : ''}`}><span>Save{d.saves[a].prof ? ' ●' : ''}</span><b>{signed(d.saves[a].value)}</b><Breakdown parts={d.saves[a].parts} label="Save" /></button>
           </div>
         ))}
       </div>
       <h2 className="sec">Skills <span className="muted small">Passive Perception {d.passivePerception}</span></h2>
       <ul className="skills">
         {d.skills.map((s) => (
-          <li key={s.id}><button onClick={() => roll({ kind: 'd20', label: s.name, bonus: s.value, mode, parts: s.parts, rule: 'skill' })}>
+          <li key={s.id}><button onClick={() => roll({ kind: 'd20', label: s.name, bonus: s.value, mode, parts: s.parts, adv: d.checkAdv[s.ability], rule: 'skill' })}>
             <span className={`dot ${s.expertise ? 'ex' : s.prof ? 'pr' : ''}`} aria-label={s.expertise ? 'expertise' : s.prof ? 'proficient' : ''} />
             <span className="grow">{s.name} <small className="muted">{s.ability}</small></span><Breakdown parts={s.parts} label={s.name} /><b className="mono sk-total">{signed(s.value)}</b>
           </button></li>
@@ -354,7 +377,7 @@ export function HpSheet({ d, ch, hp, setState, onClose, roll }) {
       if (patch.hp === 0) patch.concentration = null
       else if (roll) {
         onClose()
-        const e = await roll({ kind: 'd20', label: `Concentration: CON save, DC ${dc}`, bonus: d.saves.CON.value, parts: d.saves.CON.parts, rule: `Took ${v} damage while concentrating: CON save against DC ${dc} (10, or half the damage if higher). Fail and the spell ends.` })
+        const e = await roll({ kind: 'd20', label: `Concentration: CON save, DC ${dc}`, bonus: d.saves.CON.value, parts: d.saves.CON.parts, dice: d.saves.CON.dice, adv: d.saves.CON.adv, rule: `Took ${v} damage while concentrating: CON save against DC ${dc} (10, or half the damage if higher). Fail and the spell ends.` })
         if (e && e.total < dc) patch.concentration = null
         setState(patch); return
       }
@@ -559,8 +582,53 @@ export function TurnBar({ d, ch, setState }) {
         <span className="grow small"><b>{left} ft</b> of {d.speed.value * (t.dash ? 2 : 1)} to move{t.dash ? ' (Dash)' : ''}{spent.length ? <span className="muted"> · spent: {spent.join(', ')}</span> : null}</span>
         <button className="icon-btn boxed" aria-label="Moved 5 ft" onClick={() => set({ moved: Math.min(d.speed.value * (t.dash ? 2 : 1), (t.moved || 0) + 5) })} disabled={!left}>−5</button>
         {!t.dash && <button className="btn ghost small" onClick={() => { if (allowed(t, { kind: 'action' })) set({ action: true, dash: true }) }} title="Dash: your action, as much movement again">Dash</button>}
-        <button className="btn ghost small" onClick={() => setState({ turn: newTurn() })}>New turn</button>
+        <button className="btn ghost small" onClick={() => setState(turnStartPatch(ch.state, d))}>New turn</button>
       </div>
     </div>
+  )
+}
+
+const sgnDice = (x) => (x.startsWith('-') ? `−${x.slice(1)}` : `+${x}`)
+/** One effect in a few words: "+2 AC", "+1d4 attacks", "adv. DEX saves". */
+export function effectText(e) {
+  const who = e.ability ? `${e.ability} ` : ''
+  switch (e.on) {
+    case 'ac': return `${signed(e.value)} AC`
+    case 'acMin': return `AC at least ${e.value}`
+    case 'acBase': return `AC ${e.value} + DEX without armor`
+    case 'speed': return e.mult ? 'speed ×2' : e.zero ? 'speed 0' : `${signed(e.value)} ft speed`
+    case 'hpMax': return `${signed(e.value)} max HP`
+    case 'tempHp': return `${e.value} temp HP each turn`
+    case 'attack': return `${sgnDice(e.dice)} attack rolls`
+    case 'save': return e.adv ? `advantage on ${who}saves` : `${sgnDice(e.dice)} ${who}saves`
+    case 'check': return `advantage on ${who}checks`
+    case 'damage': return `${e.dice ? sgnDice(e.dice) : signed(e.value)} ${e.str ? 'STR ' : ''}weapon damage`
+    case 'resist': return `resist ${e.types.join(', ')}`
+    default: return ''
+  }
+}
+
+/** Spells and features on this character right now (Bless from Mira, Rage…): what they do and how they end. */
+function BuffList({ d, ch, setState }) {
+  if (!d.buffs.length) return null
+  const remove = (b) => {
+    // your own concentration spell: ending it ends it everywhere
+    if (b.from === ch.id && b.conc && ch.state.concentration === b.spell) return setState({ concentration: null })
+    if (b.conc && b.from !== ch.id && !confirm(`${b.name} ends when ${b.fromName || 'its caster'} stops concentrating. Remove it from your sheet anyway?`)) return
+    setState({ buffs: (ch.state.buffs || []).filter((x) => x.id !== b.id).concat(b.after ? [{ ...b.after, id: `${b.id}a`, from: b.from, fromName: b.fromName, conc: false, at: b.at }] : []) })
+  }
+  return (
+    <section className="buffs" aria-label="Active spells and effects">
+      {d.buffs.map((b) => (
+        <div key={b.id} className="buff">
+          <span className="grow">
+            <b>✦ {buffLabel(b, ch.id)}</b>
+            <small>{[b.effects.map(effectText).filter(Boolean).join(', '), b.conc ? (b.from === ch.id ? 'your concentration' : `while ${b.fromName || 'the caster'} concentrates`) : b.until ? 'until your next turn' : null].filter(Boolean).join(' · ')}</small>
+            {b.note && (b.effects.length === 0 || /haste|heroism|enlarge|rage/.test(b.spell)) && <small>{b.note}</small>}
+          </span>
+          <button className="btn ghost small" onClick={() => remove(b)} aria-label={`End ${b.name}`}>End</button>
+        </div>
+      ))}
+    </section>
   )
 }

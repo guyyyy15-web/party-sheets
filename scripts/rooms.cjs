@@ -32,7 +32,8 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
   const hero = (name, over) => ({ ...newCharacter(), name, portrait: { kind: 'icon', src: '⚔️' }, ...over })
   const aria = hero('Aria', { classId: 'fighter', level: 3, speciesId: 'human', backgroundId: 'soldier', scores: { STR: 16, DEX: 12, CON: 14, INT: 10, WIS: 12, CHA: 8 } })
   const brom = hero('Brom', { classId: 'monk', level: 2, speciesId: 'dwarf', backgroundId: 'acolyte', scores: { STR: 10, DEX: 16, CON: 14, INT: 8, WIS: 15, CHA: 10 } })
-  for (const c of [aria, brom]) c.state.hp = derive(c).hp.value
+  const mira = hero('Mira', { classId: 'cleric', level: 3, speciesId: 'human', backgroundId: 'acolyte', scores: { STR: 10, DEX: 12, CON: 14, INT: 10, WIS: 16, CHA: 12 }, spells: { cantrips: [], prepared: ['bless'] } })
+  for (const c of [aria, brom, mira]) c.state.hp = derive(c).hp.value
   const backup = (c) => ({ name: `${c.name}.json`, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ kind: 'party-sheets-backup', v: 1, characters: [c] })) })
 
   const state = path.join(srv, '.wrangler/state-rooms')
@@ -219,6 +220,49 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     ok(await until(() => A.p.isVisible('.sync-badge.ok')), 'phone A: saved once back online')
     ok(await until(async () => (await D.textContent('.dm-card:has-text("Aria") .dm-hp b')).startsWith(String(ariaMax - 2)), 15000), 'DM: sees the heal made offline')
     await A.p.screenshot({ path: `${shots}/rooms-4-sheet.png` })
+
+    // ── spells on friends: Mira (a cleric on a third phone) casts Bless on Aria and Brom; both sheets show it; Mira
+    // takes damage, fails the CON save, and Bless is gone from both sheets
+    const M = await phone()
+    await M.p.goto(invite)
+    ok(await until(() => M.p.isVisible('text=You joined')), 'phone M: joined with the invite')
+    await M.p.setInputFiles('input[aria-label="Backup file"]', backup(mira))
+    await M.p.click('button:has-text("Bring a character")')
+    await M.p.click('.sheet button:has-text("Mira")')
+    ok(await until(() => M.p.isVisible('text=Mira joined')), 'phone M: Mira joined the group')
+    await M.p.click('.char-card:has-text("Mira")')
+    await M.p.click('.tabs button:text-is("Spells")')
+    await M.p.click('.spell:has-text("Bless") button:text-is("Cast")')
+    await M.p.click('.sheet button:has-text("1st-level slot")')
+    ok(await until(() => M.p.isVisible('.buff-targets .guide-opt:has-text("Aria")')), 'phone M: Bless asks who gets it, with the party')
+    await M.p.click('.buff-targets .guide-opt:has-text("Aria")')
+    await M.p.click('.buff-targets .guide-opt:has-text("Brom")')
+    ok(await until(async () => (await M.p.locator('.buff-targets .guide-opt:has-text("on their sheet")').count()) === 2), 'phone M: Bless sent to Aria and Brom')
+    await M.p.screenshot({ path: `${shots}/rooms-7-bless-targets.png` })
+    await axe(M.p, 'buff targets')
+    await M.p.click('.sheet button:text-is("Done")')
+    const onSheet = async (P, name) => { if (!(await P.p.isVisible(`.char-top h1:text-is("${name}")`))) { await P.p.goto(URL); await P.p.click(`.char-card:has-text("${name}")`) } }
+    await onSheet(A, 'Aria'); await onSheet(B, 'Brom')
+    ok(await until(() => A.p.isVisible('.buff:has-text("Bless (from Mira)")'), 30000), 'phone A: Aria shows Bless (from Mira)')
+    ok(await until(() => B.p.isVisible('.buff:has-text("Bless (from Mira)")'), 30000), 'phone B: Brom shows Bless (from Mira)')
+    await A.p.screenshot({ path: `${shots}/rooms-8-blessed.png` })
+    // Aria's saves now add the d4: a DEX save shows "Bless (from Mira)" in its math
+    await A.p.evaluate(() => localStorage.setItem('ps.throwOnScreen', 'false'))
+    await A.p.click('.tabs button:text-is("Checks")')
+    await A.p.click('button[aria-label^="DEX saving throw"]')
+    ok(await until(() => A.p.isVisible('.roll-card .math li:has-text("Bless (from Mira)")')), 'phone A: a save rolls the Bless d4 with the d20')
+    await A.p.click('.roll-card button[aria-label="Close the roll"]').catch(() => {})
+    // Mira takes 6 damage and rolls a 1 on her CON save
+    await M.p.evaluate(() => { Math.random = () => 0 })
+    await M.p.click('.vitals .hp'); await M.p.fill('input[aria-label="Amount"]', '6'); await M.p.click('.sheet button:has-text("Damage")')
+    ok(await until(async () => !(await M.p.isVisible('.conc-banner'))), 'phone M: the failed save ended her concentration')
+    ok(await until(async () => !(await A.p.isVisible('.buff:has-text("Bless")')), 30000), 'phone A: Bless is gone from Aria')
+    ok(await until(async () => !(await B.p.isVisible('.buff:has-text("Bless")')), 30000), 'phone B: Bless is gone from Brom')
+    // Mira leaves again (the checks below count two characters in the group)
+    await M.p.click('button[aria-label="Character settings"]')
+    await M.p.click('button:has-text("Leave the group")')
+    ok(await until(async () => (await D.locator('.dm-card').count()) === 2, 15000), 'DM: Mira left the room')
+    await M.ctx.close()
 
     // accounts: phone A saves an account with a username + password and with "Face ID" (a virtual authenticator with
     // PRF, the same thing a passkey does on an iPhone); a new phone signs in and lands on Aria's sheet, with the groups

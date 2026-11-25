@@ -14,7 +14,7 @@ import { signedIn } from './ui/account.js'
 import { AccountSheet, AccountChip, SaveAccountNudge } from './ui/account.jsx'
 import { refreshAccount, signOutLocal } from './ui/account.js'
 import { ownerKey } from './ui/sync.js'
-import { DiceTray, performRoll, throwDefault, load3d, RollCard } from './ui/dice.jsx'
+import { DiceTray, performRoll, throwDefault, load3d, RollCard, RULES } from './ui/dice.jsx'
 import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
 import { Sheet, themeOf, GameIcon } from './ui/common.jsx'
@@ -155,9 +155,13 @@ function App() {
     let req = req0
     if (req.kind === 'd20') {
       const edge = (view.name === 'sheet' && current?.state?.edge) || 0
-      const m = edge ? await askEdge(edge, req.label) : 'normal'
+      // advantage from a feature or a spell on this roll (Danger Sense, Haste, Enlarge): it counts unless a
+      // disadvantage that applies cancels it (then one d20)
+      const own = req.adv?.length ? req.adv : null
+      let m = edge && !(own && edge > 0) ? await askEdge(edge, req.label) : 'normal'
       if (!m) return null
-      req = { ...req, mode: m }
+      if (own) m = m === 'dis' ? 'normal' : 'adv'
+      req = { ...req, mode: m, ...(own ? { rule: [req.rule && (RULES[req.rule] || req.rule), `Advantage from ${own.join(', ')}.`].filter(Boolean).join(' ') } : {}) }
     }
     busy.current = true
     try {
