@@ -20,7 +20,7 @@ export const LIMITS = {
 }
 const ID = /^[A-Za-z0-9_-]{6,40}$/
 const KEY = /^[A-Za-z0-9_-]{24,64}$/
-const DM_STATE_KEYS = ['hp', 'temp', 'conditions', 'inspiration', 'exhaustion', 'deathSaves']
+const DM_STATE_KEYS = ['hp', 'temp', 'conditions', 'inspiration', 'exhaustion', 'deathSaves', 'gifts']
 
 export default {
   async fetch(req, env) {
@@ -395,7 +395,7 @@ async function route(req, env) {
       if (role !== 'dm' && role !== 'init') fail(403, 'DM only')
       if (!inRoom) fail(404, 'no such character')
       await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
-      const body = await readJson(req, 4096)
+      const body = await readJson(req, 12288)
       const st = body?.state
       if (!st || typeof st !== 'object') fail(400, 'state required')
       const clean = {}
@@ -407,6 +407,7 @@ async function route(req, env) {
       if ('conditions' in clean && !(Array.isArray(clean.conditions) && clean.conditions.length <= 20 && clean.conditions.every((c) => typeof c === 'string' && c.length <= 20))) fail(400, 'bad conditions')
       if ('deathSaves' in clean) { const d = clean.deathSaves; if (!(d && [d.ok, d.fail].every((n) => Number.isInteger(n) && n >= 0 && n <= 3))) fail(400, 'bad death saves'); clean.deathSaves = { ok: d.ok, fail: d.fail } }
       if ('inspiration' in clean) clean.inspiration = !!clean.inspiration
+      if ('gifts' in clean && !(Array.isArray(clean.gifts) && clean.gifts.length <= 10 && clean.gifts.every((g) => g && typeof g === 'object' && !Array.isArray(g)) && JSON.stringify(clean.gifts).length <= 8192)) fail(400, 'bad gifts')
       const data = mergePatch(JSON.parse(row.data), { state: clean })
       const rev = await env.DB.prepare('UPDATE characters SET data = ?, rev = rev + 1, updated_at = ? WHERE id = ? RETURNING rev').bind(JSON.stringify(data), Date.now(), id).first('rev')
       await count(env, 'dm_action')

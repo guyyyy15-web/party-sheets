@@ -111,6 +111,18 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await B.p.click('.char-card:has-text("Brom")')
     ok(await until(async () => (await B.p.textContent('.cond-btn')).includes('Poisoned') && (await B.p.getAttribute('.status-row .insp', 'aria-pressed')) === 'true', 15000), 'phone B: Brom poisoned and inspired by the DM')
 
+    // the DM gives Brom a magic weapon; Brom takes it in hand and it shows in his attacks
+    await D.click('.dm-card:has-text("Brom") button:has-text("Give an item")')
+    await D.fill('.sheet input[placeholder^="Flame Tongue"]', 'Moonblade')
+    await D.selectOption('.sheet select', 'shortsword')
+    await D.click('.sheet button[aria-label="Magic bonus up"]')
+    await D.click('.sheet button:has-text("Give it to Brom")')
+    ok(await until(() => B.p.isVisible('text=From the DM: Moonblade'), 20000), 'phone B: "From the DM: Moonblade"')
+    await B.p.screenshot({ path: `${shots}/rooms-4b-gift.png` })
+    await B.p.click('.gift-banner button:has-text("Hold it")')
+    ok(await until(() => B.p.isVisible('.attack:has-text("Moonblade")')), 'phone B: Moonblade is in his attacks')
+    { const t = await B.p.textContent('.attack:has-text("Moonblade") .roll-row'); ok(/\+7tohit1d6\+5/.test(t.replace(/\s+/g, "")), `phone B: +7 to hit, 1d6+5 (DEX +4, proficiency +2, magic +1): ${t}`) }
+
     // a player change reaches the DM
     await A.p.click('.status-row .insp')
     ok(await until(async () => (await D.getAttribute('.dm-card:has-text("Aria") .insp', 'aria-pressed')) === 'true', 15000), 'DM: sees Aria take Inspiration')

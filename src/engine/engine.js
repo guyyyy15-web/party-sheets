@@ -145,8 +145,15 @@ export function derive(input) {
   const scores = computeScores(ch, features)
   const mod = Object.fromEntries(ABILITIES.map((a) => [a, scores[a].mod]))
   const prof = profBonus(level)
-  const armor = armorById(ch.equipment?.armor)
-  const shield = !!ch.equipment?.shield
+  // items (from the DM or the player's own): what's worn or held counts; a magic item that needs attunement counts
+  // only when attuned (3 at most). Item: { id, name, kind, base, bonus, ac, save, attune, attuned, equipped, qty, potion }
+  const worn = (ch.items || []).filter((i) => i.equipped && i.kind !== 'potion' && i.kind !== 'gear')
+  const attunedIds = new Set((ch.items || []).filter((i) => i.attune && i.attuned).slice(0, 3).map((i) => i.id))
+  const works = (i) => !i.attune || attunedIds.has(i.id)
+  const armorItem = worn.find((i) => i.kind === 'armor' && armorById(i.base))
+  const shieldItem = worn.find((i) => i.kind === 'shield')
+  const armor = armorItem ? { ...armorById(armorItem.base), name: armorItem.name } : armorById(ch.equipment?.armor)
+  const shield = !!shieldItem || !!ch.equipment?.shield
   const exhaustion = Math.max(0, Math.min(EXHAUSTION.max, ch.state?.exhaustion || 0))
   const d20Pen = exhaustion * EXHAUSTION.d20PerLevel // every d20 test: attacks, saves, checks, initiative
   const penSource = d20Pen ? [{ label: `Exhaustion level ${exhaustion}`, value: -d20Pen, kind: 'penalty' }] : []
@@ -190,7 +197,13 @@ export function derive(input) {
   for (const e of active) if (e.type === 'ac') acBases.push({ label: e.label, value: e.value(ctx) })
   const acBase = acBases.reduce((a, b) => (b.value > a.value ? b : a))
   const ac = { value: acBase.value, sources: [{ ...acBase, kind: 'base' }] }
-  if (shield) { ac.value += 2; ac.sources.push({ label: 'Shield', value: 2, kind: 'bonus' }) }
+  if (shield) { ac.value += 2; ac.sources.push({ label: shieldItem ? shieldItem.name : 'Shield', value: 2, kind: 'bonus' }) }
+  const itemPart = (i, v) => ({ label: `${i.name}${i.attune ? ' (attuned)' : ''}`, value: v, kind: 'bonus' })
+  for (const i of worn) {
+    if (!works(i)) continue
+    const v = (i.kind === 'armor' || i.kind === 'shield' ? +i.bonus || 0 : 0) + (+i.ac || 0)
+    if (v) { ac.value += v; ac.sources.push(itemPart(i, v)) }
+  }
   const bonus = (target) => active.filter((e) => e.type === 'bonus' && e.target === target).map((e) => ({ label: e.label || e.from, value: e.value(ctx), kind: 'bonus' }))
   for (const b of bonus('ac')) { ac.value += b.value; ac.sources.push(b) }
   if (ch.overrides?.ac != null) ac.override = ch.overrides.ac
@@ -225,6 +238,7 @@ export function derive(input) {
   const profPart = (why) => ({ label: `Proficiency bonus (${why})`, value: prof, kind: 'prof' })
   const saves = Object.fromEntries(ABILITIES.map((a) => [a, { prof: saveProf.has(a), value: mod[a] + (saveProf.has(a) ? prof : 0) - d20Pen,
     parts: [abilityPart(a), ...(saveProf.has(a) ? [profPart(`proficient in ${a} saves`)] : []), ...penSource] }]))
+  for (const i of worn) if (works(i) && +i.save) for (const a of ABILITIES) { saves[a].value += +i.save; saves[a].parts.push(itemPart(i, +i.save)) }
   const checks = Object.fromEntries(ABILITIES.map((a) => [a, mod[a] - d20Pen]))
   const checkParts = Object.fromEntries(ABILITIES.map((a) => [a, [abilityPart(a), ...penSource]]))
   const skills = SKILLS.map((s) => {
@@ -261,9 +275,12 @@ export function derive(input) {
   }
   const attacks = []
   const dieSize = (d) => Number(String(d).split('d')[1] || 1)
-  for (const id of ch.equipment?.weapons || []) {
-    const wp = weaponById(id)
-    if (!wp) continue
+  const weaponList = [...(ch.equipment?.weapons || []).map((id) => ({ id })), ...worn.filter((i) => i.kind === 'weapon' && weaponById(i.base)).map((i) => ({ id: i.base, item: i }))]
+  for (const { id, item } of weaponList) {
+    const wp0 = weaponById(id)
+    if (!wp0) continue
+    const wp = item ? { ...wp0, name: item.name } : wp0
+    const magic = item && works(item) ? +item.bonus || 0 : 0
     const isMonkWeapon = monkWeapons && (wp.cat === 'simple-melee' || (wp.cat === 'martial-melee' && wp.props.includes('light')))
     const useDex = isRanged(wp) || wp.props.includes('finesse') || isMonkWeapon
     const ability = useDex && (isRanged(wp) || mod.DEX >= mod.STR) ? 'DEX' : 'STR'
@@ -273,12 +290,14 @@ export function derive(input) {
     const toHitParts = [{ label: `${ability} modifier (score ${scores[ability].total}; ${why})`, value: mod[ability], kind: 'ability' }]
     if (proficientWith(wp)) toHitParts.push(profPart(`proficient with ${wp.name}s`))
     if (isRanged(wp)) toHitParts.push(...bonus('attack.ranged'))
+    if (magic) toHitParts.push(itemPart(item, magic))
     toHitParts.push(...penSource)
     const toHit = toHitParts.reduce((t, s) => t + s.value, 0)
     let vDie = wp.versatile
     if (vDie && isMonkWeapon && maDie && dieSize(maDie) > dieSize(vDie)) vDie = `1${maDie}`
-    const damageParts = mod[ability] ? [{ label: `${ability} modifier (the same one as the attack)`, value: mod[ability], kind: 'ability' }] : []
-    attacks.push({ id: wp.id, name: wp.name, toHit, toHitSources: toHitParts, damageParts, damageDie: die, dieWhy: die !== wp.dmg ? `your Martial Arts die (${die.slice(1)}) instead of the ${wp.name}'s ${wp.dmg}` : `the ${wp.name}'s damage die`, damage: `${die}${mod[ability] ? signed(mod[ability]) : ''}`, type: wp.type, props: wp.props, range: wp.range, versatile: vDie && `${vDie}${signed(mod[ability])}`, mastery: masteries.has(wp.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
+    const damageParts = [...(mod[ability] ? [{ label: `${ability} modifier (the same one as the attack)`, value: mod[ability], kind: 'ability' }] : []), ...(magic ? [itemPart(item, magic)] : [])]
+    const dmgBonus = damageParts.reduce((t, s) => t + s.value, 0)
+    attacks.push({ id: item ? item.id : wp.id, icon: wp0.id, name: wp.name, toHit, toHitSources: toHitParts, damageParts, damageDie: die, dieWhy: die !== wp.dmg ? `your Martial Arts die (${die.slice(1)}) instead of the ${wp.name}'s ${wp.dmg}` : `the ${wp.name}'s damage die`, damage: `${die}${dmgBonus ? signed(dmgBonus) : ''}`, type: wp.type, props: wp.props, range: wp.range, versatile: vDie && `${vDie}${signed(dmgBonus)}`, mastery: masteries.has(wp0.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
   }
   const unarmedAbility = monkWeapons && mod.DEX > mod.STR ? 'DEX' : 'STR'
   attacks.push({

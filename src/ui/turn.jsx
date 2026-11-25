@@ -10,7 +10,7 @@ const OTHER = 'Dash (move again), Dodge, Disengage, Help, Hide, Ready, Search or
 /** What this character can do with its action, as targets the guide can walk through. */
 export function turnOptions(d) {
   const out = d.attacks.map((a) => ({
-    key: `w:${a.id}`, kind: 'attack', name: a.name, icon: `w.${a.id}`, count: d.attacksPerAction, critOn: d.crit,
+    key: `w:${a.id}`, kind: 'attack', name: a.name, icon: `w.${a.icon || a.id}`, count: d.attacksPerAction, critOn: d.crit,
     toHit: a.toHit, toHitParts: a.toHitSources, damage: a.damage, damageParts: a.damageParts, dieWhy: a.dieWhy, type: a.type,
     sub: `${signed(a.toHit)} to hit · ${a.damage} ${a.type}`,
   }))
