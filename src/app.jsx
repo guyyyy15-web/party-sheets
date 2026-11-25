@@ -16,6 +16,7 @@ import { refreshAccount, signOutLocal } from './ui/account.js'
 import { ownerKey } from './ui/sync.js'
 import { DiceTray, performRoll, throwDefault, load3d, RollCard, RULES } from './ui/dice.jsx'
 import { announce } from './ui/fx.js'
+import { PrintView } from './ui/print.jsx'
 import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
 import { Sheet, themeOf, GameIcon } from './ui/common.jsx'
@@ -215,7 +216,10 @@ function App() {
       group={current.roomId ? { name: room?.name || 'Table', onLeave: () => leave(current) } : null}
       onSaveNow={() => saveNow(current.id)}
       onGlossary={() => setView({ name: 'glossary', id: current.id, back: 'sheet' })}
+      onPrint={() => setView({ name: 'print', id: current.id })}
       onDelete={async () => { await remove(current); setView({ name: 'home' }) }} />
+  } else if (view.name === 'print' && chars?.find((c) => c.id === view.id)) {
+    screen = <PrintView ch={chars.find((c) => c.id === view.id)} onBack={() => setView({ name: 'sheet', id: view.id })} />
   } else if (view.name === 'glossary') {
     screen = <GlossaryView ch={current && !current.draft ? current : null} onBack={() => setView(view.back === 'sheet' && current ? { name: 'sheet', id: current.id } : { name: 'home' })} />
   } else if (landing) {
@@ -234,7 +238,7 @@ function App() {
   return (
     <>
       {screen}
-      {view.name !== 'wizard' && view.name !== 'init' && !landing && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice"><GameIcon id="ui.d20" size={30} /></button>}
+      {view.name !== 'wizard' && view.name !== 'init' && view.name !== 'print' && !landing && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice"><GameIcon id="ui.d20" size={30} /></button>}
       {tray && <DiceTray pool={pool} setPool={setPool} mod={poolMod} setMod={setPoolMod} throwOn={throwOn} setThrowOn={setThrowOn} last={log[0]}
         onClose={() => setTray(false)} onThrow={() => { setTray(false); roll({ kind: 'pool', pool, mod: poolMod }) }} />}
       {shown && <RollCard e={shown} onClose={() => setShown(null)} />}

@@ -42,7 +42,8 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   SRD tables (scores, HP, AC, saves, attacks, slots, resources, rests, fights); `npm run campaign` does a Cleric and a
   Fighter 1→20 through the real Level up sheet with a fight at 5. Run both after any rules change.
 - Before pushing: `npm test`, `npm run smoke`, `npm run smoke:rooms` and `npm run a11y` (and `npm run campaign` after rules changes), and look at screenshots/ after UI changes. After a
-  release: `node scripts/live.cjs` (the real site, iPhone 13 Pro and SE).
+  release: `node scripts/live.cjs` (the real site, iPhone 13 Pro, SE and an Android Pixel 7; it also checks the bottom
+  tabs and a sheet's last button are on screen).
 - Level-up UX (`src/engine/levelup.js` `levelDiff` + `headlines`, UI `src/ui/levelup.jsx`): the card after "Become
   level N" and the next-level preview on the sheet both come from `levelDiff`, so they agree; `state.leveledAt` shows a
   "What's new" link for a day. The plan for the next UX steps is the Claude doc "Party Sheets — Level-up UX plan".
@@ -53,10 +54,17 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - Term cards (`src/content/glossary.js` ~118 terms in our own words, `src/engine/explain.js` "For you" lines that call
   `derive()` with the item swapped in, UI `src/ui/glossary.jsx`): ⓘ on armor and conditions, weapon properties as
   links, "What it is" in the how-it's-made sheets, a searchable Rules glossary (📖 on the sheet, Table settings).
-- Landing page (`src/ui/landing.jsx`): a first visit with no characters and no account sees what Party Sheets is
-  (5 points), Start / Sign in / Share; once (`ps.seenLanding`), never on invite, DM or restore links; "About Party
-  Sheets" in Table settings reopens it. Link preview: `og.png` (`node scripts/og.cjs`) and the og: tags in index.html.
-  Test scripts set `ps.seenLanding` except smoke, which checks the landing page.
+- Landing page (`src/ui/landing.jsx`, release 3): a first visit with no characters and no account sees it: the 12
+  class avatars, Start / Sign in, "Try a turn" (a demo rogue against a goblin with the real engine and dice, nothing
+  saved), 5 points, 8 screens with a line each (`landing/*.jpg`), Share, credits. Shown once (`ps.seenLanding`), never
+  on invite, DM or restore links; "About Tavern Table" in Tavern settings reopens it. The screens come from the test
+  runs: `npm run smoke` and `npm run smoke:rooms`, then `node scripts/shots.cjs` (re-run after UI changes). Link
+  previews: `node scripts/og.cjs` (with avatars) and the og: tags in the .html pages. Test scripts set
+  `ps.seenLanding` except smoke, which checks the landing page.
+- Print / PDF (release 3; `src/engine/print.js` pure + tests/print.test.mjs, UI `src/ui/print.jsx`): from the
+  character settings, a paper sheet in our own design (no official frames or logo), A4 or Letter: page 1 numbers,
+  skills, attacks, resources with tick circles; page 2 features, gear, notes; page 3 spells with slot circles. All
+  numbers from derive(). smoke prints a real PDF and counts its pages.
 - Feat spells (`src/content/feat-spells.js`, `featSpellsOf` in `src/engine/spells.js`): Magic Initiate, Fey/Shadow
   Touched, Ritual Caster, Telepathic, Telekinetic pick real spells (choices of kind `spell`; options read the feature's
   own picks via `c.own(key)`, a background's `featChoice` fixes Magic Initiate's list). `d.featSpells` carry their own

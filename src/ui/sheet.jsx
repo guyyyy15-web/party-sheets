@@ -28,7 +28,7 @@ import { termById } from '../content/glossary.js'
 const KIND = { action: 'Action', bonus: 'Bonus action', reaction: 'Reaction', free: 'Free / on a hit', info: 'Good to know' }
 const THEMES = ['gold', 'red', 'jade', 'blue', 'violet', 'rose']
 
-export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete, group, onSaveNow, onGlossary }) {
+export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelete, group, onSaveNow, onGlossary, onPrint }) {
   const d = useMemo(() => derive(ch), [ch])
   const [tab, setTab] = useState('turn')
   const [sources, setSources] = useState(null)
@@ -210,6 +210,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       {settings && (
         <Sheet title="Character" onClose={() => setSettings(false)}>
           <button className="btn ghost wide look-btn" onClick={() => { setSettings(false); setLookOpen(true) }}><Portrait ch={ch} size={40} /> ✎ Your look</button>
+          {onPrint && <button className="btn ghost wide" onClick={() => { setSettings(false); onPrint() }}>🖨 Print / PDF sheet</button>}
           <span className="field-label">Color</span>
           <div className="themes">{THEMES.map((t) => <button key={t} className={`swatch theme-${t} ${theme === t ? 'on' : ''}`} aria-label={t} onClick={() => setCh({ ...ch, theme: t })} />)}</div>
           <label className="field"><span>Name</span><input className="input" value={ch.name} onChange={(e) => setCh({ ...ch, name: e.target.value.slice(0, 40) })} /></label>

@@ -1,4 +1,4 @@
-// Checks on the REAL site after a release (iPhone 13 Pro and SE): 4d6 thrown on screen, a level 5 start, HP, a 3D throw, tabs.
+// Checks on the REAL site after a release (iPhone 13 Pro, SE and an Android Pixel 7): 4d6 thrown on screen, a level 5 start, HP, a 3D throw, tabs.
 // Run: node scripts/live.cjs  (nothing is stored on a server: characters stay in the test browser)
 const { chromium, devices } = require('playwright')
 const URL = process.env.SITE || 'https://guyyyy15-web.github.io/party-sheets/'
@@ -6,7 +6,7 @@ let fails = 0
 const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails++ }
 ;(async () => {
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
-  for (const [devName, dev] of [['iPhone 13 Pro', devices['iPhone 13 Pro']], ['iPhone SE', devices['iPhone SE']]]) {
+  for (const [devName, dev] of [['iPhone 13 Pro', devices['iPhone 13 Pro']], ['iPhone SE', devices['iPhone SE']], ['Pixel 7 (Android)', devices['Pixel 7']]]) {
     const ctx = await b.newContext({ ...dev })
     // the real site, but its test characters must not land in the real database: saving points at a closed port
     await ctx.addInitScript(() => (localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9')), localStorage.setItem('ps.seenLanding', 'true')))
@@ -70,6 +70,11 @@ const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails+
     ok(m && Number(m[1]) === Number(m[2]) + Number(m[3]), `${devName}: 3D throw settles in ${((Date.now() - t2) / 1000).toFixed(1)} s and adds up (${txt.trim()})`)
     await p.click('.dice3d')
     await p.screenshot({ path: `screenshots/live-${devName.replace(' ', '')}.png` })
+    // nothing hides under the browser's bars: the bottom tabs are on screen, and a sheet scrolled to its end shows its last button
+    ok(await p.evaluate(() => { const r = document.querySelector('.sheet-page .tabs').getBoundingClientRect(); return r.bottom <= innerHeight + 1 && r.top > innerHeight / 2 }), `${devName}: the tabs sit at the bottom, on screen`)
+    await p.click('[role=tab]:has-text("Turn")'); await p.click('button.start-turn')
+    ok(await p.evaluate(() => { const s = document.querySelector('.sheet'); s.scrollTop = s.scrollHeight; const last = [...s.querySelectorAll('button')].at(-1).getBoundingClientRect(); return last.bottom <= innerHeight + 1 && last.top >= 0 }), `${devName}: a sheet's last button can be reached`)
+    await p.click('.sheet button[aria-label="Close"]')
     for (const tab of ['Checks', 'Features', 'Gear', 'Notes', 'Turn']) {
       await p.click(`[role=tab]:has-text("${tab}")`)
       const w = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
