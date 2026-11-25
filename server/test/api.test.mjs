@@ -191,7 +191,7 @@ test('initiative: the DM makes the Initiative link; it runs the fight; players s
   assert.equal((await call(`/rooms/${room.id}/encounter/initiative`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', total: 12 } })).status, 404)
   const fight = { active: true, round: 1, turn: null, seq: 1, combatants: [
     { id: 'pc-brakka01', kind: 'pc', charId: 'brakka01', name: 'Brakka', init: null, bonus: 2 },
-    { id: 'npc-1', kind: 'npc', group: 'Ogre', name: 'Ogre', init: 15, bonus: -1, dmg: 39, ac: 11, conditions: ['prone'], evil: 'x' },
+    { id: 'npc-1', kind: 'npc', group: 'Ogre', name: 'Ogre', init: 15, bonus: -1, dmg: 39, ac: 11, icon: '🐗', color: 'red', note: ' the big one ', conditions: ['prone'], evil: 'x' },
   ] }
   assert.equal((await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: playerKey, body: { rev: 0, data: fight } })).status, 403, 'players cannot run it')
   const put = await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: 0, data: fight } })
@@ -203,11 +203,12 @@ test('initiative: the DM makes the Initiative link; it runs the fight; players s
   const sent = await call(`/rooms/${room.id}/encounter/initiative`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', total: 17 } })
   assert.equal(sent.status, 200); assert.equal(sent.body.rev, 2)
   const ogre = sent.body.data.combatants.find((c) => c.id === 'npc-1')
-  assert.equal(ogre.ac, undefined); assert.equal(ogre.dmg, 39, 'players see the damage count, not the AC')
+  assert.equal(ogre.ac, undefined); assert.equal(ogre.dmg, 39, 'players see the damage count; there is no AC any more')
+  assert.deepEqual([ogre.icon, ogre.color, ogre.note], ['🐗', 'red', 'the big one'], 'and the look the runner gave it')
 
   // the runner sees it, with the numbers; and may change a player's HP like the DM
   const g = await call(`/rooms/${room.id}/encounter`, { auth: initKey })
-  assert.equal(g.body.data.combatants.find((c) => c.charId === 'brakka01').init, 17); assert.equal(g.body.data.combatants[1].ac, 11)
+  assert.equal(g.body.data.combatants.find((c) => c.charId === 'brakka01').init, 17); assert.equal(g.body.data.combatants[1].ac, undefined, 'AC is not kept')
   assert.equal((await call(`/rooms/${room.id}/characters/brakka01`, { method: 'PATCH', auth: initKey, body: { state: { hp: 3, conditions: ['prone'] } } })).status, 200)
   // the player reports damage: it waits for the runner (players never see the list); with auto on, it lands at once
   const c1 = await call(`/rooms/${room.id}/encounter/claim`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', target: 'npc-1', amount: 9, label: 'Longsword' } })
@@ -278,4 +279,20 @@ test('spells on a friend: a member adds a buff from their own caster; it ends ev
   // not in this room → 404
   const other = (await call('/rooms', { method: 'POST', body: { name: 'Other' } })).body
   assert.equal((await call(`/rooms/${other.room.id}/characters/char_aria2/buffs`, { method: 'POST', auth: other.playerKey, owner: mira, body: { buff: bless } })).status, 404)
+})
+
+test('players see each other\'s sheets in a fight (?sheets=1): numbers and spells, no notes, gold, gifts or photo', async () => {
+  const { room, playerKey } = (await call('/rooms', { method: 'POST', body: { name: 'Party view' } })).body
+  const a = key()
+  const secret = { ...hero('Aria'), notes: 'my secret plan', portrait: { kind: 'photo', src: 'data:image/jpeg;base64,AAAA' }, equipment: { gp: 99, items: 'a love letter', weapons: ['longsword'] },
+    state: { hp: 12, temp: 0, conditions: ['poisoned'], concentration: 'bless', concTargets: ['char_brom9'], gifts: [{ id: 'g1', name: 'Sword' }], buffs: [] } }
+  assert.equal((await call(`/rooms/${room.id}/characters/char_aria9`, { method: 'PUT', auth: playerKey, owner: a, body: { patch: secret } })).status, 201)
+  const plain = await call(`/rooms/${room.id}`, { auth: playerKey })
+  assert.equal(plain.body.characters[0].data, undefined, 'the home screen still gets only the summary')
+  const v = await call(`/rooms/${room.id}?sheets=1`, { auth: playerKey })
+  const d = v.body.characters[0].data
+  assert.deepEqual([d.name, d.state.hp, d.state.conditions, d.state.concentration, d.state.concTargets], ['Aria', 12, ['poisoned'], 'bless', ['char_brom9']])
+  assert.equal(d.notes, undefined); assert.equal(d.equipment.gp, undefined); assert.equal(d.equipment.items, undefined)
+  assert.equal(d.state.gifts, undefined); assert.equal(d.portrait, null)
+  assert.equal((await call(`/rooms/${room.id}?sheets=1`, { auth: key() })).status, 403)
 })

@@ -78,6 +78,8 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   modifier to a spell's damage (Potent Spellcasting, Empowered Evocation, Agonizing Blast, Elemental Affinity); `adv`
   effects give advantage (Danger Sense, Feral Instinct). A new feature that fires on a hit, when hit or after casting
   gets a line in triggers.js and a test.
+- Heights on phones: never size by `vh` alone (it slides under Safari's and Chrome's toolbars): every vh has a `dvh`
+  twin after it (tests/layout.test.mjs checks style.css).
 - Phones (≤ 599 px): the sheet's top is a sticky app bar (`.char-top`; the tabs stick under it at `--bar-h`, measured
   by a ResizeObserver), tighter spacing, and each attack folds its math/properties/mastery behind ⓘ (`.attack.open`).
   Design for the iPhone 13 Pro (390 px, Guy); live.cjs also checks the SE so nothing breaks there.
@@ -124,7 +126,12 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   themselves (`POST …/encounter/initiative`, own character only) from the sheet's fight banner or the Init stat; every
   number can be typed by hand (real dice). Enemies by kind × count, no HP: `dmg` counts damage taken from 0 (healing
   down), the DM says when one falls (`dead`, skipped in the order). Players see the order, enemies' damage and
-  conditions, never their AC. Poll: runner 3 s, players 5 s.
+  conditions. Poll: runner 3 s, players 5 s.
+  No enemy AC (Guy, 2026-11-25): each enemy has a look instead, `icon` (one of ENEMY_ICONS), `color` (ENEMY_COLORS) and
+  a short `note` everyone sees, set when added and editable later (`setLook`, alone or for its whole kind). Players'
+  rows are blue, enemies' red unless colored. A player's order sheet (`PartyOrder`) loads the party's sheets
+  (`GET /rooms/:id?sheets=1`, `partySheet`: no notes, gold, item text, gifts or photo) every 5 s while open: HP,
+  conditions, concentration → on whom (`state.concTargets`), spells on them; tap a hero for a read-only sheet.
   Attacks in a fight: when the turn reaches a player while their sheet is open, the turn guide opens by itself
   ("Who are you attacking?" → to hit → damage). The damage is POSTed to `…/encounter/claim`: with `enc.auto` it is added
   to the enemy at once, else it waits in `enc.claims` for the runner (✓ with the amount editable, or ✕). Players never

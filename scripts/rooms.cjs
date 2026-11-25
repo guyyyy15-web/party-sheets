@@ -20,9 +20,10 @@ let fails = 0
 const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails++ }
 const shots = path.join(root, 'screenshots')
 const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8')
-async function axe(p, name) {
+async function axe(p, name, scope = null) {
   await p.addScriptTag({ content: AXE })
-  const bad = (await p.evaluate(async () => (await window.axe.run(document, { resultTypes: ['violations'] })).violations.map((v) => ({ id: v.id, impact: v.impact, sample: v.nodes[0]?.target?.join(' ') })))).filter((v) => v.impact === 'serious' || v.impact === 'critical')
+  // scope: a modal sheet, checked alone (the page behind its dimmed backdrop isn't what's being read)
+  const bad = (await p.evaluate(async (scope) => (await window.axe.run(scope ? document.querySelector(scope) : document, { resultTypes: ['violations'] })).violations.map((v) => ({ id: v.id, impact: v.impact, sample: v.nodes[0]?.target?.join(' ') })), scope)).filter((v) => v.impact === 'serious' || v.impact === 'critical')
   ok(!bad.length, `a11y ${name}${bad.length ? `: ${JSON.stringify(bad)}` : ''}`)
 }
 const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now() - t < ms) { try { if (await fn()) return true } catch {} await new Promise((r) => setTimeout(r, 300)) } return false }
@@ -153,10 +154,19 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await T.p.click('button:has-text("+ Enemies")')
     await T.p.fill('input[placeholder^="Soldier"]', 'Soldier')
     await T.p.click('button[aria-label="How many up"]'); await T.p.click('button[aria-label="How many up"]')
-    await T.p.fill('.sheet .field:has(span:text-is("AC (if you know it)")) input', '14')
+    await T.p.click('.sheet button[aria-label="Icon 🗡️"]'); await T.p.click('.sheet button[aria-label="Color orange"]')
+    await T.p.fill('.sheet input[placeholder^="red cloak"]', 'city guard')
     await T.p.click('button:has-text("Add 3 × Soldier")')
     ok(await until(async () => (await T.p.locator('.init-row.npc').count()) === 3), 'runner: Soldier 1–3 joined the order')
-    ok(/AC 14 · Damage taken 0/.test(await T.p.textContent('.init-row:has-text("Soldier 2")')), 'runner: each soldier has AC 14 and 0 damage taken')
+    { const t = await T.p.textContent('.init-row:has-text("Soldier 2")'); ok(/🗡️/.test(t) && /city guard/.test(t) && /Damage taken 0/.test(t) && !/AC/.test(t), `runner: each soldier has its icon and note, 0 damage, no AC (${t})`) }
+    ok(await T.p.locator('.init-row.npc.ec-orange').count() === 3, 'runner: the soldiers are orange')
+    // edit one soldier's look later: the sergeant
+    await T.p.click('.init-row:has-text("Soldier 3") .init-main')
+    await T.p.click('.sheet button[aria-label="Icon 👑"]'); await T.p.click('.sheet button[aria-label="Color gold"]')
+    await T.p.fill('.sheet input[placeholder^="red cloak"]', 'the sergeant')
+    await T.p.click('.sheet button:has-text("Save for Soldier 3")')
+    await T.p.click('button[aria-label="Close"]')
+    ok(await until(async () => /👑[\s\S]*the sergeant/.test(await T.p.textContent('.init-row:has-text("Soldier 3")')) && (await T.p.locator('.init-row.ec-gold').count()) === 1), 'runner: Soldier 3 edited to the gold sergeant 👑')
     await T.p.click('.init-row:has-text("Aria") .init-num')
     await T.p.fill('input[aria-label="Initiative total"]', '25')
     await T.p.click('.sheet button:has-text("Set 25")')
@@ -204,7 +214,16 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await B.p.click('button.fight-banner')
     const order = await B.p.textContent('.sheet .init-list')
     ok(/Soldier 1\s*fell/.test(order) && !/AC/.test(order), `phone B: sees Soldier 1 fell, no enemy AC (${order.replace(/\s+/g, ' ').slice(0, 120)})`)
+    ok(/the sergeant/.test(order) && /city guard/.test(order), 'phone B: sees the enemies\' notes (city guard, the sergeant)')
+    // the party as the table sees it: HP, conditions; tap a hero for a read-only sheet
+    ok(await until(async () => /HP \d+\/\d+/.test(await B.p.textContent('.sheet .init-row:has-text("Aria")')), 10000), 'phone B: sees Aria\'s HP in the order')
+    ok(/Poisoned/.test(await B.p.textContent('.sheet .init-row:has-text("Brom")')), 'phone B: sees Brom is Poisoned in the order')
     await B.p.screenshot({ path: `${shots}/rooms-6-player-order.png` })
+    await axe(B.p, 'player order with the party', '.sheet')
+    await B.p.click('.sheet .init-row:has-text("Aria") .init-main')
+    ok(await until(() => B.p.isVisible('.sheet h3:text-is("Attacks")')), 'phone B: Aria\'s sheet opens from the order (read only)')
+    ok(!(await B.p.isVisible('.sheet input, .sheet .btn.danger')), 'phone B: nothing to edit on Aria\'s sheet')
+    await B.p.screenshot({ path: `${shots}/rooms-6b-party-sheet.png` })
     await B.p.click('button[aria-label="Close"]')
     await T.ctx.close()
 
@@ -231,6 +250,10 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await M.p.click('.sheet button:has-text("Mira")')
     ok(await until(() => M.p.isVisible('text=Mira joined')), 'phone M: Mira joined the group')
     await M.p.click('.char-card:has-text("Mira")')
+    // the fight is still on: Mira types her initiative, so she has a place in the order
+    if (await until(() => M.p.isVisible('.fight-banner button:has-text("I rolled real dice")'), 12000)) {
+      await M.p.click('.fight-banner button:has-text("I rolled real dice")'); await M.p.fill('input[aria-label="Your initiative total"]', '9'); await M.p.click('.fight-banner button:has-text("Send")')
+    }
     await M.p.click('.tabs button:text-is("Spells")')
     await M.p.click('.spell:has-text("Bless") button:text-is("Cast")')
     await M.p.click('.sheet button:has-text("1st-level slot")')
@@ -246,6 +269,13 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     ok(await until(() => A.p.isVisible('.buff:has-text("Bless (from Mira)")'), 30000), 'phone A: Aria shows Bless (from Mira)')
     ok(await until(() => B.p.isVisible('.buff:has-text("Bless (from Mira)")'), 30000), 'phone B: Brom shows Bless (from Mira)')
     await A.p.screenshot({ path: `${shots}/rooms-8-blessed.png` })
+    // in the order, everyone sees Mira concentrating on Bless and on whom, and Bless on Aria
+    await B.p.click('button.fight-banner')
+    const miraRow = async () => (await B.p.locator('.sheet .init-row:has(b:text-is("Mira"))').count()) ? B.p.textContent('.sheet .init-row:has(b:text-is("Mira"))') : `(no Mira row) ${await B.p.textContent('.sheet .init-list')}`
+    ok(await until(async () => /Bless → Aria, Brom|Bless → Brom, Aria/.test(await miraRow()), 15000), `phone B: the order shows Mira concentrating on Bless → Aria, Brom (${(await miraRow()).replace(/\s+/g, ' ').slice(0, 160)})`)
+    ok(/Bless \(from Mira\)/.test(await B.p.textContent('.sheet .init-row:has-text("Aria")')), 'phone B: the order shows Bless on Aria')
+    await B.p.screenshot({ path: `${shots}/rooms-8b-order-conc.png` })
+    await B.p.click('button[aria-label="Close"]')
     // Aria's saves now add the d4: a DEX save shows "Bless (from Mira)" in its math
     await A.p.evaluate(() => localStorage.setItem('ps.throwOnScreen', 'false'))
     await A.p.click('.tabs button:text-is("Checks")')

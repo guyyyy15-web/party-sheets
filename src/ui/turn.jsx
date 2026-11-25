@@ -111,8 +111,9 @@ export function TurnGuide({ d, ch, setState, roll, mode, setMode, bonus, canPay,
           <h3 className="guide-q">Who are you attacking?</h3>
           <div className="guide-options">
             {fight.targets.map((c) => (
-              <button key={c.id} className={`guide-opt ${c.kind}`} onClick={() => { setTarget(c.id); setPhase(attackPhase(t)) }}>
-                <span><b>{c.name}</b><small>{c.kind === 'npc' ? (c.dmg ? `${c.dmg} damage taken` : 'no damage yet') : 'in your party'}{c.conditions?.length ? ` · ${c.conditions.join(', ')}` : ''}</small></span>
+              <button key={c.id} className={`guide-opt ${c.kind} ${c.color ? `ec-${c.color}` : ''}`} onClick={() => { setTarget(c.id); setPhase(attackPhase(t)) }}>
+                {c.icon && <span className="e-icon big" aria-hidden>{c.icon}</span>}
+                <span><b>{c.name}</b>{c.note ? <small className="e-note">{c.note}</small> : null}<small>{c.kind === 'npc' ? (c.dmg ? `${c.dmg} damage taken` : 'no damage yet') : 'in your party'}{c.conditions?.length ? ` · ${c.conditions.join(', ')}` : ''}</small></span>
               </button>
             ))}
           </div>

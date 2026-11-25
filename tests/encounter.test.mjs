@@ -1,6 +1,7 @@
 // The fight (initiative): order, turns, rounds, enemies by kind, manual numbers, what players see.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { setLook, ENEMY_ICONS } from '../src/encounter-core.js'
 import { newEncounter, addPc, addGroup, order, setInit, rollMissing, next, prev, hurt, remove, forPlayers, placeOf, toggleCondition, setDead, applyClaim, dropClaim, targetsFor } from '../src/encounter-core.js'
 
 const seq = (...v) => { let i = 0; return () => v[i++ % v.length] }
@@ -38,12 +39,13 @@ test('enemies: damage counts up from 0, healing down; the DM says when one falls
   remove(e, 'pc-a'); assert.ok(!e.combatants.some((c) => c.id === 'pc-a'))
 })
 
-test('players see the damage count but not the AC, and their own place in the order', () => {
+test('players see the damage count and the enemy\'s look (no AC), and their own place in the order', () => {
   const e = newEncounter([{ charId: 'a', name: 'Ana', init: 9 }])
-  addGroup(e, { name: 'Ogre', ac: 11, roll: seq(19) })
+  addGroup(e, { name: 'Ogre', ac: 11, icon: '🐗', color: 'red', note: 'the big one', roll: seq(19) })
   hurt(e, 'npc-1', 35)
   const p = forPlayers(e).combatants.find((c) => c.kind === 'npc')
   assert.equal(p.ac, undefined); assert.equal(p.dmg, 35)
+  assert.deepEqual([p.icon, p.color, p.note], ['🐗', 'red', 'the big one'])
   next(e)
   assert.deepEqual(placeOf(e, 'pc-a'), { place: 2, of: 2, now: false, inTurns: 1 })
 })
@@ -68,4 +70,18 @@ test('claims: healing takes damage back off an enemy, a condition lands on it', 
   applyClaim(e, 'h'); applyClaim(e, 'c')
   const o = e.combatants.find((c) => c.id === 'npc-1')
   assert.equal(o.dmg, 6); assert.deepEqual(o.conditions, ['charmed'])
+})
+
+test('an enemy\'s look: set when added, edited later, alone or for its whole kind; only known icons and colors', () => {
+  const e = newEncounter([])
+  addGroup(e, { name: 'Goblin', count: 3, icon: '👹', color: 'green', roll: seq(10) })
+  assert.ok(e.combatants.every((c) => c.icon === '👹' && c.color === 'green' && c.note === null))
+  setLook(e, 'npc-2', { icon: '👑', color: 'gold', note: '  the chief  ' })
+  assert.deepEqual(['icon', 'color', 'note'].map((k) => e.combatants[1][k]), ['👑', 'gold', 'the chief'])
+  assert.equal(e.combatants[0].icon, '👹', 'the others keep theirs')
+  setLook(e, 'npc-1', { icon: '💀', color: 'gray', note: '' }, { group: true })
+  assert.ok(e.combatants.every((c) => c.icon === '💀' && c.color === 'gray' && c.note === null))
+  setLook(e, 'npc-1', { icon: '<b>', color: 'pink', note: 'x'.repeat(60) })
+  assert.deepEqual([e.combatants[0].icon, e.combatants[0].color, e.combatants[0].note.length], [null, null, 40])
+  assert.ok(ENEMY_ICONS.length >= 12)
 })

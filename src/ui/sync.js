@@ -82,8 +82,8 @@ export const endBuffs = (r, casterCh, targetId, { spell, conc = true } = {}) => 
 export const runnerPatch = (r, charId, state) => api(`/rooms/${r.id}/characters/${charId}`, { method: 'PATCH', key: runKey(r), body: { state } })
 
 /** The room as its members see it: the DM gets every full sheet, a player gets the party list. */
-export async function fetchRoom(r, asDm) {
-  const j = await api(`/rooms/${r.id}`, { key: asDm ? (asDm === 'run' ? runKey(r) : r.dmKey) : r.playerKey || r.dmKey || r.initKey })
+export async function fetchRoom(r, asDm, { sheets = false } = {}) {
+  const j = await api(`/rooms/${r.id}${sheets ? '?sheets=1' : ''}`, { key: asDm ? (asDm === 'run' ? runKey(r) : r.dmKey) : r.playerKey || r.dmKey || r.initKey })
   if (j.room.name !== r.name || JSON.stringify(j.room.settings || {}) !== JSON.stringify(r.settings || {})) keepRoom({ id: r.id, name: j.room.name, settings: j.room.settings || {} })
   return j
 }
