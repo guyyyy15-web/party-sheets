@@ -328,6 +328,47 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await q.waitForSelector('text=Imported 4 characters')
   ok((await q.$$('.char-card')).length === 4, 'a new phone imports all 4 from the backup')
 
+  // the rules in play (a phone of its own): Sneak Attack offered right after a hit, once a turn; damage by type with
+  // resistance; Shield as a reaction when hit
+  {
+    const { newCharacter, derive } = await import('../src/engine/engine.js')
+    const mk = (over) => { const c = { ...newCharacter(), portrait: { kind: 'icon', src: '⚔️' }, ...over }; c.state.hp = derive(c).hp.value; return c }
+    const vex = mk({ name: 'Vex', classId: 'rogue', level: 5, speciesId: 'human', backgroundId: 'criminal', scores: { STR: 10, DEX: 16, CON: 12, INT: 10, WIS: 12, CHA: 10 }, equipment: { weapons: ['rapier'] } })
+    const ember = mk({ name: 'Ember', classId: 'wizard', level: 3, speciesId: 'dragonborn', backgroundId: 'sage', scores: { STR: 8, DEX: 14, CON: 12, INT: 16, WIS: 10, CHA: 10 }, choices: { 'species.draconic-ancestry.ancestry': ['red'] }, spells: { cantrips: [], prepared: ['shield'] } })
+    const rctx = await b.newContext({ ...devices['iPhone 13 Pro'] })
+    await rctx.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true'), localStorage.setItem('ps.throwOnScreen', 'false')), OFFLINE_API)
+    const r = await rctx.newPage(); r.on('dialog', (dg) => dg.accept()); r.on('pageerror', (e) => ok(false, `rules page error: ${e.message}`))
+    await r.goto(URL)
+    await r.setInputFiles('input[type=file]', { name: 'rules.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ kind: 'party-sheets-backup', v: 1, characters: [vex, ember] })) })
+    await r.waitForSelector('.char-card:has-text("Vex")')
+    await r.evaluate(() => { Math.random = () => 0.5 }) // every d20 an 11: a plain hit, no crit, no natural 1
+    await r.click('.char-card:has-text("Vex")')
+    await r.click('button:has-text("Start my turn")')
+    await r.click('.guide-opt:has-text("Attack with Rapier")')
+    await r.click('.sheet button:has-text("Roll to hit")'); await r.click('.sheet button:text-is("Hit")')
+    await r.click('.sheet button:has-text("Roll damage")')
+    ok(await r.isVisible('.rider:has-text("Sneak Attack")'), 'rules: Sneak Attack is offered right after a Rapier hit')
+    await r.click('.rider:has-text("Sneak Attack") button:has-text("Add 3d6")')
+    ok(await r.waitForSelector('.rider:has-text("Sneak Attack") .ok-line', { timeout: 5000 }).then(() => true).catch(() => false), 'rules: Sneak Attack adds 3d6')
+    await r.screenshot({ path: `${shots}/14-rider.png` })
+    await r.click('.roll-card button[aria-label="Close the roll"]').catch(() => {})
+    await r.click('.sheet button[aria-label="Close"]')
+    await r.click('button[aria-label="All characters"]')
+    await r.click('.char-card:has-text("Ember")')
+    const ac = Number(await r.textContent('.vitals .stat b >> nth=0'))
+    await r.click('.vitals .hp'); await r.fill('input[aria-label="Amount"]', '10')
+    await r.selectOption('select[aria-label="Damage type"]', 'fire')
+    ok((await r.textContent('.dmg-final')).includes('You take 5'), 'rules: a red dragonborn takes half of 10 fire')
+    await r.click('.react-opts button:has-text("Shield")')
+    await r.click('button:text-is("It misses")')
+    ok((await r.textContent('.dmg-final')).includes('You take 0'), 'rules: Shield turns the hit into a miss')
+    await r.screenshot({ path: `${shots}/15-hit.png` })
+    await r.click('.sheet button.danger')
+    ok(Number(await r.textContent('.vitals .stat b >> nth=0')) === ac + 5, 'rules: Shield gives +5 AC until the next turn')
+    ok(await r.isVisible('.buff:has-text("Shield")'), 'rules: Shield shows as an active effect')
+    await rctx.close()
+  }
+
   // offline
   await p.evaluate(() => navigator.serviceWorker.ready)
   await p.reload()

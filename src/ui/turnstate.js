@@ -21,3 +21,23 @@ export function used(turn, { kind, slot, spend, once } = {}) {
 }
 /** Ask before doing something already used this turn (the DM may allow it: Action Surge, a second reaction…). */
 export const allowed = (turn, need) => { const c = conflicts(turn, need); return !c.length || confirm(`You already used ${c.join(' and ')} this turn. Do it anyway?`) }
+/** A new turn: the turn's parts back, buffs that last "until your next turn" end, and Heroism's temp HP. */
+export function turnStartPatch(state, d) {
+  const buffs = (state?.buffs || []).filter((x) => x.until !== 'turn').map((x) => (x.until === 'turn-end' ? { ...x, until: 'turn' } : x))
+  const temp = d?.turnTemp && d.turnTemp.value > (state?.temp || 0) ? d.turnTemp.value : state?.temp || 0
+  return { turn: newTurn(), ...(state?.buffs ? { buffs } : {}), ...(temp !== (state?.temp || 0) ? { temp } : {}) }
+}
+/**
+ * Concentration ends (a new concentration spell, a failed CON save, 0 HP, Rage, a long rest, "End"): the caster's
+ * own concentration buffs go at once; the ones on other characters are queued in concEnds and taken off by the sheet
+ * (retried until the server answers).
+ */
+export function endConcentration(state, selfId) {
+  const mine = (state?.buffs || [])
+  const keep = []
+  for (const x of mine) {
+    if (!(x.from === selfId && x.conc)) keep.push(x)
+    else if (x.after) keep.push({ ...x.after, id: `${x.id}a`, from: x.from, fromName: x.fromName, conc: false, at: x.at })
+  }
+  return { concentration: null, buffs: keep, concTargets: [], concEnds: [...new Set([...(state?.concEnds || []), ...(state?.concTargets || [])])] }
+}

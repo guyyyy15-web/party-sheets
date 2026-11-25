@@ -7,6 +7,8 @@ import { speciesById } from '../content/species.js'
 import { backgroundById } from '../content/backgrounds.js'
 import { featById, FEATS } from '../content/feats.js'
 import { EXHAUSTION } from '../content/conditions.js'
+import { buffLabel } from './buffs.js'
+import { ON_HIT, ON_HURT, ON_CAST, DAMAGE_REDUCTION } from '../content/triggers.js'
 
 // Short rest healing per Hit Die spent: the die + CON, at least this much. Long rest: all spent Hit Dice come back.
 export const HIT_DIE_MIN = 1
@@ -191,10 +193,15 @@ export function derive(input) {
   }
   const active = effects.filter((e) => !e.when || e.when(ctx))
   for (const e of active) if (e.type === 'prof') for (const a of e.saves || []) saveProf.add(a)
+  // buffs from spells (yours or a friend's) and features like Rage: state.buffs, see engine/buffs.js
+  const buffs = (ch.state?.buffs || []).filter((b) => b && Array.isArray(b.effects))
+  const bfx = buffs.flatMap((b) => b.effects.map((e) => ({ ...e, label: buffLabel(b, ch.id) })))
+  const fx = (on) => bfx.filter((e) => e.on === on)
 
   // AC: the best base formula, then bonuses
   const acBases = [{ label: armor ? `${armor.name} (${armor.base}${armor.dexMax === 0 ? '' : ` + DEX${armor.dexMax ? ` max ${armor.dexMax}` : ''}`})` : 'No armor (10 + DEX)', value: armor ? armor.base + (armor.dexMax === null ? mod.DEX : Math.min(armor.dexMax, mod.DEX)) : 10 + mod.DEX }]
   for (const e of active) if (e.type === 'ac') acBases.push({ label: e.label, value: e.value(ctx) })
+  if (!armor) for (const e of fx('acBase')) acBases.push({ label: `${e.label}: ${e.value} + DEX`, value: e.value + mod.DEX })
   const acBase = acBases.reduce((a, b) => (b.value > a.value ? b : a))
   const ac = { value: acBase.value, sources: [{ ...acBase, kind: 'base' }] }
   if (shield) { ac.value += 2; ac.sources.push({ label: shieldItem ? shieldItem.name : 'Shield', value: 2, kind: 'bonus' }) }
@@ -206,6 +213,8 @@ export function derive(input) {
   }
   const bonus = (target) => active.filter((e) => e.type === 'bonus' && e.target === target).map((e) => ({ label: e.label || e.from, value: e.value(ctx), kind: 'bonus' }))
   for (const b of bonus('ac')) { ac.value += b.value; ac.sources.push(b) }
+  for (const e of fx('ac')) { ac.value += e.value; ac.sources.push({ label: e.label, value: e.value, kind: 'bonus' }) }
+  for (const e of fx('acMin')) if (ac.value < e.value) { ac.sources.push({ label: `${e.label}: AC at least ${e.value}`, value: e.value - ac.value, kind: 'bonus' }); ac.value = e.value }
   if (ch.overrides?.ac != null) ac.override = ch.overrides.ac
 
   // speed
@@ -213,8 +222,11 @@ export function derive(input) {
   for (const e of active) if (e.type === 'speed') baseSpeed = Math.max(baseSpeed, e.value)
   const speed = { value: baseSpeed, sources: [{ label: `${sp?.name || 'Base'} speed`, value: baseSpeed, kind: 'base' }] }
   for (const b of bonus('speed')) { speed.value += b.value; speed.sources.push(b) }
+  for (const e of fx('speed')) if (e.value) { speed.value += e.value; speed.sources.push({ label: e.label, value: e.value, kind: 'bonus' }) }
   if (armor?.str && ctx.score.STR < armor.str) { speed.value -= 10; speed.sources.push({ label: `${armor.name} needs STR ${armor.str}`, value: -10, kind: 'penalty' }) }
   if (exhaustion) { const v = -EXHAUSTION.speedPerLevel * exhaustion; speed.value = Math.max(0, speed.value + v); speed.sources.push({ label: `Exhaustion level ${exhaustion}`, value: v, kind: 'penalty' }) }
+  for (const e of fx('speed')) if (e.mult === 2 && speed.value > 0) { speed.sources.push({ label: `${e.label}: speed doubled`, value: speed.value, kind: 'bonus' }); speed.value *= 2 }
+  for (const e of fx('speed')) if (e.zero && speed.value) { speed.sources.push({ label: `${e.label}: speed 0`, value: -speed.value, kind: 'penalty' }); speed.value = 0 }
 
   // HP: max die at level 1, then the rolled or average value per level, + CON each level
   const hitDie = cls?.hitDie || 8
@@ -227,11 +239,13 @@ export function derive(input) {
     if (level > 1) hp.sources.push({ label: `Levels 2-${level}: d${hitDie} ${signed(mod.CON)} CON each`, value: rest, kind: 'base' })
     for (const b of bonus('hpMax')) hp.sources.push(b)
     for (const e of active) if (e.type === 'hp') hp.sources.push({ label: e.label || e.from, value: e.value(ctx), kind: 'bonus' })
+    for (const e of fx('hpMax')) hp.sources.push({ label: e.label, value: e.value, kind: 'bonus' })
     hp.value = Math.max(1, hp.sources.reduce((t, s) => t + s.value, 0))
   }
 
   const initiative = { value: mod.DEX, sources: [{ label: `DEX modifier (score ${scores.DEX.total})`, value: mod.DEX, kind: 'ability' }, ...bonus('initiative'), ...penSource] }
   initiative.value = initiative.sources.reduce((t, s) => t + s.value, 0)
+  initiative.adv = active.filter((e) => e.type === 'adv' && e.on === 'initiative' && (!e.when || e.when(ctx))).map((e) => e.label || e.from)
 
   // "where each number comes from", in words a player can redo at the table
   const abilityPart = (a) => ({ label: `${a} modifier (score ${scores[a].total})`, value: mod[a], kind: 'ability' })
@@ -239,6 +253,15 @@ export function derive(input) {
   const saves = Object.fromEntries(ABILITIES.map((a) => [a, { prof: saveProf.has(a), value: mod[a] + (saveProf.has(a) ? prof : 0) - d20Pen,
     parts: [abilityPart(a), ...(saveProf.has(a) ? [profPart(`proficient in ${a} saves`)] : []), ...penSource] }]))
   for (const i of worn) if (works(i) && +i.save) for (const a of ABILITIES) { saves[a].value += +i.save; saves[a].parts.push(itemPart(i, +i.save)) }
+  // dice on d20 rolls (Bless +1d4, Bane -1d4) and advantage from buffs and features (Danger Sense, Haste…)
+  const dieOf = (e) => ({ dice: e.dice, label: e.label })
+  const advFeat = (on, a) => active.filter((e) => e.type === 'adv' && e.on === on && (!e.ability || e.ability === a)).map((e) => e.label || e.from)
+  for (const a of ABILITIES) {
+    saves[a].dice = fx('save').filter((e) => e.dice && (!e.ability || e.ability === a)).map(dieOf)
+    saves[a].adv = [...advFeat('save', a), ...fx('save').filter((e) => e.adv && e.ability === a).map((e) => e.label)]
+  }
+  const checkAdv = Object.fromEntries(ABILITIES.map((a) => [a, [...advFeat('check', a), ...fx('check').filter((e) => e.adv && e.ability === a).map((e) => e.label)]]))
+  const atkDice = fx('attack').filter((e) => e.dice).map(dieOf)
   const checks = Object.fromEntries(ABILITIES.map((a) => [a, mod[a] - d20Pen]))
   const checkParts = Object.fromEntries(ABILITIES.map((a) => [a, [abilityPart(a), ...penSource]]))
   const skills = SKILLS.map((s) => {
@@ -253,7 +276,7 @@ export function derive(input) {
   const resources = []
   for (const e of active) if (e.type === 'resource' && !resources.some((r) => r.id === e.id)) {
     const max = e.max(ctx)
-    if (max > 0) resources.push({ id: e.id, name: e.name, max, reset: e.reset, short: e.short, used: Math.min(max, ch.state?.used?.[e.id] || 0) })
+    if (max > 0) resources.push({ id: e.id, name: e.name, max, reset: e.reset, short: e.short, used: Math.min(max, ch.state?.used?.[e.id] || 0), ...(e.hidden ? { hidden: true } : {}) })
   }
 
   if (cls) {
@@ -297,37 +320,67 @@ export function derive(input) {
     if (vDie && isMonkWeapon && maDie && dieSize(maDie) > dieSize(vDie)) vDie = `1${maDie}`
     const damageParts = [...(mod[ability] ? [{ label: `${ability} modifier (the same one as the attack)`, value: mod[ability], kind: 'ability' }] : []), ...(magic ? [itemPart(item, magic)] : [])]
     const dmgBonus = damageParts.reduce((t, s) => t + s.value, 0)
-    attacks.push({ id: item ? item.id : wp.id, icon: wp0.id, name: wp.name, toHit, toHitSources: toHitParts, damageParts, damageDie: die, dieWhy: die !== wp.dmg ? `your Martial Arts die (${die.slice(1)}) instead of the ${wp.name}'s ${wp.dmg}` : `the ${wp.name}'s damage die`, damage: `${die}${dmgBonus ? signed(dmgBonus) : ''}`, type: wp.type, props: wp.props, range: wp.range, versatile: vDie && `${vDie}${signed(dmgBonus)}`, mastery: masteries.has(wp0.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
+    attacks.push({ id: item ? item.id : wp.id, icon: wp0.id, name: wp.name, toHit, toHitSources: toHitParts, damageParts, damageDie: die, dieWhy: die !== wp.dmg ? `your Martial Arts die (${die.slice(1)}) instead of the ${wp.name}'s ${wp.dmg}` : `the ${wp.name}'s damage die`, damage: `${die}${dmgBonus ? signed(dmgBonus) : ''}`, ability, versatileDie: vDie || null, type: wp.type, props: wp.props, range: wp.range, versatile: vDie && `${vDie}${signed(dmgBonus)}`, mastery: masteries.has(wp0.id) ? { name: wp.mastery, text: MASTERY[wp.mastery] } : null, crit })
   }
   const unarmedAbility = monkWeapons && mod.DEX > mod.STR ? 'DEX' : 'STR'
   attacks.push({
-    id: 'unarmed', name: 'Unarmed Strike', toHit: mod[unarmedAbility] + prof - d20Pen, toHitSources: [{ label: `${unarmedAbility} modifier (score ${scores[unarmedAbility].total}${unarmedAbility === 'DEX' ? '; Martial Arts lets a monk use DEX' : ''})`, value: mod[unarmedAbility], kind: 'ability' }, profPart('everyone is proficient with Unarmed Strikes'), ...penSource],
+    id: 'unarmed', name: 'Unarmed Strike', ability: unarmedAbility, toHit: mod[unarmedAbility] + prof - d20Pen, toHitSources: [{ label: `${unarmedAbility} modifier (score ${scores[unarmedAbility].total}${unarmedAbility === 'DEX' ? '; Martial Arts lets a monk use DEX' : ''})`, value: mod[unarmedAbility], kind: 'ability' }, profPart('everyone is proficient with Unarmed Strikes'), ...penSource],
     damageParts: monkWeapons && maDie ? [{ label: `${unarmedAbility} modifier`, value: mod[unarmedAbility], kind: 'ability' }] : [{ label: 'Unarmed Strike: 1', value: 1, kind: 'base' }, { label: `STR modifier (score ${scores.STR.total})`, value: mod.STR, kind: 'ability' }],
     damageDie: monkWeapons && maDie ? `1${maDie}` : null, dieWhy: monkWeapons && maDie ? `your Martial Arts die (${maDie})` : null,
     damage: monkWeapons && maDie ? `1${maDie}${signed(mod[unarmedAbility])}` : `${Math.max(0, 1 + mod.STR)}`, type: 'bludgeoning', props: [], crit,
     note: `Or Grapple / Shove (DC ${8 + (monkWeapons ? Math.max(mod.STR, mod.DEX) : mod.STR) + prof})`,
   })
-  const spellcasting = spellcastingOf({ ch, cls, features, ctx, level, mod, prof, d20Pen, penSource })
-  const featSpells = featSpellsOf({ features, ctx, mod, prof, d20Pen, penSource })
+  // damage from buffs (Rage on STR attacks, Enlarge +1d4) and the dice on every attack roll (Bless)
+  for (const a of attacks) {
+    a.toHitDice = atkDice
+    const dmg = fx('damage').filter((e) => !e.str || a.ability === 'STR')
+    if (!dmg.length) continue
+    a.extraDice = []
+    for (const e of dmg) {
+      if (e.value) a.damageParts = [...a.damageParts, { label: e.label, value: e.value, kind: 'bonus' }]
+      if (e.dice) a.extraDice.push({ dice: e.dice, label: e.label })
+    }
+    const b = a.damageParts.reduce((t, s) => t + s.value, 0)
+    const extra = a.extraDice.map((x) => (x.dice.startsWith('-') ? x.dice : `+${x.dice}`)).join('')
+    const build = (die) => (die ? `${die}${extra}${b ? signed(b) : ''}` : extra ? `${extra.replace(/^\+/, '')}${b ? signed(b) : ''}` : `${Math.max(0, b)}`)
+    a.damage = build(a.damageDie)
+    if (a.versatileDie) a.versatile = build(a.versatileDie)
+    a.dieWhys = [...(a.damageDie ? [a.dieWhy] : []), ...a.extraDice.map((x) => x.label)]
+  }
+  const spellcasting0 = spellcastingOf({ ch, cls, features, ctx, level, mod, prof, d20Pen, penSource })
+  const spellcasting = spellcasting0 && { ...spellcasting0, attack: { ...spellcasting0.attack, dice: atkDice } }
+  const featSpells = featSpellsOf({ features, ctx, mod, prof, d20Pen, penSource }).map((x) => ({ ...x, attack: { ...x.attack, dice: atkDice } }))
   const attacksPerAction = Math.max(1, ...active.filter((e) => e.type === 'attacks').map((e) => e.value(ctx)))
 
   // actions for "My Turn"
   const actions = [{ id: 'attack', name: 'Attack', kind: 'action', summary: `${attacksPerAction} attack${attacksPerAction > 1 ? 's' : ''} with a weapon or Unarmed Strike.` }]
   for (const e of active) if (e.type === 'action' && !actions.some((a) => a.id === e.id)) {
-    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), perTurn: e.perTurn ?? /once (per turn|on each of your turns)/i.test(String(call(e.summary, ctx) || '')), cost: e.cost, onCast: e.onCast || null, alt: e.alt || null, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx), parts: e.roll.parts ? e.roll.parts(ctx) : null, why: e.roll.why || null }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: e.setHp, attack: e.attack, count: e.count && e.count(ctx), from: e.from })
+    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), perTurn: e.perTurn ?? /once (per turn|on each of your turns)/i.test(String(call(e.summary, ctx) || '')), cost: e.cost, onCast: e.onCast || null, alt: e.alt || null, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx), parts: e.roll.parts ? e.roll.parts(ctx) : null, why: e.roll.why || null }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: call(e.setHp, ctx), needsBuff: e.needsBuff || null, attack: e.attack, count: e.count && e.count(ctx), from: e.from,
+      // when it fires (src/content/triggers.js): after a hit, when you are hit, after a casting
+      onHit: ON_HIT[e.id] && (!ON_HIT[e.id].only || ON_HIT[e.id].only(e)) ? { ...ON_HIT[e.id], value: ON_HIT[e.id].value?.(ctx) ?? null, only: undefined } : null,
+      onHurt: ON_HURT[e.id] ? { ...ON_HURT[e.id], value: ON_HURT[e.id].value?.(ctx) ?? null, types: ON_HURT[e.id].types ? ON_HURT[e.id].types(ctx.has) : null } : null,
+      ...(ON_CAST[e.id] && !e.onCast ? { onCast: ON_CAST[e.id] } : {}),
+      buff: e.buff ? call(e.buff, ctx) : null, concentration: e.concentration || null, endsConcentration: !!e.endsConcentration })
   }
   for (const e of active) if (e.type === 'note' && e.save) actions.push({ id: `note-${e.from}`, name: e.from, kind: 'info', summary: e.save.label, save: { dc: e.save.dc(ctx) } })
 
   const senses = active.filter((e) => e.type === 'sense').map((e) => ({ name: e.name, range: e.range }))
   const immunities = [...new Set(active.filter((e) => e.type === 'immune').map((e) => e.damage))]
-  const resistances = [...new Set(active.filter((e) => e.type === 'resist').map((e) => e.damage))].filter((x) => !immunities.includes(x))
+  const resistances = [...new Set([...active.filter((e) => e.type === 'resist').map((e) => e.damage), ...fx('resist').flatMap((e) => e.types)])].filter((x) => !immunities.includes(x))
+  const vulnerabilities = [...new Set(active.filter((e) => e.type === 'vulnerable').map((e) => e.damage))]
+  // temp HP at the start of each turn (Heroism): the best one
+  const turnTemp = fx('tempHp').reduce((best, e) => (!best || e.value > best.value ? { value: e.value, label: e.label } : best), null)
   const choices = openChoices(ch, features, ctx)
+  // spell damage that adds a modifier (Potent Spellcasting, Empowered Evocation, Agonizing Blast, Elemental Affinity)
+  const spellDamage = active.filter((e) => e.type === 'spellDamage').map((e) => ({ label: e.label || e.from, value: mod[e.ability], ability: e.ability, cantripOf: e.cantripOf || null, school: e.school || null, classOf: e.classOf || null, ids: e.ids || null, damageType: e.damageType || null }))
+  // damage you take, reduced (Heavy Armor Master)
+  const reductions = Object.entries(DAMAGE_REDUCTION).filter(([id, r]) => ctx.has(id) && (!r.when || r.when(ctx))).map(([id, r]) => ({ id, label: featById(id)?.name || id, types: r.types, value: r.value(ctx), attack: !!r.attack }))
 
   return {
     name: ch.name, level, cls, species: sp, background: bg, subclass: cls?.subclasses.find((s) => s.id === ch.subclassId) || null,
     scores, mod, prof, ac, speed, hp, hitDie, initiative, saves, checks, checkParts, skills, passivePerception, spellcasting, featSpells, resources, attacks, attacksPerAction, actions,
     exhaustion, d20Pen, inspiration: !!ch.state?.inspiration, conditions: ch.state?.conditions || [],
-    senses, resistances, immunities, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
+    senses, resistances, immunities, vulnerabilities, buffs, spellDamage, reductions, turnTemp, checkAdv, features: features.map((f) => ({ id: f.id, key: f.key, name: f.name, summary: f.summary, level: f.level, source: f.source })),
     choices, pending: choices.filter((c) => !c.done), armor, shield, crit,
   }
 }
@@ -343,7 +396,8 @@ export function rest(ch, kind) {
   const state = { ...ch.state, used }
   if (kind === 'long') {
     // 8 hours: every concentration spell has ended (a short rest leaves it to the player: Find the Path lasts a day)
-    Object.assign(state, { concentration: null, hp: d.hp.value, temp: 0, deathSaves: { ok: 0, fail: 0 }, exhaustion: Math.max(0, (ch.state.exhaustion || 0) - 1) })
+    // every buff here lasts 8 hours at most: all of them (on you, and yours on others) are over
+    Object.assign(state, { concentration: null, buffs: [], concTargets: [], concEnds: [...new Set([...(ch.state.concEnds || []), ...(ch.state.concTargets || [])])], hp: derive({ ...ch, state: { ...ch.state, buffs: [] } }).hp.value, temp: 0, deathSaves: { ok: 0, fail: 0 }, exhaustion: Math.max(0, (ch.state.exhaustion || 0) - 1) })
     if (LONG_REST_HIT_DICE !== 'all') used['hit-dice'] = Math.max(0, (ch.state.used?.['hit-dice'] || 0) - Math.max(1, Math.floor(d.level / 2)))
     if (d.features.some((f) => f.id === 'resourceful')) state.inspiration = true // Human: Heroic Inspiration on every long rest
   } else used['hit-dice'] = ch.state.used?.['hit-dice'] || 0 // a short rest gives no Hit Dice back

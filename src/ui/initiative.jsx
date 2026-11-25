@@ -10,7 +10,9 @@ import { fetchRoom, fetchEncounter, putEncounter, runnerPatch, sendInitiative, s
 import { newEncounter, addPc, addGroup, order, setInit, rollMissing, next, prev, hurt, setDead, toggleCondition, remove, clone, d20, placeOf, applyClaim, dropClaim, setAuto, targetsFor } from '../encounter-core.js'
 
 const POLL_MS = 3000
-const condName = (id) => CONDITIONS.find((c) => c.id === id)?.name || id
+// spells on an enemy (Bane, Reduce) arrive as conditions of their own
+const SPELL_CONDS = { bane: 'Bane (−1d4 attacks and saves)', reduced: 'Reduced (−1d4 weapon damage)' }
+const condName = (id) => CONDITIONS.find((c) => c.id === id)?.name || SPELL_CONDS[id] || id
 
 /** A player character as the fight needs it, from its sheet. */
 function pcView(c) {
@@ -223,7 +225,8 @@ function EnemySheet({ c, change, onClose }) {
       <button className={`btn wide ${c.dead ? 'ghost' : 'danger'}`} onClick={() => change((x) => setDead(x, c.id, !c.dead))}>{c.dead ? 'Not dead after all' : '☠ The DM says it fell'}</button>
       <p className="muted small">A fallen enemy is skipped in the order.</p>
       <h3 className="sec">Conditions</h3>
-      <div className="chips">{CONDITIONS.filter((x) => x.id !== 'exhaustion').map((x) => <button key={x.id} className={`chip ${(c.conditions || []).includes(x.id) ? 'on' : ''}`} aria-pressed={(c.conditions || []).includes(x.id)} onClick={() => change((e) => toggleCondition(e, c.id, x.id))}>{x.name}</button>)}</div>
+      <div className="chips">{CONDITIONS.filter((x) => x.id !== 'exhaustion').map((x) => <button key={x.id} className={`chip ${(c.conditions || []).includes(x.id) ? 'on' : ''}`} aria-pressed={(c.conditions || []).includes(x.id)} onClick={() => change((e) => toggleCondition(e, c.id, x.id))}>{x.name}</button>)}
+        {(c.conditions || []).filter((id) => !CONDITIONS.some((x) => x.id === id)).map((id) => <button key={id} className="chip on" aria-pressed="true" onClick={() => change((e) => toggleCondition(e, c.id, id))}>{condName(id)} ✕</button>)}</div>
       <button className="btn ghost wide danger-text" onClick={() => { change((e) => remove(e, c.id)); onClose() }}>Remove from the fight</button>
     </Sheet>
   )

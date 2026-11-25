@@ -124,7 +124,8 @@ export const PHB_FEATS = [
   general({
     id: 'great-weapon-master', name: 'Great Weapon Master', prereq: { scores: { STR: 13 } }, ability: ['STR'],
     summary: '+1 STR. A hit with a Heavy weapon in the Attack action deals extra damage equal to your proficiency bonus. After a melee weapon critical hit or dropping a creature to 0 HP, attack again with that weapon as a bonus action.',
-    effects: [{ type: 'action', id: 'hew', name: 'Hew', kind: 'bonus', summary: 'After a melee crit or a kill with a weapon: one more attack with it.' }],
+    effects: [{ type: 'action', id: 'hew', name: 'Hew', kind: 'bonus', summary: 'After a melee crit or a kill with a weapon: one more attack with it.' },
+      { type: 'action', id: 'gwm-damage', name: 'Heavy Weapon Mastery', kind: 'free', summary: (c) => `A Heavy weapon hit in the Attack action: +${c.prof} damage.`, roll: { label: 'Extra damage', expr: (c) => `${c.prof}`, why: 'Great Weapon Master: extra damage equal to your proficiency bonus.' } }],
   }),
   general({
     id: 'heavily-armored', name: 'Heavily Armored', prereq: { armor: 'medium' }, ability: ['STR', 'CON'],

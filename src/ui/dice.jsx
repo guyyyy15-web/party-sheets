@@ -1,7 +1,7 @@
 // Dice for every screen: the tray behind the 🎲 button, and one roll() that throws them on screen (physics) when
 // that's on. Same rules as Katsebushi: the faces come from the physics, never a separate random number.
 import React from 'react'
-import { rollDice, rollD20, rollPool, poolSides, poolLabel, diceNeeded, d20Needed, signed } from '../dice.js'
+import { rollDice, rollD20With, d20WithNeeded, rollPool, poolSides, poolLabel, diceNeeded, signed } from '../dice.js'
 
 export const webglOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')) } catch { return false } }
 export const throwDefault = () => webglOk() // on by default (Guy), even with Reduce motion; the tray can turn it off
@@ -40,11 +40,13 @@ function stepsFor(req, r) {
   if (req.kind === 'd20') {
     if (r.faces.length > 1) steps.push({ text: `${req.mode === 'adv' ? 'Advantage' : 'Disadvantage'}: two d20 rolled ${r.faces.join(' and ')}, keep the ${req.mode === 'adv' ? 'higher' : 'lower'}`, value: String(r.kept), kind: 'dice' })
     else steps.push({ text: 'Roll a d20', value: String(r.kept), kind: 'dice' })
+    for (const x of r.extra || []) steps.push({ text: `${x.label}: ${x.sign < 0 ? 'minus ' : ''}${x.dice.replace('-', '')}`, value: `${x.sign < 0 ? '-' : '+'}${x.total}`, kind: 'dice' })
   } else if (req.kind === 'expr') {
-    for (const g of r.rolls) {
+    r.rolls.forEach((g, i) => {
       const n = g.faces.length
-      steps.push({ text: `${req.crit ? 'Critical: twice the dice, roll' : 'Roll'} ${n}d${g.sides}${req.dieWhy ? ` (${req.dieWhy})` : ''}${n > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: String(g.faces.reduce((a, b) => a + b, 0)), kind: 'dice' })
-    }
+      const why = req.dieWhys ? req.dieWhys[i] : req.dieWhy
+      steps.push({ text: `${req.crit ? 'Critical: twice the dice, roll' : 'Roll'} ${g.sign < 0 ? 'minus ' : ''}${n}d${g.sides}${why ? ` (${why})` : ''}${n > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: `${g.sign < 0 ? '-' : ''}${g.faces.reduce((a, b) => a + b, 0)}`, kind: 'dice' })
+    })
   } else {
     for (const g of r.groups) steps.push({ text: `Roll ${g.faces.length}d${g.sides}${g.faces.length > 1 ? `: ${g.faces.join(' + ')}` : ''}`, value: String(g.faces.reduce((a, b) => a + b, 0)), kind: 'dice' })
   }
@@ -58,14 +60,16 @@ function stepsFor(req, r) {
 
 /** req: {kind:'d20',label,bonus,mode,attack,parts,rule} | {kind:'expr',label,expr,crit,parts,rule} | {kind:'pool',pool,mod} → a log entry. */
 export async function performRoll(req, throwOn) {
-  const sides = req.kind === 'd20' ? d20Needed(req.mode) : req.kind === 'expr' ? diceNeeded(req.expr, { crit: req.crit }) : poolSides(req.pool)
+  const sides = req.kind === 'd20' ? d20WithNeeded(req.mode, req.dice) : req.kind === 'expr' ? diceNeeded(req.expr, { crit: req.crit }) : poolSides(req.pool)
   let faces = null, D = null
   if (throwOn && sides.length) { try { D = await load3d(); faces = await D.throwDice(sides) } catch { D = null; faces = null } }
   let e
   if (req.kind === 'd20') {
-    const r = rollD20(req.bonus, req.mode, Math.random, faces)
+    // Bless/Bane dice are thrown with the d20 and added (or taken off) after it
+    const r = rollD20With(req.bonus, req.mode, req.dice, Math.random, faces)
+    const ex = r.extra
     const f = r.faces.length > 1 ? `[${r.faces.join(', ')}] keep ${r.kept}` : `${r.kept}`
-    e = { label: req.label, total: r.total, text: `d20 ${f} ${signed(req.bonus)}`, flag: r.nat20 ? 'NAT 20' : r.nat1 ? 'NAT 1' : null, crit: !!req.attack && r.kept >= (req.critOn || 20), faces: r.faces, kept: r.kept }
+    e = { label: req.label, total: r.total, text: `d20 ${f}${ex.map((x) => ` ${x.sign < 0 ? '-' : '+'} ${x.dice.replace('-', '')}[${x.faces.join(', ')}]`).join('')} ${signed(req.bonus)}`, flag: r.nat20 ? 'NAT 20' : r.nat1 ? 'NAT 1' : null, crit: !!req.attack && r.kept >= (req.critOn || 20), faces: r.faces, kept: r.kept, extra: ex }
   } else if (req.kind === 'expr') {
     const r = rollDice(req.expr, { crit: req.crit, faces })
     e = { label: req.crit ? `${req.label} (crit)` : req.label, total: r.total, text: `${r.rolls.map((g) => `d${g.sides}[${g.faces.join(', ')}]`).join(' ')} ${r.bonus ? signed(r.bonus) : ''}`.trim(), flag: req.crit ? 'CRIT' : null, raw: r }
@@ -74,7 +78,7 @@ export async function performRoll(req, throwOn) {
     e = { label: poolLabel(req.pool, req.mod), total: r.total, text: r.text, flag: null, raw: r }
   }
   // the math, for players learning to do it with real dice
-  e.steps = stepsFor(req, req.kind === 'd20' ? { faces: e.faces, kept: e.kept } : e.raw)
+  e.steps = stepsFor(req, req.kind === 'd20' ? { faces: e.faces, kept: e.kept, extra: e.extra } : e.raw)
   const rules = [req.rule ? RULES[req.rule] || req.rule : null, req.kind === 'd20' && req.mode !== 'normal' ? RULES[req.mode] : null, req.crit ? RULES.crit : null].filter(Boolean)
   if (req.kind === 'pool') rules.push(RULES.pool)
   e.rules = rules

@@ -4,6 +4,8 @@
 import React, { useState } from 'react'
 import { Sheet, GameIcon, signed } from './common.jsx'
 import { spellRoll, cantripDice } from '../engine/spells.js'
+import { hitRiders, smiteExpr, spellDamageParts } from '../engine/riders.js'
+import { allowed, used as usedTurn } from './turnstate.js'
 
 const OTHER = 'Dash (move again), Dodge, Disengage, Help, Hide, Ready, Search or use an object'
 
@@ -11,7 +13,7 @@ const OTHER = 'Dash (move again), Dodge, Disengage, Help, Hide, Ready, Search or
 export function turnOptions(d) {
   const out = d.attacks.map((a) => ({
     key: `w:${a.id}`, kind: 'attack', name: a.name, icon: `w.${a.icon || a.id}`, count: d.attacksPerAction, critOn: d.crit,
-    toHit: a.toHit, toHitParts: a.toHitSources, damage: a.damage, damageParts: a.damageParts, dieWhy: a.dieWhy, type: a.type,
+    toHit: a.toHit, toHitParts: a.toHitSources, toHitDice: a.toHitDice, damage: a.damage, damageParts: a.damageParts, dieWhy: a.dieWhy, dieWhys: a.dieWhys, type: a.type, weapon: a.id !== 'unarmed' ? a.icon || a.id : null, unarmed: a.id === 'unarmed', ability: a.ability, props: a.props, range: a.range,
     sub: `${signed(a.toHit)} to hit · ${a.damage} ${a.type}`,
   }))
   const spells = [
@@ -22,15 +24,23 @@ export function turnOptions(d) {
   for (const { s, mod, ability, dc, atk } of spells) {
     if (seen.has(s.id)) continue
     seen.add(s.id)
-    const r = spellRoll(s, { level: d.level, castLevel: 0, mod, ability })
-    if (!r || r.heal || s.time !== 'Action') continue
-    if (s.attack) out.push({ key: `s:${s.id}`, kind: 'attack', name: s.name, icon: `school.${s.school.toLowerCase()}`, count: s.beams ? cantripDice(d.level) : 1, critOn: 20, toHit: atk.value, toHitParts: atk.parts, damage: r.expr, damageParts: r.parts, dieWhy: r.why, type: r.type, spell: true, sub: `cantrip · ${signed(atk.value)} to hit · ${r.expr} ${r.type}` })
+    const r0 = spellRoll(s, { level: d.level, castLevel: 0, mod, ability })
+    if (!r0 || r0.heal || s.time !== 'Action') continue
+    const r = withSpellDamage(r0, spellDamageParts(d, s))
+    if (s.attack) out.push({ key: `s:${s.id}`, kind: 'attack', name: s.name, icon: `school.${s.school.toLowerCase()}`, count: s.beams ? cantripDice(d.level) : 1, critOn: 20, toHit: atk.value, toHitParts: atk.parts, toHitDice: atk.dice, damage: r.expr, damageParts: r.parts, dieWhy: r.why, type: r.type, spell: true, sub: `cantrip · ${signed(atk.value)} to hit · ${r.expr} ${r.type}` })
     else if (s.save) out.push({ key: `s:${s.id}`, kind: 'save', name: s.name, icon: `school.${s.school.toLowerCase()}`, count: 1, save: s.save, dc, damage: r.expr, damageParts: r.parts, dieWhy: r.why, type: r.type, spell: true, sub: `cantrip · ${s.save} save DC ${dc} · ${r.expr} ${r.type}` })
   }
   return out
 }
 
-export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpells, onClose, fight, takeAction }) {
+/** A spell's roll with the modifiers your features add (Potent Spellcasting…), in the expression and the math. */
+export function withSpellDamage(r, extra) {
+  if (!r || !extra.length) return r
+  const add = extra.reduce((t, p) => t + p.value, 0)
+  return { ...r, expr: `${r.expr}${add >= 0 ? '+' : ''}${add}`.replace(/\+-/, '-'), parts: [...(r.parts || []), ...extra] }
+}
+
+export function TurnGuide({ d, ch, setState, roll, mode, setMode, bonus, canPay, onUse, onSpells, onClose, fight, takeAction }) {
   const options = turnOptions(d)
   const [t, setT] = useState(null) // what the action is
   const [n, setN] = useState(1) // which attack of the action
@@ -49,11 +59,21 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
   const attackPhase = (o) => (o.kind === 'save' ? 'save' : 'hit')
   const choose = (o) => { if (n === 1 && takeAction && !takeAction()) return; setT(o); setHit(null); setDmg(null); setCrit(false); setSent(null); setPhase(inFight && fight.targets.length && !target ? 'target' : attackPhase(o)) }
   const rollHit = () => go(async () => {
-    const e = await roll({ kind: 'd20', label: `${t.name} to hit`, bonus: t.toHit, mode, attack: true, critOn: t.critOn, parts: t.toHitParts, rule: t.spell ? 'Spell attack: d20 + your spellcasting modifier + proficiency bonus.' : 'attack' })
+    const e = await roll({ kind: 'd20', label: `${t.name} to hit`, bonus: t.toHit, mode, attack: true, critOn: t.critOn, parts: t.toHitParts, dice: t.toHitDice, rule: t.spell ? 'Spell attack: d20 + your spellcasting modifier + proficiency bonus.' : 'attack' })
     if (e) { setHit(e); setCrit(!!e.crit) }
   })
+  const savage = d.actions.find((a) => a.id === 'savage-attacker')
+  const canSavage = !!(savage && t?.weapon && !ch?.state?.turn?.once?.['savage-attacker'])
+  const [useSavage, setUseSavage] = useState(true)
   const rollDmg = () => go(async () => {
-    const e = await roll({ kind: 'expr', label: `${t.name} damage`, expr: t.damage, crit, parts: t.damageParts, dieWhy: t.dieWhy, rule: 'damage' })
+    const req = { kind: 'expr', label: `${t.name} damage`, expr: t.damage, crit, parts: t.damageParts, dieWhy: t.dieWhy, dieWhys: t.dieWhys, rule: 'damage' }
+    let e = await roll(req)
+    if (e && canSavage && useSavage) {
+      // Savage Attacker: the weapon's damage dice twice, keep the better (once per turn)
+      const e2 = await roll({ ...req, label: `${t.name} damage (Savage Attacker, 2nd roll)` })
+      if (e2 && e2.total > e.total) e = e2
+      if (setState) setState({ turn: usedTurn(ch.state.turn, { once: { id: 'savage-attacker', name: 'Savage Attacker' } }) })
+    }
     if (e) {
       setDmg(e); setPhase('next'); setSent(null)
       if (inFight && target) { const r = await fight.claim(target, e.total, t.name); setSent(r || 'failed') }
@@ -129,6 +149,7 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
           {phase === 'dmg' && (
             <>
               <p className="guide-line"><b>2. Roll damage:</b> {t.damage} {t.type}{crit ? ', dice doubled for the critical hit' : ''}.</p>
+              {canSavage && <label className="row toggle small"><input type="checkbox" checked={useSavage} onChange={(e) => setUseSavage(e.target.checked)} /><span>Savage Attacker: roll twice, keep the better (once a turn)</span></label>}
               <button className="btn primary wide big-btn" disabled={busy} onClick={rollDmg}>🎲 Roll damage ({t.damage}{crit ? ' ×2 dice' : ''})</button>
             </>
           )}
@@ -137,8 +158,9 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
               {dmg && <p className="guide-result" role="status"><span className="mono big">{dmg.total}</span> {t.type} damage{targetC ? <> to <b>{targetC.name}</b></> : ''}.{!targetC ? ' Tell the DM.' : ''}</p>}
               {dmg && targetC && <p className={sent === 'failed' ? 'warn-line' : 'ok-line'} role="status">{!sent ? 'Sending…' : sent === 'failed' ? 'Couldn\'t send it: tell the DM.' : sent.applied ? `Added to ${targetC.name}'s damage.` : 'Sent: the DM confirms it.'}</p>}
               {!dmg && <p className="guide-line">No damage this time.</p>}
+              {dmg && ch && <HitRiders key={`${n}:${dmg.id}`} d={d} ch={ch} setState={setState} t={t} crit={crit} roll={roll} fight={inFight ? fight : null} target={targetC} />}
               {more && <button className="btn primary wide big-btn" onClick={nextAttack}>Next attack ({n + 1} of {t.count}) ›</button>}
-              {more && <button className="btn ghost wide" onClick={() => { setN(n + 1); setPhase('pick') }}>Use a different weapon for the next attack</button>}
+              {more && <button className="btn ghost wide" onClick={() => { setN(n + 1); setPhase('pick') }}>{d.features.some((f) => f.id === 'war-magic') ? 'A different weapon, or a cantrip (War Magic)' : 'Use a different weapon for the next attack'}</button>}
               <button className={`btn wide ${more ? 'ghost' : 'primary'}`} onClick={toBonus}>{bonus.length ? 'Bonus action ›' : 'End my turn ›'}</button>
             </>
           )}
@@ -167,5 +189,55 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
         </>
       )}
     </Sheet>
+  )
+}
+
+/**
+ * Right after a hit: what you may add to it (src/content/triggers.js). Each pays its cost, takes the bonus action
+ * when it is one, locks for the turn when it is once a turn, rolls its damage (doubled on a crit) and sends it to the
+ * target like the hit itself.
+ */
+function HitRiders({ d, ch, setState, t, crit, roll, fight, target }) {
+  const riders = hitRiders(d, ch.state, t)
+  const [done, setDone] = useState({}) // id → total
+  const [vs, setVs] = useState(false)
+  if (!riders.length) return null
+  const use = async (r, slot) => {
+    const kind = r.kind === 'bonus' ? 'bonus' : null
+    const isSlot = slot && !slot.free
+    const once = r.perTurn ? { id: r.id, name: r.name } : null
+    if (!allowed(ch.state.turn, { kind, slot: isSlot, once })) return
+    const pay = slot ? { [slot.id]: 1 } : r.cost ? { [r.cost.resource]: r.cost.amount } : null
+    const used = { ...ch.state.used }
+    for (const [id, n] of Object.entries(pay || {})) used[id] = (used[id] || 0) + n
+    const patch = { turn: usedTurn(ch.state.turn, { kind, slot: isSlot, once, spend: pay }), used }
+    if (r.spell?.concentration) Object.assign(patch, { concentration: r.spell.id, concAt: Date.now() })
+    setState(patch)
+    const expr = r.spell ? smiteExpr(r.spell, slot.level, { vs }) : r.expr
+    if (!expr || r.noDamageNow) { setDone({ ...done, [r.id]: 'used' }); return }
+    const e = await roll({ kind: 'expr', label: `${r.name}${r.type ? `: ${r.type}` : ''}`, expr, crit, parts: r.parts, rule: r.why || (r.spell ? `${r.name}: ${r.spell.damage?.higher || ''}`.trim() : undefined) })
+    if (!e) return
+    setDone({ ...done, [r.id]: e.total })
+    if (fight && target) fight.claim(target.id, e.total, r.name)
+  }
+  return (
+    <div className="riders" aria-label="On this hit">
+      <h4 className="guide-q small">On this hit you can add</h4>
+      {riders.map((r) => (
+        <div key={r.id} className="rider">
+          <b>{r.name}</b>{r.kind === 'bonus' ? <span className="muted small"> · bonus action</span> : null}{r.perTurn ? <span className="muted small"> · once a turn</span> : null}
+          <small>{r.ask || r.summary}</small>
+          {done[r.id] != null ? <p className="ok-line">✓ {done[r.id] === 'used' ? 'used' : `+${done[r.id]} damage${target ? `, sent for ${target.name}` : ': tell the DM'}`}</p>
+            : r.locked ? <p className="muted small">Used this turn.</p>
+            : !r.canPay ? <p className="muted small">Nothing left to pay for it.</p>
+            : r.spell ? (
+              <>
+                {r.vs && <label className="row toggle small"><input type="checkbox" checked={vs} onChange={(e) => setVs(e.target.checked)} /><span>The target is a {r.vs.types} (+{r.vs.dice})</span></label>}
+                <div className="row">{r.slots.map((sl) => <button key={sl.id} className="btn small ghost" onClick={() => use(r, sl)}>{sl.free ? 'Free use' : `Level ${sl.level} slot`} · {smiteExpr(r.spell, sl.level, { vs }) || 'cast'}</button>)}</div>
+              </>
+            ) : <div className="row"><button className="btn small ghost" onClick={() => use(r)}>{r.expr ? `Add ${r.expr}${crit && /d/.test(r.expr) ? ' ×2 dice' : ''}` : 'Use it'}{r.cost ? ` · costs ${r.cost.amount}` : ''}</button></div>}
+        </div>
+      ))}
+    </div>
   )
 }

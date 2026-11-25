@@ -59,6 +59,25 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   Once-per-turn features (`perTurn`: set by the content, else read from "once per turn" in the summary) lock in
   `turn.once` until the next turn. Damage while concentrating rolls the CON save first (`concentrationDC`: 10 or half
   the damage, ≤ 30) and ends the spell on a fail; at 0 HP it simply ends.
+- **Spells on friends** (`src/engine/buffs.js` pure, `buff` on spells in `src/content/spells.js`, checked against the
+  SRD 5.2.1): a buff lives on the target, `state.buffs` [{ id, spell, name, from (caster's char id), fromName, conc,
+  effects, note, until, after }]; effects are resolved numbers (`on`: ac, acMin, acBase, speed, hpMax, tempHp, attack,
+  save, check, damage, resist), so `derive()` never needs the caster's sheet; every number keeps its source ("Shield of
+  Faith (from Mira)"). Dice buffs (Bless, Bane) ride on d20 rolls as `dice` (`rollD20With` in src/dice.js). Casting
+  picks targets (`BuffTargets` in spells.jsx): you at once, a party member through `POST /rooms/:id/characters/:t/buffs`
+  (only for your own caster, X-Owner; cleaned by `cleanBuff`, ≤ 12 per character, ≤ 4 KB), an enemy as a claim with a
+  condition (Bane, Reduce). Concentration ending anywhere (new concentration spell, failed CON save, 0 HP, Rage, long
+  rest, End) goes through the sheet's `setState` → `endConcentration`: own buffs go at once, the others queue in
+  `state.concEnds` and are DELETEd (`?from=<caster>&conc=1`) with retries. Haste leaves its lethargy (`after`); Shield
+  and Parry last `until: 'turn'`; `turnStartPatch` runs at each new turn (Heroism's temp HP). Rage is a buff on yourself.
+- **Rules triggers** (`src/content/triggers.js`, applied by `src/engine/riders.js`, tests in tests/rules-audit.test.mjs):
+  ON_HIT (offered right after "Hit" in the turn guide: Sneak Attack, Divine Strike, GWM, Hunter's Mark/Hex while
+  concentrating, smite spells with `afterHit` and a slot…; cost, bonus action and once-per-turn enforced), ON_HURT (the
+  HP sheet's "You were hit": Shield, Uncanny Dodge, Deflect, Parry…), AT_ZERO, ON_CAST, DAMAGE_REDUCTION (Heavy Armor
+  Master). Damage taken: reductions → halving → resistance → vulnerability (`finalDamage`). `spellDamage` effects add a
+  modifier to a spell's damage (Potent Spellcasting, Empowered Evocation, Agonizing Blast, Elemental Affinity); `adv`
+  effects give advantage (Danger Sense, Feral Instinct). A new feature that fires on a hit, when hit or after casting
+  gets a line in triggers.js and a test.
 - Phones (≤ 599 px): the sheet's top is a sticky app bar (`.char-top`; the tabs stick under it at `--bar-h`, measured
   by a ResizeObserver), tighter spacing, and each attack folds its math/properties/mastery behind ⓘ (`.attack.open`).
   Design for the iPhone 13 Pro (390 px, Guy); live.cjs also checks the SE so nothing breaks there.

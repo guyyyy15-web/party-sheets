@@ -621,3 +621,20 @@ button.fight-banner { flex-direction: row; align-items: center; min-height: 48px
 .tchip { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); font-weight: 600; font-size: 13.5px; }
 .tchip.used { border-color: var(--line); background: none; color: var(--muted); text-decoration: line-through; }
 .tmove { margin-top: 6px; align-items: center; gap: 6px; }
+/* spells and effects on this character (Bless from Mira, Rage…) */
+.buffs { display: grid; gap: 6px; margin: 10px 0; }
+.buff { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--info); background: color-mix(in srgb, var(--info) 12%, transparent); }
+.buff small { display: block; color: var(--muted); }
+.buff .btn { min-height: 44px; }
+.buff-targets { display: grid; gap: 6px; margin-top: 10px; }
+/* damage taken: type, reactions, what's left */
+.hurt { display: grid; gap: 8px; margin: 8px 0; }
+.react-opts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.react-opts p { width: 100%; margin: 0; }
+.react-opts .btn { min-height: 44px; }
+.dmg-final { margin: 0; } .dmg-final small { display: block; color: var(--muted); }
+.dmg-final.changed b { color: var(--accent); }
+.riders { display: grid; gap: 8px; margin: 10px 0; }
+.rider { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); }
+.rider .row { flex-wrap: wrap; gap: 6px; margin-top: 6px; } .rider .btn { min-height: 44px; }
+.rider small { display: block; color: var(--muted); }

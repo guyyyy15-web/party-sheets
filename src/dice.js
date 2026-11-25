@@ -65,6 +65,24 @@ export function rollD20(bonus = 0, mode = 'normal', rng = Math.random, given = n
   return { faces: b === null ? [a] : [a, b], kept, bonus, total: kept + bonus, nat20: kept === 20, nat1: kept === 1, mode }
 }
 
+/**
+ * A d20 test with dice added or taken off (Bless +1d4, Bane −1d4): `extra` = [{ dice: '1d4' | '-1d4', label }].
+ * Faces are used in order: the d20(s) first, then each extra die. Returns rollD20's result with `extra` and the total.
+ */
+export function rollD20With(bonus = 0, mode = 'normal', extra = [], rng = Math.random, given = null) {
+  const r = rollD20(bonus, mode, rng, given)
+  let rest = given ? given.slice(r.faces.length) : null
+  const ex = (extra || []).filter((x) => x && x.dice).map((x) => {
+    const rr = rollDice(x.dice.replace('-', ''), { rng, faces: rest })
+    const n = rr.rolls.reduce((t, g) => t + g.faces.length, 0)
+    if (rest) rest = rest.slice(n)
+    return { dice: x.dice, label: x.label, sign: x.dice.startsWith('-') ? -1 : 1, total: rr.total, faces: rr.rolls.flatMap((g) => g.faces) }
+  })
+  return { ...r, extra: ex, total: r.total + ex.reduce((t, x) => t + x.sign * x.total, 0) }
+}
+/** The dice a d20 test with extras needs, for the throw on screen. */
+export const d20WithNeeded = (mode = 'normal', extra = []) => [...d20Needed(mode), ...(extra || []).filter((x) => x && x.dice).flatMap((x) => diceNeeded(x.dice.replace('-', '')))]
+
 /** A handful of dice from the tray: { 20: 1, 6: 2 } + modifier → { total, groups, text }. */
 export function rollPool(pool, modifier = 0, { rng = Math.random, faces = null } = {}) {
   const next = source(rng, faces)

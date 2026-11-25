@@ -3,6 +3,8 @@
 // owner (a device key) writes them, and the DM may apply quick actions (HP, temp HP, conditions, inspiration,
 // exhaustion). Characters are stored as plain JSON (the owner chose no encryption). Request bodies are never logged.
 
+import { cleanBuff, applyBuff, removeBuffs, BUFF_LIMITS } from '../../src/engine/buffs.js'
+
 export const LIMITS = {
   roomName: 60,
   characterBytes: 256 * 1024, // a character with a small portrait
@@ -344,6 +346,42 @@ async function route(req, env) {
       const rev = await saveEncounter(env, room.id, cur, row)
       return json({ rev, data: runs ? cur : hideEnemies(cur) })
     }
+  }
+
+  // ── spells on a friend: a party member puts a buff (Bless, Shield of Faith, Aid…) on another character's sheet, or
+  // takes theirs off when their concentration ends. Only for their own caster (X-Owner), both in this room.
+  const bm = /^\/rooms\/([A-Za-z0-9_-]+)\/characters\/([A-Za-z0-9_-]+)\/buffs$/.exec(p)
+  if (bm && (m === 'POST' || m === 'DELETE')) {
+    const { room, role } = await roleIn(env, req, bm[1])
+    await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
+    const url = new URL(req.url)
+    const body = m === 'POST' ? await readJson(req, BUFF_LIMITS.bytes + 256) : null
+    const from = String(m === 'POST' ? body?.buff?.from || '' : url.searchParams.get('from') || '')
+    if (!ID.test(bm[2]) || !ID.test(from)) fail(400, 'bad id')
+    const [row, caster] = await Promise.all([
+      env.DB.prepare('SELECT data, room_id FROM characters WHERE id = ?').bind(bm[2]).first(),
+      env.DB.prepare('SELECT owner_hash, room_id FROM characters WHERE id = ?').bind(from).first(),
+    ])
+    if (!row || row.room_id !== room.id || !caster || caster.room_id !== room.id) fail(404, 'no such character')
+    if (role !== 'dm' && role !== 'init' && !same(await ownerHash(req), caster.owner_hash)) fail(403, 'not your caster')
+    const data = JSON.parse(row.data)
+    let st
+    if (m === 'POST') {
+      const buff = cleanBuff({ ...body.buff, at: Date.now() })
+      if (!buff || JSON.stringify(buff).length > BUFF_LIMITS.bytes) fail(400, 'bad buff')
+      st = applyBuff(data.state, buff)
+    } else {
+      const spell = url.searchParams.get('spell')
+      if (spell != null && !/^[a-z0-9-]{1,40}$/.test(spell)) fail(400, 'bad spell')
+      st = { buffs: removeBuffs(data.state?.buffs, { from, spell, conc: url.searchParams.get('conc') === '1' }) }
+      if (JSON.stringify(st.buffs) === JSON.stringify(data.state?.buffs || [])) return json({ id: bm[2], changed: false })
+    }
+    const next = mergePatch(data, { state: st })
+    const text = JSON.stringify(next)
+    if (text.length > LIMITS.characterBytes) fail(413, 'character too large')
+    const rev = await env.DB.prepare('UPDATE characters SET data = ?, rev = rev + 1, updated_at = ? WHERE id = ? RETURNING rev').bind(text, Date.now(), bm[2]).first('rev')
+    await count(env, m === 'POST' ? 'buff_added' : 'buff_removed')
+    return json({ id: bm[2], rev, changed: true, buffs: next.state.buffs })
   }
 
   const cm = /^\/rooms\/([A-Za-z0-9_-]+)\/characters\/([A-Za-z0-9_-]+)$/.exec(p)

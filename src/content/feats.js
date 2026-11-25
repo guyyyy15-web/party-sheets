@@ -27,6 +27,7 @@ const SRD_FEATS = [
   {
     id: 'savage-attacker', name: 'Savage Attacker', category: 'origin',
     summary: 'Once per turn when you hit with a weapon, roll its damage dice twice and use either roll.',
+    effects: [{ type: 'action', id: 'savage-attacker', name: 'Savage Attacker', kind: 'free', perTurn: true, summary: 'Once per turn: roll a weapon\'s damage dice twice, keep the better.' }],
   },
   {
     id: 'skilled', name: 'Skilled', category: 'origin',

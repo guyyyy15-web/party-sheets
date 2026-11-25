@@ -74,6 +74,10 @@ export const putEncounter = (r, data, rev) => api(`/rooms/${r.id}/encounter`, { 
 export const sendInitiative = (r, characterId, total) => api(`/rooms/${r.id}/encounter/initiative`, { method: 'POST', key: runKey(r) || r.playerKey, owner: true, body: { characterId, total } })
 /** A player's damage to someone in the fight: applied at once or waiting for the runner ({ applied, data }). */
 export const sendClaim = (r, characterId, target, amount, label, extra) => api(`/rooms/${r.id}/encounter/claim`, { method: 'POST', key: r.playerKey || runKey(r), owner: true, body: { characterId, target, amount, label, ...(extra || {}) } })
+/** A spell on a party member: the buff goes on their sheet (the caster's owner key proves it's ours). */
+export const sendBuff = (r, casterCh, targetId, buff) => api(`/rooms/${r.id}/characters/${targetId}/buffs`, { method: 'POST', key: r.playerKey || roomKey(r), owner: keyOf(casterCh), body: { buff } })
+/** The caster's concentration ended (or "End"): take their buffs off a target. */
+export const endBuffs = (r, casterCh, targetId, { spell, conc = true } = {}) => api(`/rooms/${r.id}/characters/${targetId}/buffs?from=${encodeURIComponent(casterCh.id)}${conc ? '&conc=1' : ''}${spell ? `&spell=${encodeURIComponent(spell)}` : ''}`, { method: 'DELETE', key: r.playerKey || roomKey(r), owner: keyOf(casterCh) })
 /** HP / conditions / death saves of a character, by the DM or the initiative runner. */
 export const runnerPatch = (r, charId, state) => api(`/rooms/${r.id}/characters/${charId}`, { method: 'PATCH', key: runKey(r), body: { state } })
 
