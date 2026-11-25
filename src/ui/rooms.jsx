@@ -1,7 +1,7 @@
 // Groups ("rooms"): each playing group has its own room, an invite link for the players and a DM link for its DM.
 import React, { useState, useEffect } from 'react'
-import { Sheet } from './common.jsx'
-import { createRoom, listRooms, inviteLink, dmLink, initLink, makeInitLink, roomById, fetchRoom, forgetRoom, syncStatus, onSyncStatus } from './sync.js'
+import { Sheet, GameIcon } from './common.jsx'
+import { createRoom, listRooms, inviteLink, dmLink, initLink, makeInitLink, roomById, fetchRoom, forgetRoom, deleteRoom, syncStatus, onSyncStatus } from './sync.js'
 
 /** Share a link: the phone's share sheet, else copy, else show it to copy by hand. */
 async function shareUrl(url, title, text) {
@@ -9,21 +9,23 @@ async function shareUrl(url, title, text) {
   try { await navigator.clipboard.writeText(url); return 'copied' } catch { return 'manual' }
 }
 
-function LinkRow({ label, hint, url, title, text }) {
+function LinkRow({ label, hint, url, title, text, icon = 'ui.group' }) {
   const [done, setDone] = useState(null)
+  const copy = async () => { try { await navigator.clipboard.writeText(url); setDone('copied') } catch { setDone('manual') } }
   return (
     <div className="link-row">
-      <b>{label}</b><p className="muted small">{hint}</p>
+      <div className="link-head"><GameIcon id={icon} size={30} /><span className="grow"><b>{label}</b><span className="muted small" style={{ display: 'block' }}>{hint}</span></span></div>
+      <input className="link-url" readOnly value={url} aria-label={label} onFocus={(e) => e.target.select()} />
       <div className="row">
-        <input className="input mono grow" readOnly value={url} aria-label={label} onFocus={(e) => e.target.select()} />
-        <button className="btn primary" onClick={async () => setDone(await shareUrl(url, title, text))}>{done === 'copied' ? '✓ Copied' : 'Share'}</button>
+        <button className="btn primary grow" onClick={copy}>{done === 'copied' ? '✓ Copied' : '⧉ Copy link'}</button>
+        <button className="btn ghost grow" onClick={async () => { const r = await shareUrl(url, title, text); if (r === 'copied' || r === 'manual') setDone(r) }}>↗ Share</button>
       </div>
       {done === 'manual' && <p className="muted small">Select the link above and copy it.</p>}
     </div>
   )
 }
 
-export function ShareLinks({ room: room0, onClose }) {
+export function ShareLinks({ room: room0, onClose, onGone }) {
   const [room, setRoom] = useState(() => roomById(room0.id) || room0)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
@@ -35,11 +37,22 @@ export function ShareLinks({ room: room0, onClose }) {
   }
   return (
     <Sheet title={`Links for ${room.name}`} onClose={onClose}>
-      {inv && <LinkRow label="Invite for players" hint="For the players." url={inv} title={`Join ${room.name}`} text={`Join our group "${room.name}" on Party Sheets:`} />}
-      {init && <LinkRow label="Initiative link" hint="For whoever runs the initiative at the table: the order, enemies, HP and conditions. No gold, items or notes." url={init} title={`Initiative: ${room.name}`} text={`Run the initiative for "${room.name}":`} />}
+      {inv && <LinkRow icon="ui.group" label="Invite for players" hint="Each player opens it once and brings a character." url={inv} title={`Join ${room.name}`} text={`⚔️ Join our D&D group "${room.name}" on Party Sheets. Tap to join:`} />}
+      {init && <LinkRow label="Initiative link" hint="For whoever runs the initiative at the table: the order, enemies, HP and conditions. No gold, items or notes." url={init} icon="ui.d20" title={`Initiative: ${room.name}`} text={`🎲 Run the initiative for "${room.name}" on Party Sheets:`} />}
       {room.dmKey && <button className="btn ghost wide" disabled={busy} onClick={make}>{init ? '↻ Make a new Initiative link' : '⚔ Make an Initiative link'}</button>}
       {err && <p className="warn-line" role="alert">{err}</p>}
-      {dm && <LinkRow label="DM link (keep it for the DM)" hint="Only for the DM: every sheet, live." url={dm} title={`DM: ${room.name}`} text={`DM screen for "${room.name}":`} />}
+      {dm && <LinkRow icon="ui.dm" label="DM link (keep it for the DM)" hint="Only for the DM: every sheet, live." url={dm} title={`DM: ${room.name}`} text={`🛡 The DM screen for "${room.name}" on Party Sheets (keep it to yourself):`} />}
+      <div className="danger-zone">
+        {room.dmKey ? (
+          <button className="btn ghost wide danger-text" disabled={busy} onClick={async () => {
+            if (!confirm(`Delete "${room.name}" for everyone? Its links stop working and the fight is cleared. Every character stays saved, just in no group.`)) return
+            setBusy(true); setErr(null)
+            try { await deleteRoom(room); onGone?.(room); onClose() } catch (e) { setErr(e.status === 0 ? 'No connection. Try again when online.' : e.message); setBusy(false) }
+          }}>🗑 Delete this group</button>
+        ) : (
+          <button className="btn ghost wide danger-text" onClick={() => { if (confirm(`Remove "${room.name}" from this phone? Your characters stay saved; open the invite again to come back.`)) { forgetRoom(room.id); onGone?.(room); onClose() } }}>Remove this group from my phone</button>
+        )}
+      </div>
     </Sheet>
   )
 }
@@ -63,7 +76,7 @@ export function NewRoomSheet({ onClose, onCreated }) {
 }
 
 /** Home: the groups this phone knows, with my characters in each and the rest of the party. */
-export function RoomsSection({ chars, renderChar, onDm, onInit, onNewInRoom, onBring, joined }) {
+export function RoomsSection({ chars, renderChar, onDm, onInit, onNewInRoom, onBring, joined, onGone }) {
   const [rooms, setRooms] = useState(listRooms)
   const [party, setParty] = useState({})
   const [share, setShare] = useState(null)
@@ -71,7 +84,7 @@ export function RoomsSection({ chars, renderChar, onDm, onInit, onNewInRoom, onB
   const [bring, setBring] = useState(null)
   useEffect(() => {
     let live = true
-    for (const r of rooms) fetchRoom(r, false).then((j) => live && setParty((p) => ({ ...p, [r.id]: j.characters }))).catch(() => {})
+    for (const r of rooms) fetchRoom(r, false).then((j) => live && setParty((p) => ({ ...p, [r.id]: j.characters }))).catch((e) => { if (live && e.status === 404) { forgetRoom(r.id); setRooms(listRooms()) } }) // deleted by its DM
     return () => { live = false }
   }, [rooms])
   useEffect(() => { if (joined) setRooms(listRooms()) }, [joined])
@@ -103,7 +116,7 @@ export function RoomsSection({ chars, renderChar, onDm, onInit, onNewInRoom, onB
           </div>
         )
       })}
-      {share && <ShareLinks room={share} onClose={() => setShare(null)} />}
+      {share && <ShareLinks room={share} onClose={() => setShare(null)} onGone={(r) => { setRooms(listRooms()); onGone?.(r) }} />}
       {create && <NewRoomSheet onClose={() => setCreate(false)} onCreated={(r) => { setCreate(false); setRooms(listRooms()); setShare(r) }} />}
       {bring && (
         <Sheet title={`Bring to ${bring.name}`} onClose={() => setBring(null)}>

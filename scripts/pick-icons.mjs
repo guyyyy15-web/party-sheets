@@ -39,7 +39,7 @@ const WANT = {
   'cond.incapacitated': ['knockout', 'dizzy'], 'cond.invisible': ['invisible', 'ghost'], 'cond.paralyzed': ['frozen-body', 'imprisoned'], 'cond.petrified': ['stone-bust', 'stone-block'], 'cond.poisoned': ['poison-bottle', 'poison'],
   'cond.prone': ['falling', 'lying-down'], 'cond.restrained': ['manacles', 'chained-heart'], 'cond.stunned': ['dizzy', 'star-swirl'], 'cond.unconscious': ['sleepy', 'night-sleep'], 'cond.exhaustion': ['tired-eye', 'despair'],
   // general
-  'ui.feat': ['laurel-crown', 'laurels'], 'ui.subclass': ['crown', 'tied-scroll'], 'ui.spell': ['magic-swirl'], 'ui.pack': ['knapsack', 'backpack'], 'ui.gold': ['two-coins', 'coins'], 'ui.dm': ['dungeon-gate', 'scroll-quill'], 'ui.group': ['three-friends', 'team-idea'],
+  'ui.d20': ['dice-twenty-faces-twenty'], 'ui.feat': ['laurel-crown', 'laurels'], 'ui.subclass': ['crown', 'tied-scroll'], 'ui.spell': ['magic-swirl'], 'ui.pack': ['knapsack', 'backpack'], 'ui.gold': ['two-coins', 'coins'], 'ui.dm': ['dungeon-gate', 'scroll-quill'], 'ui.group': ['three-friends', 'team-idea'],
 }
 const out = {}, miss = []
 for (const [k, cands] of Object.entries(WANT)) {

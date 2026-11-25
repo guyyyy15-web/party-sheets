@@ -70,6 +70,8 @@ export const fetchEncounter = (r, key = runKey(r) || r.playerKey) => api(`/rooms
 export const putEncounter = (r, data, rev) => api(`/rooms/${r.id}/encounter`, { method: 'PUT', key: runKey(r), body: { data, rev } })
 /** A player's own initiative (or the runner's for anyone). */
 export const sendInitiative = (r, characterId, total) => api(`/rooms/${r.id}/encounter/initiative`, { method: 'POST', key: runKey(r) || r.playerKey, owner: true, body: { characterId, total } })
+/** A player's damage to someone in the fight: applied at once or waiting for the runner ({ applied, data }). */
+export const sendClaim = (r, characterId, target, amount, label) => api(`/rooms/${r.id}/encounter/claim`, { method: 'POST', key: r.playerKey || runKey(r), owner: true, body: { characterId, target, amount, label } })
 /** HP / conditions / death saves of a character, by the DM or the initiative runner. */
 export const runnerPatch = (r, charId, state) => api(`/rooms/${r.id}/characters/${charId}`, { method: 'PATCH', key: runKey(r), body: { state } })
 
@@ -79,6 +81,8 @@ export async function fetchRoom(r, asDm) {
   if (j.room.name !== r.name || JSON.stringify(j.room.settings || {}) !== JSON.stringify(r.settings || {})) keepRoom({ id: r.id, name: j.room.name, settings: j.room.settings || {} })
   return j
 }
+/** The DM deletes the group for everyone (characters stay saved, in no group); then this phone forgets it. */
+export const deleteRoom = (r) => api(`/rooms/${r.id}`, { method: 'DELETE', key: r.dmKey }).then(() => forgetRoom(r.id))
 /** The DM changes the group's name or settings (e.g. expansions on/off). */
 export const updateRoom = (r, body) => api(`/rooms/${r.id}`, { method: 'PATCH', key: r.dmKey, body }).then((j) => keepRoom({ id: r.id, name: j.room.name, settings: j.room.settings || {} }))
 /** Expansion subclasses: the group's DM decides; a character in no group follows this phone's table setting. */

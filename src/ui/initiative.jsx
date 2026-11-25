@@ -6,8 +6,8 @@ import { derive } from '../engine/engine.js'
 import { CONDITIONS } from '../content/conditions.js'
 import { Sheet, signed, Stepper } from './common.jsx'
 import { HpSheet, ConditionsSheet } from './sheet.jsx'
-import { fetchRoom, fetchEncounter, putEncounter, runnerPatch, sendInitiative, roomById as roomOf } from './sync.js'
-import { newEncounter, addPc, addGroup, order, setInit, rollMissing, next, prev, hurt, setDead, toggleCondition, remove, clone, d20, placeOf } from '../encounter-core.js'
+import { fetchRoom, fetchEncounter, putEncounter, runnerPatch, sendInitiative, sendClaim, roomById as roomOf } from './sync.js'
+import { newEncounter, addPc, addGroup, order, setInit, rollMissing, next, prev, hurt, setDead, toggleCondition, remove, clone, d20, placeOf, applyClaim, dropClaim, setAuto, targetsFor } from '../encounter-core.js'
 
 const POLL_MS = 3000
 const condName = (id) => CONDITIONS.find((c) => c.id === id)?.name || id
@@ -97,6 +97,13 @@ export function InitiativeView({ room, onBack }) {
             <span className="grow"><b>Round {data.round}</b>{current ? <> · <span className="muted">turn:</span> <b>{current.name}</b></> : <span className="muted"> · not started</span>}</span>
             <button className="btn ghost small" onClick={() => setAdding(true)}>+ Enemies</button>
           </div>
+          {(data.claims || []).length > 0 && (
+            <div className="claims" role="region" aria-label="Damage to confirm">
+              <h3 className="sec">Damage to confirm</h3>
+              {data.claims.map((cl) => <Claim key={cl.id} cl={cl} target={data.combatants.find((c) => c.id === cl.target)} change={change} />)}
+            </div>
+          )}
+          <label className="row toggle small"><input type="checkbox" checked={!!data.auto} onChange={(e) => change((x) => setAuto(x, e.target.checked))} /><span>Apply players' damage to enemies without asking</span></label>
           {missing.length > 0 && (
             <div className="banner init-missing">
               <span className="grow">Waiting for initiative: {missing.map((c) => c.name).join(', ')}</span>
@@ -137,7 +144,7 @@ export function InitiativeView({ room, onBack }) {
       )}
 
       {adding && <AddEnemies onClose={() => setAdding(false)} onAdd={(g) => { change((e) => addGroup(e, g)); setAdding(false) }} />}
-      {editInit && data && <InitNumber c={data.combatants.find((x) => x.id === editInit)} onClose={() => setEditInit(null)}
+      {editInit && data && <InitNumber c={data.combatants.find((x) => x.id === editInit)} onClose={() => setEditInit(null)} onRemove={() => { change((e) => remove(e, editInit)); setEditInit(null) }}
         onSet={(v) => { const c = data.combatants.find((x) => x.id === editInit); if (c?.kind === 'pc') sendInitiative(room, c.charId, v).then((j) => setEnc({ rev: j.rev, data: j.data })).catch(() => change((e) => setInit(e, editInit, v))); else change((e) => setInit(e, editInit, v)); setEditInit(null) }} />}
       {sel && <EnemySheet c={sel} onClose={() => setOpen(null)} change={(fn) => change((e) => fn(e))} />}
       {pcHp && pcSel(pcHp) && <HpSheet d={pcSel(pcHp).d} ch={pcSel(pcHp).ch} hp={pcSel(pcHp).hp} setState={(s) => pcAct(pcHp, s)} onClose={() => setPcHp(null)} />}
@@ -146,8 +153,22 @@ export function InitiativeView({ room, onBack }) {
   )
 }
 
+/** One player's damage waiting for the runner: apply it, change the amount first, or drop it. */
+function Claim({ cl, target, change }) {
+  const [n, setN] = useState(String(cl.amount))
+  const v = parseInt(n, 10)
+  return (
+    <div className="claim">
+      <span className="grow"><b>{cl.byName}</b> → <b>{target?.name || '?'}</b>{cl.label ? <span className="muted small"> · {cl.label}</span> : null}</span>
+      <input className="input claim-n" inputMode="numeric" value={n} onChange={(e) => setN(e.target.value.replace(/\D/g, '').slice(0, 3))} aria-label={`Damage from ${cl.byName} to ${target?.name}`} />
+      <button className="btn small primary" disabled={!Number.isInteger(v)} onClick={() => change((e) => applyClaim(e, cl.id, v))} aria-label={`Apply ${v} damage to ${target?.name}`}>✓</button>
+      <button className="btn small ghost" onClick={() => change((e) => dropClaim(e, cl.id))} aria-label={`Drop the damage from ${cl.byName}`}>✕</button>
+    </div>
+  )
+}
+
 /** Type the number (a player rolled real dice), or roll d20 + their bonus here. */
-function InitNumber({ c, onSet, onClose }) {
+function InitNumber({ c, onSet, onClose, onRemove }) {
   const [v, setV] = useState(c?.init != null ? String(c.init) : '')
   if (!c) return null
   const n = parseInt(v, 10)
@@ -159,6 +180,7 @@ function InitNumber({ c, onSet, onClose }) {
         <button className="btn primary grow" disabled={!Number.isInteger(n)} onClick={() => onSet(n)}>Set {Number.isInteger(n) ? n : ''}</button>
         <button className="btn ghost grow" onClick={() => onSet(d20() + (c.bonus || 0))}>🎲 Roll d20 {signed(c.bonus || 0)}</button>
       </div>
+      {onRemove && <button className="btn ghost wide danger-text" onClick={() => { if (confirm(`Take ${c.name} out of this fight?`)) onRemove() }}>Remove {c.name} from this fight</button>}
     </Sheet>
   )
 }
@@ -207,10 +229,11 @@ function EnemySheet({ c, change, onClose }) {
 export function useFight(ch) {
   const room = ch?.roomId ? roomOf(ch.roomId) : null
   const [enc, setEnc] = useState(null)
+  const [loaded, setLoaded] = useState(!room)
   useEffect(() => {
     if (!room) return
     let live = true
-    const load = () => { if (!document.hidden) fetchEncounter(room, room.playerKey || room.dmKey || room.initKey).then((j) => live && setEnc(j.data)).catch(() => {}) }
+    const load = () => { if (!document.hidden) fetchEncounter(room, room.playerKey || room.dmKey || room.initKey).then((j) => { if (live) { setEnc(j.data); setLoaded(true) } }).catch(() => live && setLoaded(true)) }
     load()
     const t = setInterval(load, 5000)
     return () => { live = false; clearInterval(t) }
@@ -220,7 +243,13 @@ export function useFight(ch) {
     if (!room || !enc?.active) return false
     try { const j = await sendInitiative(room.playerKey ? { ...room, initKey: null, dmKey: null } : room, ch.id, total); setEnc(j.data); return true } catch { return false }
   }
-  return { enc: enc?.active ? enc : null, me, send }
+  /** Report damage done to someone in the fight: { applied } or null when it couldn't be sent. */
+  const claim = async (target, amount, label) => {
+    if (!room || !enc?.active) return null
+    try { const j = await sendClaim(room, ch.id, target, amount, label); setEnc(j.data); return { applied: j.applied } } catch { return null }
+  }
+  const targets = enc?.active && me ? targetsFor(enc, me.id) : []
+  return { enc: enc?.active ? enc : null, me, send, claim, targets, loaded }
 }
 
 export function FightBanner({ fight, onRoll, bonus }) {

@@ -209,6 +209,27 @@ test('initiative: the DM makes the Initiative link; it runs the fight; players s
   const g = await call(`/rooms/${room.id}/encounter`, { auth: initKey })
   assert.equal(g.body.data.combatants.find((c) => c.charId === 'brakka01').init, 17); assert.equal(g.body.data.combatants[1].ac, 11)
   assert.equal((await call(`/rooms/${room.id}/characters/brakka01`, { method: 'PATCH', auth: initKey, body: { state: { hp: 3, conditions: ['prone'] } } })).status, 200)
+  // the player reports damage: it waits for the runner (players never see the list); with auto on, it lands at once
+  const c1 = await call(`/rooms/${room.id}/encounter/claim`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', target: 'npc-1', amount: 9, label: 'Longsword' } })
+  assert.equal(c1.status, 200); assert.equal(c1.body.applied, false); assert.equal(c1.body.data.claims, undefined)
+  assert.equal((await call(`/rooms/${room.id}/encounter/claim`, { method: 'POST', auth: playerKey, owner: key(), body: { characterId: 'brakka01', target: 'npc-1', amount: 9 } })).status, 403, 'only for your own character')
+  const g2 = await call(`/rooms/${room.id}/encounter`, { auth: initKey })
+  assert.equal(g2.body.data.claims.length, 1); assert.equal(g2.body.data.claims[0].byName, 'Brakka'); assert.equal(g2.body.data.combatants[1].dmg, 39)
+  const auto = { ...g2.body.data, auto: true, claims: [] }
+  const pa = await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: g2.body.rev, data: auto } })
+  const c2 = await call(`/rooms/${room.id}/encounter/claim`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', target: 'npc-1', amount: 5 } })
+  assert.equal(c2.body.applied, true); assert.equal(c2.body.data.combatants.find((c) => c.id === 'npc-1').dmg, 44)
   // end the fight
-  assert.equal((await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: 2, data: null } })).body.data, null)
+  assert.equal((await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: c2.body.rev, data: null } })).body.data, null)
+})
+
+test('the DM deletes a group: links stop working, characters stay saved in no group, players can\'t delete it', async () => {
+  const { room, playerKey, dmKey } = (await call('/rooms', { method: 'POST', body: { name: 'Short-lived' } })).body
+  const own = key()
+  await call(`/rooms/${room.id}/characters/gone0001`, { method: 'PUT', auth: playerKey, owner: own, body: { patch: hero('Gone') } })
+  assert.equal((await call(`/rooms/${room.id}`, { method: 'DELETE', auth: playerKey })).status, 403)
+  assert.equal((await call(`/rooms/${room.id}`, { method: 'DELETE', auth: dmKey })).status, 200)
+  assert.equal((await call(`/rooms/${room.id}`, { auth: playerKey })).status, 404)
+  const mine = (await call('/me/characters', { owner: own })).body.characters
+  assert.ok(mine.some((c) => c.id === 'gone0001' && c.roomId === null), 'the character is still saved, in no group')
 })

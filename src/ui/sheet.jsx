@@ -35,6 +35,18 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const setState = (patch) => setCh({ ...ch, state: { ...ch.state, ...patch } })
   // a fight in the group: the initiative rolled here goes to the Initiative screen by itself
   const fight = useFight(ch)
+  // in a group fight, the turn guide opens by itself when this character's turn comes
+  const [guideReq, setGuideReq] = useState(0)
+  const turnKey = fight.enc && fight.me && fight.enc.turn === fight.me.id ? `${fight.enc.round}:${fight.enc.turn}` : null
+  // (only when the turn changes while the sheet is open: opening the sheet mid-turn shows the banner, no pop-up)
+  const lastTurn = useRef(undefined)
+  useEffect(() => {
+    if (!fight.loaded) return // the first answer is "as it was when the sheet opened": no pop-up for that
+    const first = lastTurn.current === undefined
+    if (lastTurn.current === turnKey) return
+    lastTurn.current = turnKey
+    if (turnKey && !first) { setTab('turn'); setGuideReq((n) => n + 1) }
+  }, [turnKey, fight.loaded])
   // the tabs stick right under the app bar, whatever its height (a "Save now" makes it taller)
   const barRef = useRef(null)
   useEffect(() => {
@@ -131,7 +143,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       <EdgeTracker edge={ch.state.edge || 0} onSet={(edge) => setState({ edge })} />
 
-      {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} setMode={setMode} used={used} spend={spend} setState={setState} hp={hp} show={show} setTerm={setTerm} onSpells={() => setTab('spells')} />}
+      {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} setMode={setMode} used={used} spend={spend} setState={setState} hp={hp} show={show} setTerm={setTerm} onSpells={() => setTab('spells')} fight={fight} guideReq={guideReq} />}
       {tab === 'spells' && d.spellcasting && <SpellsTab key={spellPick ? 'pick' : 'tab'} openPicker={spellPick} onPickerClosed={() => setSpellPick(false)} d={d} ch={ch} setCh={setCh} setState={setState} roll={roll} mode={mode} show={show} />}
       {tab === 'spells' && d.featSpells.length > 0 && <FeatSpells d={d} ch={ch} setState={setState} roll={roll} mode={mode} />}
       {tab === 'checks' && <ChecksTab d={d} roll={roll} mode={mode} show={show} />}
@@ -180,9 +192,10 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   )
 }
 
-function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, setTerm, onSpells }) {
+function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, setTerm, onSpells, fight, guideReq }) {
   const [openAtk, setOpenAtk] = useState(null) // phones: an attack's math and properties fold away behind ⓘ
   const [guide, setGuide] = useState(false)
+  useEffect(() => { if (guideReq) setGuide(true) }, [guideReq])
   const atk = d.attacks
   const pinned = new Set(ch.pinned || [])
   const groups = ['action', 'bonus', 'reaction', 'free', 'info']
@@ -196,7 +209,7 @@ function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, 
   return (
     <section className="turn">
       <button className="btn primary wide big-btn start-turn" onClick={() => setGuide(true)}>▶ Start my turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
-      {guide && <TurnGuide d={d} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} />}
+      {guide && <TurnGuide d={d} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} fight={fight} />}
       <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>
       <p className="muted small tap-hint">🎲 Tap a number to roll it: first <b>to hit</b> (d20), then <b>damage</b> if it hits.</p>
       {atk.map((a) => (

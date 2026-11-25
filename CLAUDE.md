@@ -93,6 +93,14 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   number can be typed by hand (real dice). Enemies by kind × count, no HP: `dmg` counts damage taken from 0 (healing
   down), the DM says when one falls (`dead`, skipped in the order). Players see the order, enemies' damage and
   conditions, never their AC. Poll: runner 3 s, players 5 s.
+  Attacks in a fight: when the turn reaches a player while their sheet is open, the turn guide opens by itself
+  ("Who are you attacking?" → to hit → damage). The damage is POSTed to `…/encounter/claim`: with `enc.auto` it is added
+  to the enemy at once, else it waits in `enc.claims` for the runner (✓ with the amount editable, or ✕). Players never
+  get the claims list. The runner can take anyone out of the fight (tap their number → Remove).
+- The DM deletes a group in Links (`DELETE /rooms/:id`: characters stay saved in no group, the fight goes); others
+  can remove it from their phone; a group that answers 404 is forgotten. The wizard's 🗑 deletes a half-made hero.
+- Logo: the d20 from game-icons (`ui.d20`; icons/icon.svg → `node scripts/icons.cjs`; og.png → `node scripts/og.cjs`).
+  Links sheet: each link has Copy and Share (share text is a short sentence + the URL).
 - Group settings (`rooms.settings`, DM only): `expansions` = subclasses from the expansion books (`expansion: true`,
   tagged with their book). A character in no group follows the phone's Table setting.
 - Admin screen (`#/admin`, `src/ui/admin.jsx`, `GET /admin/stats`): the first password set becomes the admin's

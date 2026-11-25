@@ -25,7 +25,7 @@ function suggested(cls, ch) {
   return [...(cls?.primary || []), 'CON', ...ABILITIES].filter((a, i, l) => l.indexOf(a) === i)
 }
 
-export function Wizard({ ch, setCh, onDone, onCancel, settings, throwOn }) {
+export function Wizard({ ch, setCh, onDone, onCancel, onDelete, settings, throwOn }) {
   const [step, setStep] = useState(ch.wizardStep || 0)
   const d = useMemo(() => derive(ch), [ch])
   const [nudge, setNudge] = useState(false)
@@ -71,6 +71,7 @@ export function Wizard({ ch, setCh, onDone, onCancel, settings, throwOn }) {
           {STEPS.map((s, i) => <span key={s} className={i < step ? 'done' : i === step ? 'on' : ''} />)}
         </div>
         <span className="muted small">{step + 1}/{STEPS.length}</span>
+        {onDelete && <button className="icon-btn" onClick={() => { if (confirm(`Delete ${ch.name?.trim() || 'this character'}? It's not finished, and it can't be brought back.`)) onDelete() }} aria-label="Delete this character">🗑</button>}
       </header>
       <main className="wiz-body" ref={body}>
         {step === 0 && <HeroStep ch={ch} setCh={setCh} />}
