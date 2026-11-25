@@ -56,9 +56,11 @@ export async function joinRoom({ kind, roomId, key }) {
   return keepRoom({ id: roomId, name: j.room.name, settings: j.room.settings || {}, ...(kind === 'dm' ? { dmKey: key } : kind === 'init' ? { initKey: key } : { playerKey: key }) })
 }
 const page = () => location.href.split('#')[0]
-export const inviteLink = (r) => (r.playerKey ? `${page()}#/join/${r.id}.${r.playerKey}` : null)
-export const dmLink = (r) => (r.dmKey ? `${page()}#/dm/${r.id}.${r.dmKey}` : null)
-export const initLink = (r) => (r.initKey ? `${page()}#/init/${r.id}.${r.initKey}` : null)
+// each kind of link opens through its own little page (join.html, dm.html, initiative.html) for its own link preview
+const dir = () => page().split('?')[0].replace(/[^/]*$/, '')
+export const inviteLink = (r) => (r.playerKey ? `${dir()}join.html#/join/${r.id}.${r.playerKey}` : null)
+export const dmLink = (r) => (r.dmKey ? `${dir()}dm.html#/dm/${r.id}.${r.dmKey}` : null)
+export const initLink = (r) => (r.initKey ? `${dir()}initiative.html#/init/${r.id}.${r.initKey}` : null)
 /** The DM makes (or remakes: the old one stops working) the group's Initiative link. */
 export const makeInitLink = (r) => api(`/rooms/${r.id}/init-link`, { method: 'POST', key: r.dmKey }).then((j) => keepRoom({ id: r.id, initKey: j.initKey }))
 
