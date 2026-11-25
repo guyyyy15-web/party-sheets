@@ -37,7 +37,7 @@ export function ShareLinks({ room: room0, onClose, onGone }) {
   }
   return (
     <Sheet title={`Links for ${room.name}`} onClose={onClose}>
-      {inv && <LinkRow icon="ui.group" label="Invite for players" hint="Each player opens it once and brings a character." url={inv} title={`Join ${room.name}`} text={`⚔️ Join our D&D group "${room.name}" on Tavern Table. Tap to join:`} />}
+      {inv && <LinkRow icon="ui.group" label="Invite for players" hint="Each player opens it once and brings a character." url={inv} title={`Join ${room.name}`} text={`⚔️ Join our D&D table "${room.name}" on Tavern Table. Tap to join:`} />}
       {init && <LinkRow label="Initiative link" hint="For whoever runs the initiative at the table: the order, enemies, HP and conditions. No gold, items or notes." url={init} icon="ui.d20" title={`Initiative: ${room.name}`} text={`🎲 Run the initiative for "${room.name}" on Tavern Table:`} />}
       {room.dmKey && <button className="btn ghost wide" disabled={busy} onClick={make}>{init ? '↻ Make a new Initiative link' : '⚔ Make an Initiative link'}</button>}
       {err && <p className="warn-line" role="alert">{err}</p>}
@@ -45,12 +45,12 @@ export function ShareLinks({ room: room0, onClose, onGone }) {
       <div className="danger-zone">
         {room.dmKey ? (
           <button className="btn ghost wide danger-text" disabled={busy} onClick={async () => {
-            if (!confirm(`Delete "${room.name}" for everyone? Its links stop working and the fight is cleared. Every character stays saved, just in no group.`)) return
+            if (!confirm(`Delete "${room.name}" for everyone? Its links stop working and the fight is cleared. Every character stays saved, just in no table.`)) return
             setBusy(true); setErr(null)
             try { await deleteRoom(room); onGone?.(room); onClose() } catch (e) { setErr(e.status === 0 ? 'No connection. Try again when online.' : e.message); setBusy(false) }
-          }}>🗑 Delete this group</button>
+          }}>🗑 Delete this table</button>
         ) : (
-          <button className="btn ghost wide danger-text" onClick={() => { if (confirm(`Remove "${room.name}" from this phone? Your characters stay saved; open the invite again to come back.`)) { forgetRoom(room.id); onGone?.(room); onClose() } }}>Remove this group from my phone</button>
+          <button className="btn ghost wide danger-text" onClick={() => { if (confirm(`Remove "${room.name}" from this phone? Your characters stay saved; open the invite again to come back.`)) { forgetRoom(room.id); onGone?.(room); onClose() } }}>Remove this table from my phone</button>
         )}
       </div>
     </Sheet>
@@ -63,14 +63,14 @@ export function NewRoomSheet({ onClose, onCreated }) {
   const [err, setErr] = useState(null)
   const go = async () => {
     setBusy(true); setErr(null)
-    try { onCreated(await createRoom(name.trim())) } catch (e) { setErr(e.status === 0 ? 'No connection. Try again when online.' : e.status === 429 ? 'Too many new groups from here. Try again in an hour.' : e.message); setBusy(false) }
+    try { onCreated(await createRoom(name.trim())) } catch (e) { setErr(e.status === 0 ? 'No connection. Try again when online.' : e.status === 429 ? 'Too many new tables from here. Try again in an hour.' : e.message); setBusy(false) }
   }
   return (
-    <Sheet title="New group" onClose={onClose}>
+    <Sheet title="New table" onClose={onClose}>
       
-      <label className="field"><span>Group name</span><input className="input" value={name} maxLength={60} placeholder="Thursday night" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) go() }} autoFocus /></label>
+      <label className="field"><span>Table name</span><input className="input" value={name} maxLength={60} placeholder="Thursday night" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) go() }} autoFocus /></label>
       {err && <p className="warn-line" role="alert">{err}</p>}
-      <button className="btn primary wide" disabled={!name.trim() || busy} onClick={go}>{busy ? 'Creating…' : 'Create group'}</button>
+      <button className="btn primary wide" disabled={!name.trim() || busy} onClick={go}>{busy ? 'Creating…' : 'Create table'}</button>
     </Sheet>
   )
 }
@@ -92,15 +92,15 @@ export function RoomsSection({ chars, renderChar, onDm, onInit, onNewInRoom, onB
   const free = chars.filter((c) => !c.roomId && !c.draft)
   return (
     <section className="rooms" aria-label="Groups">
-      <div className="section-head"><h2>Groups</h2><button className="btn ghost small" onClick={() => setCreate(true)}>+ New group</button></div>
-      {rooms.length === 0 && <p className="muted small">Make a group, or open an invite someone sent you.</p>}
+      <div className="section-head"><h2>Tables</h2><button className="btn ghost small" onClick={() => setCreate(true)}>+ New table</button></div>
+      {rooms.length === 0 && <p className="muted small">Make a table, or open an invite someone sent you.</p>}
       {rooms.map((r) => {
         const own = mine(r), others = (party[r.id] || []).filter((p) => !own.some((c) => c.id === p.id))
         return (
           <div key={r.id} className={`room ${joined === r.id ? 'fresh' : ''}`}>
             <div className="room-head">
               <span className="grow"><b>{r.name}</b><span className="muted small">{r.dmKey ? 'You are the DM' : r.initKey ? 'You run the initiative' : 'Player'}{party[r.id] ? ` · ${party[r.id].length} in the party` : ''}</span></span>
-              {(r.initKey || r.dmKey) && <button className="btn small primary" onClick={() => onInit(r)}>⚔ Initiative</button>}
+              {(r.initKey || r.dmKey) && <button className="btn small primary" onClick={() => onInit(r)}>⚔ The Fight</button>}
               {r.dmKey && <button className="btn small primary" onClick={() => onDm(r)}>DM screen</button>}
               <button className="btn small ghost" onClick={() => setShare(r)} aria-label={`Links for ${r.name}`}>Links</button>
             </div>
@@ -110,7 +110,7 @@ export function RoomsSection({ chars, renderChar, onDm, onInit, onNewInRoom, onB
             {r.playerKey && (
               <div className="row">
                 {free.length > 0 && <button className="btn ghost grow" onClick={() => setBring(r)}>Bring a character</button>}
-                <button className="btn ghost grow" onClick={() => onNewInRoom(r)}>+ New for this group</button>
+                <button className="btn ghost grow" onClick={() => onNewInRoom(r)}>+ New for this table</button>
               </div>
             )}
           </div>

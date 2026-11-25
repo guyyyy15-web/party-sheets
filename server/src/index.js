@@ -156,7 +156,7 @@ async function route(req, env) {
       const data = JSON.parse(r.data)
       if (role === 'init') return { id: r.id, rev: r.rev, updatedAt: r.updated_at, data: privateless(data) }
       if (role === 'player' && sheets) return { id: r.id, rev: r.rev, updatedAt: r.updated_at, name: data.name, data: partySheet(data) }
-      return role === 'dm' ? { id: r.id, rev: r.rev, updatedAt: r.updated_at, data } : { id: r.id, rev: r.rev, name: data.name, classId: data.classId, level: data.level, speciesId: data.speciesId, portrait: data.portrait?.kind === 'icon' ? data.portrait : null }
+      return role === 'dm' ? { id: r.id, rev: r.rev, updatedAt: r.updated_at, data } : { id: r.id, rev: r.rev, name: data.name, classId: data.classId, level: data.level, speciesId: data.speciesId, portrait: data.portrait?.kind === 'icon' ? data.portrait : null, avatar: data.avatar || null }
     })
     return json({ room: publicRoom(room), role, characters })
   }

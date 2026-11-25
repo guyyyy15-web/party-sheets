@@ -15,7 +15,7 @@ const POINTS = [
   ['class.fighter', 'Build a hero in minutes', 'Pick a class, species and background. The app applies every rule: 12 classes, 125 subclasses, all the feats and 339 spells.'],
   ['ui.spell', 'Every number explained', 'Tap any number to see where it comes from. Every roll shows its math, so you learn to play with real dice.'],
   ['ui.feat', 'Advice as you level up', 'Tell it how you want to play; it recommends what to pick at every level, and shows what each level brings.'],
-  ['ui.group', 'Play together', 'Make a group, send the invite. The DM sees every sheet live and can mark damage and conditions.'],
+  ['ui.group', 'Play together', 'Make a table, send the invite. The DM sees every sheet live and can mark damage and conditions.'],
   ['ui.dm', 'Yours, everywhere', 'Saved on the server as you play, works with no signal, and signs in on any phone with Face ID.'],
 ]
 

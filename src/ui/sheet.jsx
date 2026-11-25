@@ -5,6 +5,7 @@ import { CONDITIONS, EXHAUSTION, INSPIRATION } from '../content/conditions.js'
 import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTERY } from '../content/basics.js'
 import { SourcesSheet, Sheet, Stepper, signed, Num, Breakdown, Legend, themeOf, GameIcon } from './common.jsx'
 import { ChoicesStep, Portrait } from './wizard.jsx'
+import { LookSheet } from './avatar.jsx'
 import { SyncBadge } from './rooms.jsx'
 import { SpellsTab, FeatSpells } from './spells.jsx'
 import { TurnGuide } from './turn.jsx'
@@ -38,6 +39,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const [settings, setSettings] = useState(false)
   const [shortRest, setShortRest] = useState(false)
   const [condOpen, setCondOpen] = useState(false)
+  const [lookOpen, setLookOpen] = useState(false)
   // (a buff that raised max HP and ended leaves current HP at the new max)
   const hp = Math.min(ch.state.hp ?? d.hp.value, d.hp.value)
   // every state change goes through here: when concentration ends or changes, the caster's buffs end everywhere
@@ -89,6 +91,14 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const show = (title, x) => setSources({ title, total: x.value, sources: x.sources })
   const theme = themeOf(ch)
   // spell slots live in the Spells tab
+  // the tabs sit at the bottom on phones: a new tab starts at its top, not wherever the last one was scrolled to
+  const pickTab = (id) => {
+    setTab(id)
+    requestAnimationFrame(() => {
+      const el = document.querySelector('.sheet-main'), bar = barRef.current?.getBoundingClientRect().height || 0
+      if (el && el.getBoundingClientRect().top < bar) window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - bar - 8 })
+    })
+  }
   const sideRes = d.resources.filter((r) => !r.hidden && !(d.spellcasting && (/^slot-\d$/.test(r.id) || r.id === 'pact-slots')))
 
   return (
@@ -156,17 +166,17 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       {ch.level < 20 && <NextLevelLine ch={ch} onOpen={(diff) => setPeek({ diff, preview: true })} />}
       <section className="rests">
-        <button className="btn ghost" onClick={() => setShortRest(true)}>☕ Short rest</button>
-        <button className="btn ghost" onClick={() => { if (confirm('Long rest: HP and every resource back to full?')) setCh({ ...ch, state: rest(ch, 'long') }) }}>🌙 Long rest</button>
-        {ch.level < 20 && <button className="btn primary" onClick={() => setLevelUp('up')}>⬆ Level up</button>}
+        <button className="btn ghost" onClick={() => setShortRest(true)}>☕ Catch your breath<small>short rest</small></button>
+        <button className="btn ghost" onClick={() => { if (confirm('Long rest: HP and every resource back to full?')) setCh({ ...ch, state: rest(ch, 'long') }) }}>🌙 Sleep it off<small>long rest</small></button>
+        {ch.level < 20 && <button className="btn primary" onClick={() => setLevelUp('up')}>⬆ Level up!</button>}
       </section>
       <Legend />
       </aside>
 
       <div className="sheet-main">
       <nav className="tabs" role="tablist">
-        {[['turn', 'My Turn'], ...(d.spellcasting || d.featSpells.length ? [['spells', 'Spells']] : []), ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
-          <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{l}</button>
+        {[['turn', 'Your Turn'], ...(d.spellcasting || d.featSpells.length ? [['spells', 'Spells']] : []), ['checks', 'Checks'], ['features', 'Features'], ['gear', 'Gear'], ['notes', 'Notes']].map(([id, l]) => (
+          <button key={id} role="tab" aria-selected={tab === id} onClick={() => pickTab(id)}>{l}</button>
         ))}
       </nav>
 
@@ -185,6 +195,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       {sources && <SourcesSheet {...sources} onClose={() => setSources(null)}>{TITLE_TERM[sources.title] && termById(TITLE_TERM[sources.title]) && <p className="term-text small">{termById(TITLE_TERM[sources.title]).text} <button className="linkish" onClick={() => { const t = TITLE_TERM[sources.title]; setSources(null); setTerm(t) }}>More</button></p>}</SourcesSheet>}
       {term && <TermCard id={term} ch={ch} onClose={() => setTerm(null)} onOpen={setTerm} onWear={(armor) => setCh({ ...ch, equipment: { ...ch.equipment, armor } })} />}
       {shortRest && <ShortRest ch={ch} setCh={setCh} roll={roll} onClose={() => setShortRest(false)} />}
+      {lookOpen && <LookSheet ch={ch} setCh={setCh} onClose={() => setLookOpen(false)} />}
       {condOpen && <ConditionsSheet d={d} ch={ch} setState={setState} onClose={() => setCondOpen(false)} onTerm={(id) => { setCondOpen(false); setTerm(id) }} />}
       {hpOpen && <HpSheet d={d} ch={ch} hp={hp} setState={setState} onClose={() => setHpOpen(false)} roll={roll} />}
       {levelUp && <LevelUp ch={ch} setCh={setCh} start={levelUp} roll={roll} onClose={() => setLevelUp(false)} onSpells={() => { setLevelUp(false); setTab('spells'); setSpellPick(true) }} />}
@@ -196,6 +207,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
       )}
       {settings && (
         <Sheet title="Character" onClose={() => setSettings(false)}>
+          <button className="btn ghost wide look-btn" onClick={() => { setSettings(false); setLookOpen(true) }}><Portrait ch={ch} size={40} /> ✎ Your look</button>
           <span className="field-label">Color</span>
           <div className="themes">{THEMES.map((t) => <button key={t} className={`swatch theme-${t} ${theme === t ? 'on' : ''}`} aria-label={t} onClick={() => setCh({ ...ch, theme: t })} />)}</div>
           <label className="field"><span>Name</span><input className="input" value={ch.name} onChange={(e) => setCh({ ...ch, name: e.target.value.slice(0, 40) })} /></label>
@@ -209,9 +221,9 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
           )}
           {group && (
             <div className="panel">
-              <b>Group: {group.name}</b>
+              <b>Table: {group.name}</b>
               <p className="muted small">Your DM sees this sheet live.</p>
-              <button className="btn ghost wide" onClick={() => { if (confirm(`Take ${ch.name} out of ${group.name}? The character stays on this phone.`)) { setSettings(false); group.onLeave() } }}>Leave the group</button>
+              <button className="btn ghost wide" onClick={() => { if (confirm(`Take ${ch.name} out of ${group.name}? The character stays on this phone.`)) { setSettings(false); group.onLeave() } }}>Leave the table</button>
             </div>
           )}
           <button className="btn danger wide" onClick={() => { if (confirm(`Delete ${ch.name}? It's deleted from the server too. Export a backup first if you might want it back.`)) onDelete() }}>Delete character</button>
@@ -249,7 +261,7 @@ function TurnTab({ d, ch, setCh, roll, mode, setMode, used, spend, setState, hp,
   return (
     <section className="turn">
       <TurnBar d={d} ch={ch} setState={setState} />
-      <button className="btn primary wide big-btn start-turn" onClick={() => { setState(turnStartPatch(ch.state, d)); setGuide(true) }}>▶ Start my turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
+      <button className="btn primary wide big-btn start-turn" onClick={() => { setState(turnStartPatch(ch.state, d)); setGuide(true) }}>⚔ Your turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
       {guide && <TurnGuide d={d} ch={ch} setState={setState} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} fight={fight}
         takeAction={() => { if (!allowed(ch.state.turn, { kind: 'action' })) return false; setState({ turn: usedTurn(ch.state.turn, { kind: 'action' }) }); return true }} />}
       <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>

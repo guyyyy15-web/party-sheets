@@ -13,6 +13,17 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   tag), and every official expansion subclass (`src/content/ext-subclasses-*.js`, `expansion: true`, tagged with its
   book; older ones follow the 2024 rule: features below level 3 arrive at 3). Never paste book text or flavor text;
   summaries say what it does, with the numbers.
+- Look (release 1 of the plan in the Claude doc "Tavern Table — next update plan", Guy approved 2026-11-25): a tavern
+  at night palette, fonts Cinzel (titles) / Atkinson Hyperlegible (text) / JetBrains Mono (numbers) from Google Fonts
+  (the service worker keeps them for offline). Names in an adventurous fantasy tone, not high English: the Tavern
+  (home), Tables (groups), The Fight (initiative), Your turn, Catch your breath / Sleep it off (rests), Tavern settings
+  (this phone's settings). On phones the sheet's tabs sit at the bottom.
+- Avatars (`src/engine/avatar.js` pure, `src/content/avatars.js` our layers, UI `src/ui/avatar.jsx`): DiceBear
+  "Adventurer" (Lisa Wischofsky, CC BY 4.0, credited on the home page) + our class mark (hat, hood, horns…), species
+  marks and the class color. A character stores only `avatar: { seed, hair, hairColor, skin, eyes, mouth, glasses,
+  layer }`; with none, the look comes from its id (same on every phone). A photo or emoji (`portrait`) still wins when
+  chosen. "Your look" in the wizard's first step and in the character settings. After drawing layers: `node
+  scripts/avatars.mjs` → screenshots/avatars.png, check it by eye.
 - Icons: game-icons.net (CC BY 3.0, credited on the home page). `node scripts/pick-icons.mjs` copies the ones in use
   into `src/content/icons-data.js` (the page carries only those; no CDN). Use `<GameIcon id="w.longsword" />`.
 - Saves: IndexedDB `party-sheets` (localStorage fallback). The character shape has `v: 1`; a change to it must read

@@ -113,7 +113,7 @@ function makeStage() {
   Object.assign(banner.style, {
     position: 'absolute', left: '50%', bottom: 'calc(40px + env(safe-area-inset-bottom))', transform: 'translateX(-50%)', minWidth: '200px', width: 'min(92vw, 420px)', maxHeight: DVH ? '55dvh' : '55vh', overflowY: 'auto',
     maxWidth: 'calc(100% - 32px)', textAlign: 'center', padding: '10px 18px', borderRadius: '14px', background: '#17151a', border: `1px solid ${GOLD}`,
-    color: '#e9e2d0', fontFamily: "'Shippori Mincho', Georgia, serif", opacity: '0', transition: 'opacity .25s', pointerEvents: 'none',
+    color: '#e9e2d0', fontFamily: "'Cinzel', Georgia, serif", opacity: '0', transition: 'opacity .25s', pointerEvents: 'none',
   })
   el.appendChild(banner)
   const hint = document.createElement('div')

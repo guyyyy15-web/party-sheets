@@ -67,7 +67,7 @@ function App() {
         if (link.kind === 'dm') setView({ name: 'dm', roomId: r.id })
         else if (link.kind === 'init') setView({ name: 'init', roomId: r.id })
         else { setJoined(r.id); setView({ name: 'home' }) }
-      } catch (e) { say(e.status === 0 ? 'No connection: open the link again when online.' : e.status === 404 ? 'That group no longer exists.' : 'That link doesn\'t work. Ask for a new one.') }
+      } catch (e) { say(e.status === 0 ? 'No connection: open the link again when online.' : e.status === 404 ? 'That table no longer exists.' : 'That link doesn\'t work. Ask for a new one.') }
     }
     open()
     window.addEventListener('hashchange', open)
@@ -109,7 +109,7 @@ function App() {
   const saveNow = useCallback((id) => { clearTimeout(timers.current[id]); return runSync(id) }, [runSync])
   const bring = async (c, r) => {
     try { const next = await shareCharacter(c, r); setChars((l) => l.map((x) => (x.id === c.id ? next : x))); saveCharacter(next); say(`${c.name} joined ${r.name}.`) }
-    catch (e) { say(e.status === 0 ? 'No connection. Try again when online.' : e.status === 507 ? 'That group is full (12 characters).' : e.message) }
+    catch (e) { say(e.status === 0 ? 'No connection. Try again when online.' : e.status === 507 ? 'That table is full (12 characters).' : e.message) }
   }
   const leave = async (c) => {
     try { const next = await unshareCharacter(c); setChars((l) => l.map((x) => (x.id === c.id ? next : x))); saveCharacter(next) }
@@ -209,7 +209,7 @@ function App() {
   } else if (view.name === 'sheet' && current) {
     const room = current.roomId && roomById(current.roomId)
     screen = <CharacterSheet ch={current} setCh={update} roll={roll} mode={mode} setMode={setMode} onBack={() => setView({ name: 'home' })}
-      group={current.roomId ? { name: room?.name || 'Group', onLeave: () => leave(current) } : null}
+      group={current.roomId ? { name: room?.name || 'Table', onLeave: () => leave(current) } : null}
       onSaveNow={() => saveNow(current.id)}
       onGlossary={() => setView({ name: 'glossary', id: current.id, back: 'sheet' })}
       onDelete={async () => { await remove(current); setView({ name: 'home' }) }} />
@@ -270,8 +270,8 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
   return (
     <main className="home">
       <header className="home-top">
-        <div className="brand"><span className="logo" aria-hidden><GameIcon id="ui.d20" size={34} /></span><h1>Tavern Table</h1></div>
-        <span className="top-actions"><AccountChip onOpen={onAccount} /><button className="icon-btn" onClick={() => setTable(true)} aria-label="Table settings">⚙</button></span>
+        <div className="brand"><span className="logo" aria-hidden><GameIcon id="ui.d20" size={34} /></span><h1>Tavern Table</h1><small className="brand-sub">The Tavern</small></div>
+        <span className="top-actions"><AccountChip onOpen={onAccount} /><button className="icon-btn" onClick={() => setTable(true)} aria-label="Tavern settings">⚙</button></span>
       </header>
       {real.length === 0 ? (
         <div className="empty">
@@ -284,14 +284,14 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
       )}
       <UnsavedBanner chars={chars} onSaveAll={onSaveAll} />
       {real.some((c) => !c.draft) && <SaveAccountNudge onOpen={onAccount} />}
-      <button className="btn primary wide big-btn" onClick={() => onNew()}>+ New character</button>
+      <button className="btn primary wide big-btn" onClick={() => onNew()}>+ New hero</button>
       <RoomsSection chars={real} renderChar={card} onDm={onDm} onInit={onInit} onGone={onGone} onNewInRoom={(r) => onNew(r)} onBring={onBring} joined={joined} />
       <input ref={file} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f) }} aria-label="Backup file" />
       {table && (
-        <Sheet title="Table settings" onClose={() => setTable(false)}>
+        <Sheet title="Tavern settings" onClose={() => setTable(false)}>
           <label className="row toggle"><input type="checkbox" checked={settings.allowRoll !== false} onChange={(e) => setSettings({ ...settings, allowRoll: e.target.checked })} /><span>Allow rolling ability scores (4d6) in the wizard</span></label>
           <label className="row toggle"><input type="checkbox" checked={settings.showMath !== false} onChange={(e) => setSettings({ ...settings, showMath: e.target.checked })} /><span>Show the math on every roll</span></label>
-          <label className="row toggle"><input type="checkbox" checked={!!settings.expansions} onChange={(e) => setSettings({ ...settings, expansions: e.target.checked })} /><span>Expansion subclasses (characters not in a group)</span></label>
+          <label className="row toggle"><input type="checkbox" checked={!!settings.expansions} onChange={(e) => setSettings({ ...settings, expansions: e.target.checked })} /><span>Expansion subclasses (characters not in a table)</span></label>
           <div className="panel">
             <b>Your cloud key</b>
             <p className="muted small">Opens your characters on another phone. Keep it private.</p>
@@ -309,7 +309,7 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
             </div>
           </div>
           <button className="btn ghost wide" onClick={() => { setTable(false); location.hash = '#/admin' }}>Owner: admin screen</button>
-          <p className="muted small legal">Rules: System Reference Document 5.2 by Wizards of the Coast LLC, CC-BY-4.0; not affiliated with Wizards of the Coast. Icons: Lorc, Delapouite and contributors, <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>, CC BY 3.0.</p>
+          <p className="muted small legal">Rules: System Reference Document 5.2 by Wizards of the Coast LLC, CC-BY-4.0; not affiliated with Wizards of the Coast. Icons: Lorc, Delapouite and contributors, <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a>, CC BY 3.0. Avatars: <a href="https://www.dicebear.com/styles/adventurer/" target="_blank" rel="noopener">Adventurer</a> by Lisa Wischofsky (via DiceBear), CC BY 4.0, with class and species marks added by Tavern Table.</p>
         </Sheet>
       )}
     </main>

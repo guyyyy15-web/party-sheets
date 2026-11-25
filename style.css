@@ -1,8 +1,9 @@
-/* Party Sheets: dark table look, one accent per character (theme-*). Inputs 16px, tap targets 44px. */
+/* Tavern Table: a tavern at night (burnt wood, parchment text, lamp gold), one accent per character (theme-*).
+   Fonts: Cinzel (titles), Atkinson Hyperlegible (text), JetBrains Mono (numbers). Inputs 16px, tap targets 44px. */
 :root {
-  --ink: #15131a; --panel: #1f1c24; --panel-2: #29252f; --line: #3a3541; --text: #ece5d6; --muted: #9b9386;
-  --accent: #c9a35c; --accent-ink: #15131a; --ok: #7a9c76; --bad: #b5524a; --info: #6f8fa8;
-  --r: 14px; --font: 'Zen Kaku Gothic New', system-ui, -apple-system, 'Segoe UI', sans-serif; --display: 'Shippori Mincho', Georgia, serif; --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --ink: #16110e; --panel: #211915; --panel-2: #2c221c; --line: #463830; --text: #f1e6d2; --muted: #a99a88;
+  --accent: #d6a548; --accent-ink: #16110e; --ok: #7fa57a; --bad: #bf5a4c; --info: #7397b4;
+  --r: 14px; --font: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif; --display: 'Cinzel', Georgia, serif; --mono: 'JetBrains Mono', ui-monospace, monospace;
   color-scheme: dark;
 }
 .theme-gold { --accent: #c9a35c; } .theme-red { --accent: #c7614f; } .theme-jade { --accent: #79a179; }
@@ -528,8 +529,8 @@ body { line-height: 1.5; }
 .init-main .hp-bar.mid span { background: #c9a35c; } .init-main .hp-bar.low span { background: var(--bad); }
 .init-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 16px; }
 .tag-pc, .tag-down, .tag-looks { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: color-mix(in srgb, var(--muted) 45%, var(--text)); }
-.tag-down { color: #fff; background: var(--bad); border-color: var(--bad); }
-.tag-looks.bloodied { color: #c9a35c; border-color: #c9a35c; } .tag-looks.down { color: #fff; background: var(--bad); border-color: var(--bad); }
+.tag-down { color: #fff; background: #9e4137; border-color: #9e4137; }
+.tag-looks.bloodied { color: #c9a35c; border-color: #c9a35c; } .tag-looks.down { color: #fff; background: #9e4137; border-color: #9e4137; }
 .init-list.compact .init-row { padding: 4px; } .init-list.compact .init-num { min-width: 40px; min-height: 40px; font-size: 17px; }
 .init-foot { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--ink); border-top: 1px solid var(--line); max-width: 760px; margin: 0 auto; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -658,3 +659,28 @@ button.fight-banner { flex-direction: row; align-items: center; min-height: 48px
 .e-color { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--line); background: var(--ec); color: var(--text); }
 .e-color.none { background: var(--panel-2); } .e-color.on { border-color: var(--text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 40%, transparent); }
 .init-row .init-sub.muted { color: color-mix(in srgb, var(--muted) 45%, var(--text)); }
+/* avatars: the DiceBear face + class marks (src/engine/avatar.js); the ring in the class color */
+.portrait.is-avatar { border-color: var(--cls); background: var(--cls); }
+.portrait img.avatar-img, .avatar-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.hero-look { align-items: center; gap: 12px; } .hero-look .grow { display: grid; gap: 8px; }
+.look-main { padding: 0; border-radius: 50%; overflow: hidden; border: 3px solid var(--line); background: none; width: 102px; height: 102px; flex: none; }
+.look-main.on { border-color: var(--accent); }
+.look-preview { display: grid; place-items: center; margin: 4px 0 10px; } .look-preview img { border-radius: 50%; border: 3px solid var(--accent); }
+.look-row { align-items: center; gap: 8px; margin: 6px 0; } .look-label { text-align: center; font-weight: 600; }
+.look-swatches .row { flex-wrap: wrap; gap: 6px; }
+.look-swatch { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--line); }
+.look-swatch.on { border-color: var(--text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 40%, transparent); }
+.look-btn { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.brand-sub { color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; align-self: flex-end; margin-bottom: 4px; }
+.rests .btn small { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+/* phones: the sheet's tabs sit at the bottom, under the thumb (Guy, 2026-11-25) */
+@media (max-width: 599px) {
+  .sheet-page .tabs { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20; margin: 0; padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--ink) 94%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid var(--line); }
+  .sheet-page .tabs button { border-bottom: 0; border-top: 3px solid transparent; min-height: 48px; }
+  .sheet-page .tabs button[aria-selected='true'] { border-top-color: var(--accent); }
+  body:has(.sheet-page) .fab { bottom: calc(76px + env(safe-area-inset-bottom)); }
+  body:has(.sheet-page) .roll-card { bottom: calc(70px + env(safe-area-inset-bottom)); }
+  body:has(.sheet-page) .toast { bottom: calc(132px + env(safe-area-inset-bottom)); }
+  body:has(.sheet-page) #root { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
+}

@@ -18,7 +18,7 @@ const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails+
 const shots = path.join(root, 'screenshots')
 
 async function buildHero(p, { name, cls, species, bg, method, picks }) {
-  await p.click('text=+ New character')
+  await p.click('text=+ New hero')
   await p.fill('input[placeholder="e.g. Katsebushi"]', name)
   await p.click('button[aria-label="Icon ⚔️"]')
   await p.click('.wiz-foot button')
@@ -94,7 +94,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   ok(true, 'home: empty state')
 
   // Wizard: a monk like Katsebushi (point buy), a fighter, a rogue
-  await p.click('text=+ New character')
+  await p.click('text=+ New hero')
   await p.waitForSelector('.wiz-title')
   await p.screenshot({ path: `${shots}/01b-hero.png` })
   await p.click('button[aria-label="Cancel"]')
@@ -147,13 +147,13 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   ok(!/Advantage: two d20/.test(await p.textContent('.roll-card')), '"No" rolls one d20')
   await p.click('button[aria-label="Close the roll"]')
   await p.click('.edge button:has-text("Clear")')
-  await p.click('[role=tab]:has-text("My Turn")')
+  await p.click('[role=tab]:has-text("Your Turn")')
   // the guided turn: pick an attack, roll to hit, hit, roll damage
-  await p.click('button:has-text("Start my turn")')
+  await p.click('button.start-turn')
   await p.click('.guide-opt:has-text("Unarmed Strike")')
-  await p.click('.sheet[aria-label="My turn"] button:has-text("Roll to hit (")')
+  await p.click('.sheet[aria-label="Your turn"] button:has-text("Roll to hit (")')
   await p.waitForSelector('.roll-card'); await p.click('button[aria-label="Close the roll"]')
-  const g = p.locator('.sheet[aria-label="My turn"]')
+  const g = p.locator('.sheet[aria-label="Your turn"]')
   if (await g.locator('button:text-is("Hit")').count()) await g.locator('button:text-is("Hit")').click()
   else if (await g.locator('button:has-text("Roll damage ›")').count()) await g.locator('button:has-text("Roll damage ›")').click()
   if (await g.locator('button:has-text("Roll damage (")').count()) { await g.locator('button:has-text("Roll damage (")').click(); await p.waitForSelector('.roll-card'); await p.click('button[aria-label="Close the roll"]') }
@@ -233,12 +233,12 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
 
   // a spellcaster: choose spells, cast one with a slot, roll its healing
   // a half-made character can be deleted from the wizard
-  await p.click('text=+ New character')
+  await p.click('text=+ New hero')
   await p.fill('input[placeholder="e.g. Katsebushi"]', 'Halfmade'); await p.click('.wiz-foot button')
   await p.click('.class-card:has-text("Wizard")')
   await p.click('button[aria-label="Delete this character"]')
   await p.waitForSelector('text=Character deleted.')
-  ok(await p.isVisible('text=+ New character') && !(await p.isVisible('.char-card:has-text("Halfmade")')), 'wizard: 🗑 deletes a half-made character')
+  ok(await p.isVisible('text=+ New hero') && !(await p.isVisible('.char-card:has-text("Halfmade")')), 'wizard: 🗑 deletes a half-made character')
   await buildHero(p, { name: 'Mira', cls: 'Cleric', species: 'Dwarf', bg: 'Acolyte', method: 'standard',
     picks: { bg: ['Wisdom', 'Light', 'Thaumaturgy', 'Sanctuary'], choices: ['Medicine', 'Persuasion', 'Protector'] } })
   await p.click('[role=tab]:has-text("Spells")')
@@ -264,7 +264,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.screenshot({ path: `${shots}/07-home.png` })
 
   // play style: a bow fighter is steered to DEX and Archery
-  await p.click('text=+ New character')
+  await p.click('text=+ New hero')
   await p.fill('input[placeholder="e.g. Katsebushi"]', 'Arrow'); await p.click('.wiz-foot button')
   await p.click('.class-card:has-text("Fighter")')
   ok(await p.isVisible('.play-style:has-text("How do you want to play?")'), 'play style: the question appears after picking a class')
@@ -282,7 +282,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.click('button[aria-label="Cancel"]').catch(() => {})
   if (await p.isVisible('.wiz-foot')) await p.goto(URL)
   // the glossary: from Table settings, search, a card
-  await p.click('button[aria-label="Table settings"]'); await p.click('text=📖 Rules glossary')
+  await p.click('button[aria-label="Tavern settings"]'); await p.click('text=📖 Rules glossary')
   await p.fill('input[aria-label="Search the glossary"]', 'concentr')
   await p.click('.gl-list button:has-text("Concentration")')
   ok(await p.isVisible('.sheet:has-text("CON save")'), 'glossary: the Concentration card')
@@ -314,7 +314,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.click('button[aria-label="All characters"]')
 
   // backup round trip
-  await p.click('button[aria-label="Table settings"]')
+  await p.click('button[aria-label="Tavern settings"]')
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('text=Export all')])
   await p.click('.sheet button[aria-label="Close"]')
   const file = path.join(shots, dl.suggestedFilename())
@@ -343,7 +343,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
     await r.waitForSelector('.char-card:has-text("Vex")')
     await r.evaluate(() => { Math.random = () => 0.5 }) // every d20 an 11: a plain hit, no crit, no natural 1
     await r.click('.char-card:has-text("Vex")')
-    await r.click('button:has-text("Start my turn")')
+    await r.click('button.start-turn')
     await r.click('.guide-opt:has-text("Attack with Rapier")')
     await r.click('.sheet button:has-text("Roll to hit")'); await r.click('.sheet button:text-is("Hit")')
     await r.click('.sheet button:has-text("Roll damage")')

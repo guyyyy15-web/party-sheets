@@ -58,9 +58,9 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     // phone A: a new group, then bring Aria
     const A = await phone()
     await A.p.goto(URL)
-    await A.p.click('text=+ New group')
+    await A.p.click('text=+ New table')
     await A.p.fill('input[placeholder="Thursday night"]', 'Thursday night')
-    await A.p.click('button:has-text("Create group")')
+    await A.p.click('button:has-text("Create table")')
     await A.p.waitForSelector('text=Invite for players')
     const invite = await A.p.inputValue('input[aria-label="Invite for players"]')
     const dmUrl = await A.p.inputValue('input[aria-label="DM link (keep it for the DM)"]')
@@ -175,11 +175,11 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     ok(await until(async () => (await T.p.textContent('.init-row.now')).includes('Aria')), 'runner: round 1 starts with Aria')
     ok(await until(() => A.p.isVisible('text=Your turn!'), 15000), 'phone A: "Your turn!"')
     // the turn guide opens by itself: whom, to hit, damage, sent to the runner
-    ok(await until(() => A.p.isVisible('.sheet[aria-label="My turn"]'), 15000), 'phone A: the turn guide opened by itself')
+    ok(await until(() => A.p.isVisible('.sheet[aria-label="Your turn"]'), 15000), 'phone A: the turn guide opened by itself')
     let claimed = 0
     for (let tryN = 0; tryN < 6 && !claimed; tryN++) {
-      if (!(await A.p.isVisible('.sheet[aria-label="My turn"]'))) await A.p.click('button:has-text("Start my turn")')
-      const G = A.p.locator('.sheet[aria-label="My turn"]')
+      if (!(await A.p.isVisible('.sheet[aria-label="Your turn"]'))) await A.p.click('button.start-turn')
+      const G = A.p.locator('.sheet[aria-label="Your turn"]')
       await G.locator('.guide-opt:has-text("Unarmed Strike")').click()
       if (tryN === 0) { ok(await G.locator('text=Who are you attacking?').isVisible(), 'phone A: "Who are you attacking?"'); await A.p.screenshot({ path: `${shots}/rooms-5b-target.png` }) }
       if (await G.locator('.guide-opt:has-text("Soldier 2")').count()) await G.locator('.guide-opt:has-text("Soldier 2")').click()
@@ -290,7 +290,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     ok(await until(async () => !(await B.p.isVisible('.buff:has-text("Bless")')), 30000), 'phone B: Bless is gone from Brom')
     // Mira leaves again (the checks below count two characters in the group)
     await M.p.click('button[aria-label="Character settings"]')
-    await M.p.click('button:has-text("Leave the group")')
+    await M.p.click('button:has-text("Leave the table")')
     ok(await until(async () => (await D.locator('.dm-card').count()) === 2, 15000), 'DM: Mira left the room')
     await M.ctx.close()
 
@@ -386,7 +386,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
 
     // leaving the group
     await A.p.click('button[aria-label="Character settings"]')
-    await A.p.click('button:has-text("Leave the group")')
+    await A.p.click('button:has-text("Leave the table")')
     ok(await until(async () => (await D.locator('.dm-card').count()) === 1, 12000), 'DM: Aria left the room')
     ok(await until(async () => (await mine()).some((c) => c.data.name === 'Aria' && c.roomId === null)), 'leaving keeps Aria saved on the server')
     await A.p.click('button[aria-label="Character settings"]')
@@ -397,7 +397,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await D.goto(dmUrl.split('#')[0]); await D.waitForSelector('.room:has-text("Thursday night")')
     D.on('dialog', (dg) => dg.accept())
     await D.click('.room:has-text("Thursday night") button[aria-label^="Links for"]')
-    await D.click('button:has-text("Delete this group")')
+    await D.click('button:has-text("Delete this table")')
     ok(await until(async () => !(await D.isVisible('.room:has-text("Thursday night")'))), 'DM: the group is deleted')
     await B.p.goto(URL)
     ok(await until(async () => !(await B.p.isVisible('.room:has-text("Thursday night")')) && (await B.p.isVisible('.char-card:has-text("Brom")')), 20000), 'phone B: the group is gone, Brom is still here')

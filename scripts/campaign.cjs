@@ -54,7 +54,7 @@ async function choose(p, scope) {
 
   async function build(name, cls, species, bg) {
     await p.goto(URL)
-    await p.click('text=+ New character')
+    await p.click('text=+ New hero')
     await p.fill('input[placeholder="e.g. Katsebushi"]', name)
     await p.click('.wiz-foot button')
     await p.click(`.class-card:has-text("${cls}")`); await p.click('.wiz-foot button')
@@ -166,7 +166,7 @@ async function choose(p, scope) {
       ok((await p.textContent('.vitals .hp b')).replace(/\s/g, '') === `${max}/${max}`, 'long rest: full HP')
       ok((await slot2()).startsWith('3 of 3'), 'long rest: slots back')
       ok(!(await p.isVisible('.conc-banner')) && !(await p.isVisible('.conc')), 'long rest: concentration ended')
-      await p.click('[role=tab]:has-text("My Turn")')
+      await p.click('[role=tab]:has-text("Your Turn")')
       say('Mira at level 5: a full fight and both rests')
     }
   }
