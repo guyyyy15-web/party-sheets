@@ -20,7 +20,7 @@ async function scan(p, name) {
 ;(async () => {
   await new Promise((r) => server.listen(8772, r))
   const b = await chromium.launch()
-  const ctx = await b.newContext({ ...devices['iPhone 13'] })
+  const ctx = await b.newContext({ ...devices['iPhone 13 Pro'] })
   await ctx.addInitScript(() => (localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9')), localStorage.setItem('ps.seenLanding', 'true'))) // never the production server
   const p = await ctx.newPage()
   await p.goto('http://localhost:8772/'); await p.waitForSelector('text=No heroes yet'); await scan(p, 'home')

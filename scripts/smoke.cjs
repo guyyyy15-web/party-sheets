@@ -22,6 +22,13 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.fill('input[placeholder="e.g. Katsebushi"]', name)
   await p.click('button[aria-label="Icon ⚔️"]')
   await p.click('.wiz-foot button')
+  if (!buildHero.checked) {
+    // Next before choosing: the missing part is marked and scrolled to, nothing breaks
+    buildHero.checked = true
+    await p.click('.wiz-foot button', { force: true })
+    ok(await p.isVisible('.wizard.show-missing .cards[data-need="true"]'), 'wizard: Next too early marks what is missing')
+    ok(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'wizard: the mark never widens the page')
+  }
   await p.click(`.class-card:has-text("${cls}")`)
   await p.click('.wiz-foot button')
   await p.click(`.card:has-text("${species}")`)
@@ -65,7 +72,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
   // auto-accept the long-rest confirm()
 
-  const ctx = await b.newContext({ ...devices['iPhone 13'], acceptDownloads: true })
+  const ctx = await b.newContext({ ...devices['iPhone 13 Pro'], acceptDownloads: true })
   await ctx.addInitScript((api) => localStorage.setItem('ps.api', JSON.stringify(api)), OFFLINE_API)
   const p = await ctx.newPage()
   p.on('dialog', (d) => d.accept())
@@ -106,6 +113,10 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.click('.fab')
   await p.click('button:has-text("Throw on screen")')
   await p.click('button[aria-label="Close"]')
+  // phones: the math folds behind ⓘ
+  ok(!(await p.isVisible('.attack:has-text("Unarmed Strike") .atk-math')), 'attack math folded on a phone')
+  await p.click('.attack:has-text("Unarmed Strike") .info-btn')
+  ok(await p.isVisible('.attack:has-text("Unarmed Strike") .atk-math'), 'ⓘ opens it')
   await p.click('.attack:has-text("Unarmed Strike") .roll-btn >> nth=0')
   await p.waitForSelector('.roll-card')
   const card = (await p.textContent('.roll-card')).replace(/\s+/g, ' ')
@@ -282,7 +293,7 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.click('.sheet button[aria-label="Close"]')
   const file = path.join(shots, dl.suggestedFilename())
   await dl.saveAs(file)
-  const ctx2 = await b.newContext({ ...devices['iPhone 13'] })
+  const ctx2 = await b.newContext({ ...devices['iPhone 13 Pro'] })
   await ctx2.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true')), OFFLINE_API)
   const q = await ctx2.newPage()
   await q.goto(URL)

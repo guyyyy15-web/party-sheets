@@ -1,4 +1,4 @@
-// Checks on the REAL site after a release (iPhone 13 and SE): 4d6 thrown on screen, a level 5 start, HP, a 3D throw, tabs.
+// Checks on the REAL site after a release (iPhone 13 Pro and SE): 4d6 thrown on screen, a level 5 start, HP, a 3D throw, tabs.
 // Run: node scripts/live.cjs  (nothing is stored on a server: characters stay in the test browser)
 const { chromium, devices } = require('playwright')
 const URL = process.env.SITE || 'https://guyyyy15-web.github.io/party-sheets/'
@@ -6,7 +6,7 @@ let fails = 0
 const ok = (c, m) => { console.log(`${c ? 'ok ' : 'FAIL'} ${m}`); if (!c) fails++ }
 ;(async () => {
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
-  for (const [devName, dev] of [['iPhone 13', devices['iPhone 13']], ['iPhone SE', devices['iPhone SE']]]) {
+  for (const [devName, dev] of [['iPhone 13 Pro', devices['iPhone 13 Pro']], ['iPhone SE', devices['iPhone SE']]]) {
     const ctx = await b.newContext({ ...dev })
     // the real site, but its test characters must not land in the real database: saving points at a closed port
     await ctx.addInitScript(() => (localStorage.setItem('ps.api', JSON.stringify('http://127.0.0.1:9')), localStorage.setItem('ps.seenLanding', 'true')))

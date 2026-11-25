@@ -22,7 +22,7 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
   SRD tables (scores, HP, AC, saves, attacks, slots, resources, rests, fights); `npm run campaign` does a Cleric and a
   Fighter 1→20 through the real Level up sheet with a fight at 5. Run both after any rules change.
 - Before pushing: `npm test`, `npm run smoke`, `npm run smoke:rooms` and `npm run a11y` (and `npm run campaign` after rules changes), and look at screenshots/ after UI changes. After a
-  release: `node scripts/live.cjs` (the real site, iPhone 13 and SE).
+  release: `node scripts/live.cjs` (the real site, iPhone 13 Pro and SE).
 - Level-up UX (`src/engine/levelup.js` `levelDiff` + `headlines`, UI `src/ui/levelup.jsx`): the card after "Become
   level N" and the next-level preview on the sheet both come from `levelDiff`, so they agree; `state.leveledAt` shows a
   "What's new" link for a day. The plan for the next UX steps is the Claude doc "Party Sheets — Level-up UX plan".
@@ -46,6 +46,12 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - "Start my turn" (`src/ui/turn.jsx`): move → pick an attack or cantrip → roll to hit → Hit/Miss (crit/NAT 1 handled)
   → damage → next attack (Extra Attack) → bonus action → done. Same roll() as the sheet. 3D dice are on by default
   wherever WebGL works (Reduce motion doesn't turn them off; the tray can).
+- Phones (≤ 599 px): the sheet's top is a sticky app bar (`.char-top`; the tabs stick under it at `--bar-h`, measured
+  by a ResizeObserver), tighter spacing, and each attack folds its math/properties/mastery behind ⓘ (`.attack.open`).
+  Design for the iPhone 13 Pro (390 px, Guy); live.cjs also checks the SE so nothing breaks there.
+- Wizard: the Next button is never `disabled` (`aria-disabled` instead). Whatever a step still needs carries
+  `data-need="true"` + `data-key`; Next too early adds `.show-missing` (red outline + "Needed to continue") and scrolls
+  there; answering one scrolls to the next open one. Scroll with `scrollToEl` (vertical only).
 - Spellcasting: class data in `src/content/casters.js`, spells in `src/content/spells.js` (SRD only, own words),
   the math in `src/engine/spells.js` (`spellcastingOf`, `spellRoll`). A character stores `spells: { cantrips, prepared }`
   and `state.concentration`; slots are resources `slot-N` / `pact-slots` in `state.used`.

@@ -47,7 +47,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     fs.mkdirSync(shots, { recursive: true })
     const b = await chromium.launch()
     const phone = async () => {
-      const ctx = await b.newContext({ ...devices['iPhone 13'] })
+      const ctx = await b.newContext({ ...devices['iPhone 13 Pro'] })
       await ctx.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true'), localStorage.setItem('ps.throwOnScreen', 'false')), API)
       const p = await ctx.newPage(); p.on('dialog', (d) => d.accept()); p.on('pageerror', (e) => ok(false, `page error: ${e.message}`))
       return { ctx, p }
@@ -240,7 +240,7 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     ok(await until(async () => (await N.p.textContent('.vitals .hp b')).startsWith(String(ariaMax - 2))), 'new phone: with the latest HP')
 
     // the DM screen on a phone
-    const dp = await b.newContext({ ...devices['iPhone 13'] })
+    const dp = await b.newContext({ ...devices['iPhone 13 Pro'] })
     await dp.addInitScript((api) => (localStorage.setItem('ps.api', JSON.stringify(api)), localStorage.setItem('ps.seenLanding', 'true')), API)
     const DP = await dp.newPage(); await DP.goto(dmUrl); await DP.waitForSelector('.dm-card')
     ok(await DP.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'DM on a phone: nothing scrolls sideways')

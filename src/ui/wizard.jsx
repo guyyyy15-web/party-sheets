@@ -1,6 +1,6 @@
 // The onboarding wizard: name → class → species → background → abilities → choices → equipment → finish.
 // Every step saves a draft, so closing the app halfway keeps the character.
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { derive, readyToPlay } from '../engine/engine.js'
 import { CLASSES, classById } from '../content/classes.js'
 import { SPECIES, speciesById } from '../content/species.js'
@@ -28,7 +28,29 @@ function suggested(cls, ch) {
 export function Wizard({ ch, setCh, onDone, onCancel, settings, throwOn }) {
   const [step, setStep] = useState(ch.wizardStep || 0)
   const d = useMemo(() => derive(ch), [ch])
-  const go = (n) => { setStep(n); setCh({ ...ch, wizardStep: n }); window.scrollTo(0, 0) }
+  const [nudge, setNudge] = useState(false)
+  const go = (n) => { setStep(n); setNudge(false); setCh({ ...ch, wizardStep: n }); window.scrollTo(0, 0) }
+  // what still needs an answer on this step is marked data-need="true" (with a data-key); after something is
+  // answered or a new question appears, the next open one scrolls into view
+  const body = useRef(null)
+  const seen = useRef(null)
+  useEffect(() => {
+    const els = [...(body.current?.querySelectorAll('[data-need="true"]') || [])]
+    const keys = els.map((e) => e.dataset.key).join('|')
+    const prev = seen.current
+    seen.current = { step, keys }
+    if (!prev || prev.step !== step || prev.keys === keys || !els.length) return
+    const r = els[0].getBoundingClientRect()
+    if (r.top < 60 || r.top > window.innerHeight * 0.55) scrollToEl(els[0])
+  }, [ch, step])
+  /** Next with something missing: mark it, take the player there. */
+  const showMissing = () => {
+    setNudge(true)
+    const el = body.current?.querySelector('[data-need="true"]')
+    if (!el) return
+    scrollToEl(el)
+    setTimeout(() => el.querySelector('input:not([type=checkbox]), button:not([aria-pressed=true])')?.focus({ preventScroll: true }), 350)
+  }
   const ready = readyToPlay(ch)
   const stepOk = [
     !!ch.name.trim(),
@@ -40,8 +62,9 @@ export function Wizard({ ch, setCh, onDone, onCancel, settings, throwOn }) {
     true,
     ready.ok,
   ]
+  useEffect(() => { if (stepOk[step]) setNudge(false) }, [stepOk[step]])
   return (
-    <div className="wizard">
+    <div className={`wizard ${nudge ? 'show-missing' : ''}`}>
       <header className="wiz-top">
         <button className="icon-btn" onClick={step ? () => go(step - 1) : onCancel} aria-label={step ? 'Back' : 'Cancel'}>‹</button>
         <div className="wiz-progress" role="progressbar" aria-label="Character wizard" aria-valuemin={1} aria-valuemax={STEPS.length} aria-valuenow={step + 1} aria-valuetext={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`}>
@@ -49,7 +72,7 @@ export function Wizard({ ch, setCh, onDone, onCancel, settings, throwOn }) {
         </div>
         <span className="muted small">{step + 1}/{STEPS.length}</span>
       </header>
-      <main className="wiz-body">
+      <main className="wiz-body" ref={body}>
         {step === 0 && <HeroStep ch={ch} setCh={setCh} />}
         {step === 1 && <ClassStep ch={ch} setCh={setCh} />}
         {step === 2 && <SpeciesStep ch={ch} setCh={setCh} d={d} />}
@@ -61,12 +84,15 @@ export function Wizard({ ch, setCh, onDone, onCancel, settings, throwOn }) {
       </main>
       <footer className="wiz-foot">
         {step < STEPS.length - 1
-          ? <button className="btn primary wide" disabled={!stepOk[step]} onClick={() => go(step + 1)}>{stepOk[step] ? `Next: ${STEPS[step + 1]}` : stepHint(step)}</button>
+          ? <button className={`btn primary wide ${stepOk[step] ? '' : 'not-yet'}`} aria-disabled={!stepOk[step]} onClick={() => (stepOk[step] ? go(step + 1) : showMissing())}>{stepOk[step] ? `Next: ${STEPS[step + 1]}` : stepHint(step)}</button>
           : <button className="btn primary wide" disabled={!ready.ok} onClick={onDone}>{ready.ok ? 'Start playing' : `Still missing: ${ready.missing.slice(0, 2).join(', ')}`}</button>}
       </footer>
     </div>
   )
 }
+/** Up or down to an element, under the sticky top bar (never sideways). */
+const scrollToEl = (el) => window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - 72), behavior: smooth() })
+const smooth = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth')
 const stepHint = (s) => ['Give your hero a name', 'Pick a class', 'Pick a species (and its options)', 'Pick a background and its bonuses', 'Set your ability scores', 'Make the choices above', '', ''][s]
 
 function HeroStep({ ch, setCh }) {
@@ -78,7 +104,7 @@ function HeroStep({ ch, setCh }) {
   return (
     <section>
       <h1 className="wiz-title">Who is your hero?</h1>
-      <label className="field"><span>Name</span>
+      <label className="field" data-need={!ch.name.trim()} data-key="name"><span>Name</span>
         <input className="input" value={ch.name} onChange={(e) => setCh({ ...ch, name: e.target.value.slice(0, 40) })} placeholder="e.g. Katsebushi" autoComplete="off" enterKeyHint="next" />
       </label>
       <span className="field-label">Portrait</span>
@@ -122,7 +148,7 @@ function ClassStep({ ch, setCh }) {
           ))}</div></div>
         ))}
       </details>
-      <div className="cards">
+      <div className="cards" data-need={!ch.classId} data-key="class">
         {CLASSES.map((c) => (
           <button key={c.id} className={`card class-card has-icon cls-${c.id} ${ch.classId === c.id ? 'on' : ''}`} aria-pressed={ch.classId === c.id} onClick={() => choose(c.id)}>
             <GameIcon id={`class.${c.id}`} size={40} className="opt-icon" />
@@ -133,7 +159,7 @@ function ClassStep({ ch, setCh }) {
         ))}
       </div>
       {ch.classId && pathsFor(ch.classId).length > 0 && (
-        <div className="panel play-style" id="play-style">
+        <div className="panel play-style" id="play-style" data-need={!ch.build} data-key="style">
           <h2>How do you want to play?</h2>
           <p className="muted small">Your answer shapes the advice at every level. You can change it later.</p>
           <OptionCards count={1} picked={ch.build ? [ch.build] : []} onChange={([id]) => setCh({ ...ch, build: id || null })}
@@ -149,7 +175,7 @@ function SpeciesStep({ ch, setCh, d }) {
   return (
     <section>
       <h1 className="wiz-title">Pick a species</h1>
-      <div className="cards cols-2">
+      <div className="cards cols-2" data-need={!ch.speciesId} data-key="species">
         {SPECIES.map((s) => (
           <button key={s.id} className={`card opt has-icon ${ch.speciesId === s.id ? 'on' : ''}`} aria-pressed={ch.speciesId === s.id} onClick={() => setCh({ ...ch, speciesId: s.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('species.'))) })}><GameIcon id={`species.${s.id}`} size={40} className="opt-icon" />
             <span className="opt-name">{s.name}{ch.speciesId === s.id && <span className="tick">✓</span>}</span>
@@ -176,7 +202,7 @@ function BackgroundStep({ ch, setCh, d }) {
   return (
     <section>
       <h1 className="wiz-title">Pick a background</h1>
-      <div className="cards">
+      <div className="cards" data-need={!ch.backgroundId} data-key="background">
         {BACKGROUNDS.map((b) => (
           <button key={b.id} className={`card opt has-icon ${ch.backgroundId === b.id ? 'on' : ''}`} aria-pressed={ch.backgroundId === b.id} onClick={() => setCh({ ...ch, backgroundId: b.id, choices: Object.fromEntries(Object.entries(ch.choices).filter(([k]) => !k.startsWith('background'))) })}><GameIcon id={`bg.${b.id}`} size={40} className="opt-icon" />
             <span className="opt-name">{b.name}{b.source && <SourceTag source={b.source} />}{ch.backgroundId === b.id && <span className="tick">✓</span>}</span>
@@ -186,7 +212,7 @@ function BackgroundStep({ ch, setCh, d }) {
         ))}
       </div>
       {bg && (
-        <div className="panel">
+        <div className="panel" data-need={!ch.choices['background.abilities']} data-key="bg-abilities">
           <h2>Ability score increase</h2>
           <div className="seg">
             <button aria-pressed={pick?.mode === '2-1'} onClick={() => setPick({ mode: '2-1', plus2: bg.abilities[0], plus1: bg.abilities[1] })}>+2 and +1</button>
@@ -247,7 +273,7 @@ function AbilityStep({ ch, setCh, d, settings, throwOn }) {
   }
   const methods = [['standard', 'Standard array'], ['point-buy', 'Point buy'], ...(settings.allowRoll !== false ? [['roll', 'Roll 4d6']] : [])]
   return (
-    <section>
+    <section data-need={!ch.scoreMethod} data-key="scores">
       <h1 className="wiz-title">Ability scores</h1>
       {cls && <p className="lead">{pathOf(ch) ? `Your style (${pathOf(ch).label.toLowerCase()}) wants high ${abilityOrder(ch).slice(0, 2).join(', then ')}.` : `A ${cls.name} wants high ${cls.primary.join(' and ')}.`}</p>}
       <div className="seg">{methods.map(([m, l]) => <button key={m} aria-pressed={method === m} onClick={() => setMethod(m)}>{l}</button>)}</div>
@@ -324,7 +350,7 @@ export function ChoicesStep({ ch, setCh, d, filter, embedded }) {
     <section>
       {!embedded && <h1 className="wiz-title">Your choices</h1>}
       {list.map((c) => (
-        <div key={c.key} className={`panel choice ${c.done ? 'done' : ''}`}>
+        <div key={c.key} className={`panel choice ${c.done ? 'done' : ''}`} data-need={!c.done} data-key={c.key}>
           <h2>{c.featureName && c.featureName !== c.label ? `${c.featureName}: ` : ''}{c.label}{c.level > 1 ? <span className="muted small"> · level {c.level}</span> : null}</h2>
           {c.kind === 'asi' || c.kind === 'epic'
             ? <AsiPicker rec={recommendAsi(ch, d, { epic: c.kind === 'epic', takenFeats, scores: Object.fromEntries(Object.entries(d.scores).map(([a, sc]) => [a, sc.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))])) })} value={drafts[c.key] || ch.choices[c.key]} epic={c.kind === 'epic'} level={ch.level} takenFeats={takenFeats} caster={!!d.spellcasting} armor={d.cls?.armor || []} scores={Object.fromEntries(Object.entries(d.scores).map(([a, s]) => [a, s.total - ((ch.choices[c.key]?.ability === a ? (ch.choices[c.key]?.type === 'plus2' ? 2 : 1) : 0) + ((ch.choices[c.key]?.abilities || []).includes(a) ? 1 : 0))]))}
