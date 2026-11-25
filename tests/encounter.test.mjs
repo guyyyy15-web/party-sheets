@@ -1,7 +1,7 @@
 // The fight (initiative): order, turns, rounds, enemies by kind, manual numbers, what players see.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { newEncounter, addPc, addGroup, order, setInit, rollMissing, next, prev, hurt, remove, forPlayers, placeOf, toggleCondition, setDead } from '../src/encounter-core.js'
+import { newEncounter, addPc, addGroup, order, setInit, rollMissing, next, prev, hurt, remove, forPlayers, placeOf, toggleCondition, setDead, applyClaim, dropClaim, targetsFor } from '../src/encounter-core.js'
 
 const seq = (...v) => { let i = 0; return () => v[i++ % v.length] }
 
@@ -46,4 +46,16 @@ test('players see the damage count but not the AC, and their own place in the or
   assert.equal(p.ac, undefined); assert.equal(p.dmg, 35)
   next(e)
   assert.deepEqual(placeOf(e, 'pc-a'), { place: 2, of: 2, now: false, inTurns: 1 })
+})
+
+test('players report damage: the runner applies it (or another amount) or drops it; targets are the standing enemies first', () => {
+  const e = newEncounter([{ charId: 'a', name: 'Ana', init: 12 }, { charId: 'b', name: 'Bo', init: 3 }])
+  addGroup(e, { name: 'Orc', count: 2, roll: seq(9) })
+  setDead(e, 'npc-2', true)
+  assert.deepEqual(targetsFor(e, 'pc-a').map((c) => c.name), ['Orc 1', 'Bo'], 'the fallen orc and Ana herself are not targets')
+  e.claims = [{ id: 'c1', by: 'pc-a', byName: 'Ana', target: 'npc-1', amount: 9, label: 'Longsword' }, { id: 'c2', by: 'pc-a', byName: 'Ana', target: 'npc-1', amount: 4 }]
+  applyClaim(e, 'c1', 6) // the DM halves it for resistance… roughly
+  assert.equal(e.combatants.find((c) => c.id === 'npc-1').dmg, 6)
+  dropClaim(e, 'c2'); assert.equal(e.claims.length, 0)
+  assert.equal(forPlayers({ ...e, claims: [{ id: 'x' }] }).claims, undefined, 'players never get the claims list')
 })

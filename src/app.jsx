@@ -17,7 +17,7 @@ import { ownerKey } from './ui/sync.js'
 import { DiceTray, performRoll, throwDefault, load3d, RollCard } from './ui/dice.jsx'
 import { Wizard, Portrait } from './ui/wizard.jsx'
 import { CharacterSheet } from './ui/sheet.jsx'
-import { Sheet, themeOf } from './ui/common.jsx'
+import { Sheet, themeOf, GameIcon } from './ui/common.jsx'
 
 
 function App() {
@@ -115,6 +115,13 @@ function App() {
     try { const next = await unshareCharacter(c); setChars((l) => l.map((x) => (x.id === c.id ? next : x))); saveCharacter(next) }
     catch (e) { say(e.message) }
   }
+  /** A group is gone (deleted by its DM, or removed from this phone): its characters here are in no group now. */
+  const groupGone = async (r) => {
+    const list = (charsRef.current || []).filter((c) => c.roomId === r.id).map((c) => ({ ...c, roomId: null }))
+    for (const c of list) await saveCharacter(c)
+    setChars((l) => l.map((c) => list.find((x) => x.id === c.id) || c))
+    say(`"${r.name}" is gone from this phone. Your characters are still here and saved.`)
+  }
   const remove = async (c) => {
     clearTimeout(timers.current[c.id])
     await deleteRemote(c)
@@ -193,6 +200,7 @@ function App() {
   if (view.name === 'wizard' && current) {
     screen = <Wizard ch={current} setCh={update} settings={settings} throwOn={throwOn}
       onCancel={async () => { if (!current.name && !current.classId) await remove(current); setView({ name: 'home' }) }}
+      onDelete={async () => { await remove(current); setView({ name: 'home' }); say('Character deleted.') }}
       onDone={() => { const d = derive(current); update({ ...current, draft: false, wizardStep: 0, state: { ...current.state, hp: d.hp.value } }); setView({ name: 'sheet', id: current.id }) }} />
   } else if (view.name === 'sheet' && current) {
     const room = current.roomId && roomById(current.roomId)
@@ -209,17 +217,17 @@ function App() {
   } else if (view.name === 'admin') {
     screen = <AdminView onBack={() => { history.replaceState(null, '', location.pathname); setView({ name: 'home' }) }} />
   } else if (view.name === 'dm' && roomById(view.roomId)) {
-    screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} onInit={() => setView({ name: 'init', roomId: view.roomId, from: 'dm' })} />
+    screen = <DmView room={roomById(view.roomId)} onBack={() => setView({ name: 'home' })} onInit={() => setView({ name: 'init', roomId: view.roomId, from: 'dm' })} onGone={groupGone} />
   } else if (view.name === 'init' && roomById(view.roomId)) {
     screen = <InitiativeView room={roomById(view.roomId)} onBack={() => setView(view.from === 'dm' ? { name: 'dm', roomId: view.roomId } : { name: 'home' })} />
   } else {
-    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onGlossary={() => setView({ name: 'glossary' })} onAbout={() => setView({ name: 'landing', again: true })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} onInit={(r) => setView({ name: 'init', roomId: r.id })} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
+    screen = <Home chars={chars} onOpen={(c) => setView({ name: c.draft ? 'wizard' : 'sheet', id: c.id })} onAccount={() => { prevOwnerRef.current = ownerKey(); setAcct(true) }} onGlossary={() => setView({ name: 'glossary' })} onAbout={() => setView({ name: 'landing', again: true })} onNew={start} onSaveAll={() => Promise.all((chars || []).map((c) => saveNow(c.id)))} onBring={bring} onDm={(r) => setView({ name: 'dm', roomId: r.id })} onInit={(r) => setView({ name: 'init', roomId: r.id })} onGone={groupGone} joined={joined} onExport={exportAll} onImport={importFile} settings={settings} setSettings={setSettings} />
   }
 
   return (
     <>
       {screen}
-      {view.name !== 'wizard' && view.name !== 'init' && !landing && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice">🎲</button>}
+      {view.name !== 'wizard' && view.name !== 'init' && !landing && !tray && <button className="fab" onClick={() => { setTray(true); if (throwOn) load3d().catch(() => {}) }} aria-label="Dice"><GameIcon id="ui.d20" size={30} /></button>}
       {tray && <DiceTray pool={pool} setPool={setPool} mod={poolMod} setMod={setPoolMod} throwOn={throwOn} setThrowOn={setThrowOn} last={log[0]}
         onClose={() => setTray(false)} onThrow={() => { setTray(false); roll({ kind: 'pool', pool, mod: poolMod }) }} />}
       {shown && <RollCard e={shown} onClose={() => setShown(null)} />}
@@ -238,7 +246,7 @@ function App() {
   )
 }
 
-function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll, onBring, onDm, onInit, joined, onExport, onImport, settings, setSettings }) {
+function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll, onBring, onDm, onInit, onGone, joined, onExport, onImport, settings, setSettings }) {
   const file = useRef(null)
   const [table, setTable] = useState(false)
   const last = getSetting('lastBackupAt', null)
@@ -258,7 +266,7 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
   return (
     <main className="home">
       <header className="home-top">
-        <div className="brand"><span className="logo" aria-hidden>🎲</span><h1>Party Sheets</h1></div>
+        <div className="brand"><span className="logo" aria-hidden><GameIcon id="ui.d20" size={34} /></span><h1>Party Sheets</h1></div>
         <span className="top-actions"><AccountChip onOpen={onAccount} /><button className="icon-btn" onClick={() => setTable(true)} aria-label="Table settings">⚙</button></span>
       </header>
       {real.length === 0 ? (
@@ -273,7 +281,7 @@ function Home({ chars, onOpen, onAccount, onGlossary, onAbout, onNew, onSaveAll,
       <UnsavedBanner chars={chars} onSaveAll={onSaveAll} />
       {real.some((c) => !c.draft) && <SaveAccountNudge onOpen={onAccount} />}
       <button className="btn primary wide big-btn" onClick={() => onNew()}>+ New character</button>
-      <RoomsSection chars={real} renderChar={card} onDm={onDm} onInit={onInit} onNewInRoom={(r) => onNew(r)} onBring={onBring} joined={joined} />
+      <RoomsSection chars={real} renderChar={card} onDm={onDm} onInit={onInit} onGone={onGone} onNewInRoom={(r) => onNew(r)} onBring={onBring} joined={joined} />
       <input ref={file} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f) }} aria-label="Backup file" />
       {table && (
         <Sheet title="Table settings" onClose={() => setTable(false)}>

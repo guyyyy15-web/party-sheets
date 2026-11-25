@@ -3,6 +3,8 @@
 //   { active, round, turn: combatant id | null, seq, combatants: [Combatant] }
 //   Combatant: { id, kind: 'pc' | 'npc', name, init: number | null, bonus, group?, charId?, dmg?, ac?,
 //                conditions?: [condition id], dead?: bool }
+//   claims: [{ id, by, byName, target, amount, label, at }] = damage players reported, waiting for the runner
+//   auto: true = players' damage to enemies is applied at once (no waiting)
 // Enemies have no HP here (the table doesn't know it): `dmg` counts the damage they took, from 0 up (healing takes
 // it down), and the DM says when one falls (`dead`).
 // A player's HP, conditions and death saves live on their character (the sheet), not here.
@@ -104,10 +106,27 @@ export function remove(enc, id) {
 /** A copy to change: every change works on a fresh object, so React sees it and a retry can re-apply it. */
 export const clone = (enc) => JSON.parse(JSON.stringify(enc))
 
+/** The runner approves a player's damage (maybe a different amount, e.g. resistance): it's added to the target. */
+export function applyClaim(enc, claimId, amount) {
+  const cl = (enc.claims || []).find((c) => c.id === claimId)
+  if (!cl) return enc
+  const t = enc.combatants.find((c) => c.id === cl.target)
+  if (t?.kind === 'npc') t.dmg = Math.max(0, (t.dmg || 0) + num(amount ?? cl.amount))
+  enc.claims = enc.claims.filter((c) => c.id !== claimId)
+  return enc
+}
+export function dropClaim(enc, claimId) { enc.claims = (enc.claims || []).filter((c) => c.id !== claimId); return enc }
+export function setAuto(enc, on) { enc.auto = !!on; return enc }
+/** Who a player can attack: enemies still standing first, then everyone else but them. */
+export function targetsFor(enc, meId) {
+  const list = order(enc).filter((c) => c.id !== meId && !c.dead)
+  return [...list.filter((c) => c.kind === 'npc'), ...list.filter((c) => c.kind !== 'npc')]
+}
+
 /** What the players' screens get: enemies without their AC (the damage count is the table's, everyone sees it). */
 export function forPlayers(enc) {
   if (!enc) return enc
-  return { ...enc, combatants: enc.combatants.map((c) => (c.kind === 'npc' ? { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [] } : c)) }
+  return { ...enc, claims: undefined, combatants: enc.combatants.map((c) => (c.kind === 'npc' ? { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [] } : c)) }
 }
 /** Where a combatant is in the order (1-based), and how many turns until theirs. */
 export function placeOf(enc, id) {

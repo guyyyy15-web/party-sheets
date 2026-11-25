@@ -151,6 +151,32 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await T.p.click('button:has-text("Start round 1")')
     ok(await until(async () => (await T.p.textContent('.init-row.now')).includes('Aria')), 'runner: round 1 starts with Aria')
     ok(await until(() => A.p.isVisible('text=Your turn!'), 15000), 'phone A: "Your turn!"')
+    // the turn guide opens by itself: whom, to hit, damage, sent to the runner
+    ok(await until(() => A.p.isVisible('.sheet[aria-label="My turn"]'), 15000), 'phone A: the turn guide opened by itself')
+    let claimed = 0
+    for (let tryN = 0; tryN < 6 && !claimed; tryN++) {
+      if (!(await A.p.isVisible('.sheet[aria-label="My turn"]'))) await A.p.click('button:has-text("Start my turn")')
+      const G = A.p.locator('.sheet[aria-label="My turn"]')
+      await G.locator('.guide-opt:has-text("Unarmed Strike")').click()
+      if (tryN === 0) { ok(await G.locator('text=Who are you attacking?').isVisible(), 'phone A: "Who are you attacking?"'); await A.p.screenshot({ path: `${shots}/rooms-5b-target.png` }) }
+      if (await G.locator('.guide-opt:has-text("Soldier 2")').count()) await G.locator('.guide-opt:has-text("Soldier 2")').click()
+      await G.locator('button:has-text("Roll to hit (")').click()
+      await A.p.waitForSelector('.roll-card'); await A.p.click('button[aria-label="Close the roll"]')
+      if (await G.locator('button:text-is("Hit")').count()) await G.locator('button:text-is("Hit")').click()
+      else if (await G.locator('button:has-text("Roll damage ›")').count()) await G.locator('button:has-text("Roll damage ›")').click()
+      else { await G.locator('button[aria-label="Close"]').click(); continue } // a natural 1: try again
+      await G.locator('button:has-text("Roll damage (")').click()
+      await A.p.waitForSelector('.roll-card')
+      claimed = Number((await A.p.textContent('.roll-card .rc-head b')).match(/\d+/)?.[0] || 0)
+      await A.p.click('button[aria-label="Close the roll"]')
+      ok(await until(() => G.locator('text=Sent: the DM confirms it.').isVisible()), 'phone A: damage sent, waiting for the runner')
+      await G.locator('button[aria-label="Close"]').click()
+    }
+    ok(await until(async () => (await T.p.locator('.claim').count()) === 1, 15000), 'runner: the damage waits for approval')
+    await T.p.screenshot({ path: `${shots}/rooms-5c-claim.png` })
+    const asked = Number(await T.p.inputValue('.claim input'))
+    await T.p.click('.claim button:has-text("✓")')
+    ok(await until(async () => new RegExp(`Damage taken ${asked}`).test(await T.p.textContent('.init-row:has-text("Soldier 2")'))), `runner: approved, Soldier 2 took ${asked}`)
     // damage counts up from 0; the DM says when it falls
     await T.p.click('.init-row:has-text("Soldier 1") .init-main')
     await T.p.fill('input[aria-label="Amount"]', '8'); await T.p.click('.sheet button:has-text("+ Damage")')
@@ -280,6 +306,15 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await A.p.click('button[aria-label="Character settings"]')
     await A.p.click('button:has-text("Delete character")')
     ok(await until(async () => !(await mine()).some((c) => c.data.name === 'Aria')), 'deleting removes Aria from the server')
+
+    // the DM deletes the group: phone B keeps Brom, the group disappears there too
+    await D.goto(dmUrl.split('#')[0]); await D.waitForSelector('.room:has-text("Thursday night")')
+    D.on('dialog', (dg) => dg.accept())
+    await D.click('.room:has-text("Thursday night") button[aria-label^="Links for"]')
+    await D.click('button:has-text("Delete this group")')
+    ok(await until(async () => !(await D.isVisible('.room:has-text("Thursday night")'))), 'DM: the group is deleted')
+    await B.p.goto(URL)
+    ok(await until(async () => !(await B.p.isVisible('.room:has-text("Thursday night")')) && (await B.p.isVisible('.char-card:has-text("Brom")')), 20000), 'phone B: the group is gone, Brom is still here')
     await b.close()
   } finally { stop() }
   console.log(fails ? `\n${fails} FAILED` : '\nall good')

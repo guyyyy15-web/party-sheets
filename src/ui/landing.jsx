@@ -24,7 +24,7 @@ export function Landing({ onStart, onSignIn, onClose }) {
   return (
     <main className="landing">
       <header className="landing-hero">
-        <span className="logo" aria-hidden>🎲</span>
+        <span className="logo" aria-hidden><GameIcon id="ui.d20" size={56} /></span>
         <h1>Party Sheets</h1>
         <p className="landing-lead">Character sheets for your D&D table, on your phone. 2024 rules, real 3D dice, and a DM screen.</p>
       </header>

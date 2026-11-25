@@ -30,7 +30,7 @@ export function turnOptions(d) {
   return out
 }
 
-export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpells, onClose }) {
+export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpells, onClose, fight }) {
   const options = turnOptions(d)
   const [t, setT] = useState(null) // what the action is
   const [n, setN] = useState(1) // which attack of the action
@@ -39,25 +39,34 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
   const [dmg, setDmg] = useState(null) // the damage roll
   const [crit, setCrit] = useState(false)
   const [busy, setBusy] = useState(false)
+  // in a group fight: whom the attack goes to, and what happened to the damage sent
+  const inFight = !!(fight?.enc && fight.me)
+  const [target, setTarget] = useState(null)
+  const [sent, setSent] = useState(null) // { applied } | 'failed' | null
+  const targetC = target && fight?.enc?.combatants.find((c) => c.id === target)
   const go = async (fn) => { if (busy) return; setBusy(true); try { await fn() } finally { setBusy(false) } }
 
-  const choose = (o) => { setT(o); setHit(null); setDmg(null); setCrit(false); setPhase(o.kind === 'save' ? 'save' : 'hit') }
+  const attackPhase = (o) => (o.kind === 'save' ? 'save' : 'hit')
+  const choose = (o) => { setT(o); setHit(null); setDmg(null); setCrit(false); setSent(null); setPhase(inFight && fight.targets.length && !target ? 'target' : attackPhase(o)) }
   const rollHit = () => go(async () => {
     const e = await roll({ kind: 'd20', label: `${t.name} to hit`, bonus: t.toHit, mode, attack: true, critOn: t.critOn, parts: t.toHitParts, rule: t.spell ? 'Spell attack: d20 + your spellcasting modifier + proficiency bonus.' : 'attack' })
     if (e) { setHit(e); setCrit(!!e.crit) }
   })
   const rollDmg = () => go(async () => {
     const e = await roll({ kind: 'expr', label: `${t.name} damage`, expr: t.damage, crit, parts: t.damageParts, dieWhy: t.dieWhy, rule: 'damage' })
-    if (e) { setDmg(e); setPhase('next') }
+    if (e) {
+      setDmg(e); setPhase('next'); setSent(null)
+      if (inFight && target) { const r = await fight.claim(target, e.total, t.name); setSent(r || 'failed') }
+    }
   })
-  const nextAttack = () => { setN(n + 1); setHit(null); setDmg(null); setCrit(false); setPhase(t.kind === 'save' ? 'save' : 'hit') }
+  const nextAttack = () => { setN(n + 1); setHit(null); setDmg(null); setCrit(false); setSent(null); setPhase(attackPhase(t)) }
   const toBonus = () => setPhase(bonus.length ? 'bonus' : 'end')
   const more = t && n < t.count
 
   return (
     <Sheet title="My turn" onClose={onClose}>
       <ol className="turn-steps" aria-label="Steps of your turn">
-        {['Action', 'Roll', 'Bonus', 'Done'].map((s, i) => <li key={s} className={['pick', ['hit', 'save', 'dmg', 'next'], 'bonus', 'end'].findIndex((p) => (Array.isArray(p) ? p.includes(phase) : p === phase)) >= i ? 'on' : ''}>{s}</li>)}
+        {['Action', 'Roll', 'Bonus', 'Done'].map((s, i) => <li key={s} className={['pick', ['target', 'hit', 'save', 'dmg', 'next'], 'bonus', 'end'].findIndex((p) => (Array.isArray(p) ? p.includes(phase) : p === phase)) >= i ? 'on' : ''}>{s}</li>)}
       </ol>
 
       {phase === 'pick' && (
@@ -77,9 +86,24 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
         </>
       )}
 
+      {phase === 'target' && t && (
+        <>
+          <h3 className="guide-q">Who are you attacking?</h3>
+          <div className="guide-options">
+            {fight.targets.map((c) => (
+              <button key={c.id} className={`guide-opt ${c.kind}`} onClick={() => { setTarget(c.id); setPhase(attackPhase(t)) }}>
+                <span><b>{c.name}</b><small>{c.kind === 'npc' ? (c.dmg ? `${c.dmg} damage taken` : 'no damage yet') : 'in your party'}{c.conditions?.length ? ` · ${c.conditions.join(', ')}` : ''}</small></span>
+              </button>
+            ))}
+          </div>
+          <button className="btn ghost wide" onClick={() => { setTarget(null); setPhase(attackPhase(t)) }}>Someone not on the list</button>
+        </>
+      )}
+
       {(phase === 'hit' || phase === 'save' || phase === 'dmg' || phase === 'next') && t && (
         <>
           <h3 className="guide-q">{t.name}{t.count > 1 ? <span className="muted small"> · attack {n} of {t.count}</span> : null}</h3>
+          {inFight && fight.targets.length > 0 && <p className="muted small target-line">Target: <b>{targetC?.name || 'not on the list'}</b> · <button className="linkish" onClick={() => setPhase('target')}>change</button></p>}
           {phase === 'hit' && !hit && (
             <>
               <p className="guide-line"><b>1. Roll to hit:</b> d20 {signed(t.toHit)}. The DM compares it with the target's AC.</p>
@@ -110,7 +134,8 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
           )}
           {phase === 'next' && (
             <>
-              {dmg && <p className="guide-result" role="status"><span className="mono big">{dmg.total}</span> {t.type} damage. Tell the DM.</p>}
+              {dmg && <p className="guide-result" role="status"><span className="mono big">{dmg.total}</span> {t.type} damage{targetC ? <> to <b>{targetC.name}</b></> : ''}.{!targetC ? ' Tell the DM.' : ''}</p>}
+              {dmg && targetC && <p className={sent === 'failed' ? 'warn-line' : 'ok-line'} role="status">{!sent ? 'Sending…' : sent === 'failed' ? 'Couldn\'t send it: tell the DM.' : sent.applied ? `Added to ${targetC.name}'s damage.` : 'Sent: the DM confirms it.'}</p>}
               {!dmg && <p className="guide-line">No damage this time.</p>}
               {more && <button className="btn primary wide big-btn" onClick={nextAttack}>Next attack ({n + 1} of {t.count}) ›</button>}
               {more && <button className="btn ghost wide" onClick={() => { setN(n + 1); setPhase('pick') }}>Use a different weapon for the next attack</button>}

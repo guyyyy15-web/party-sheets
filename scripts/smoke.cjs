@@ -232,6 +232,13 @@ async function buildHero(p, { name, cls, species, bg, method, picks }) {
   await p.click('button[aria-label="All characters"]')
 
   // a spellcaster: choose spells, cast one with a slot, roll its healing
+  // a half-made character can be deleted from the wizard
+  await p.click('text=+ New character')
+  await p.fill('input[placeholder="e.g. Katsebushi"]', 'Halfmade'); await p.click('.wiz-foot button')
+  await p.click('.class-card:has-text("Wizard")')
+  await p.click('button[aria-label="Delete this character"]')
+  await p.waitForSelector('text=Character deleted.')
+  ok(await p.isVisible('text=+ New character') && !(await p.isVisible('.char-card:has-text("Halfmade")')), 'wizard: 🗑 deletes a half-made character')
   await buildHero(p, { name: 'Mira', cls: 'Cleric', species: 'Dwarf', bg: 'Acolyte', method: 'standard',
     picks: { bg: ['Wisdom', 'Light', 'Thaumaturgy', 'Sanctuary'], choices: ['Medicine', 'Persuasion', 'Protector'] } })
   await p.click('[role=tab]:has-text("Spells")')

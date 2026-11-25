@@ -14,7 +14,7 @@ import { ShareLinks } from './rooms.jsx'
 const POLL_MS = 5000
 const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago` }
 
-export function DmView({ room, onBack, onInit }) {
+export function DmView({ room, onBack, onInit, onGone }) {
   const [list, setList] = useState(null)
   const [err, setErr] = useState(null)
   const [hpFor, setHpFor] = useState(null)
@@ -66,7 +66,7 @@ export function DmView({ room, onBack, onInit }) {
       )}
       {hpC && <HpSheet d={derive(hpC.ch)} ch={hpC.ch} hp={hpC.ch.state.hp ?? derive(hpC.ch).hp.value} setState={(s) => act(hpC.c, s)} onClose={() => setHpFor(null)} />}
       {condC && <ConditionsSheet d={derive(condC.ch)} ch={condC.ch} setState={(s) => act(condC.c, s)} onClose={() => setCondFor(null)} />}
-      {share && <ShareLinks room={room} onClose={() => setShare(false)} />}
+      {share && <ShareLinks room={room} onClose={() => setShare(false)} onGone={(r) => { onGone?.(r); onBack() }} />}
       {settings && <GroupSettings room={room} onClose={() => setSettings(false)} onError={setErr} />}
     </main>
   )

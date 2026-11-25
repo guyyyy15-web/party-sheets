@@ -124,7 +124,7 @@ async function route(req, env) {
     if (!key || !same(await sha256(`admin:${key}`), stored)) fail(403, 'wrong admin password')
     if (p === '/admin/stats' && m === 'GET') return json(await adminStats(env))
     const dm = /^\/admin\/rooms\/([A-Za-z0-9_-]+)$/.exec(p)
-    if (dm && m === 'DELETE') { await env.DB.prepare('UPDATE characters SET room_id = NULL, rev = rev + 1 WHERE room_id = ?').bind(dm[1]).run(); await env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(dm[1]).run(); return json({ ok: true }) }
+    if (dm && m === 'DELETE') { await env.DB.prepare('UPDATE characters SET room_id = NULL, rev = rev + 1 WHERE room_id = ?').bind(dm[1]).run(); await env.DB.prepare('DELETE FROM encounters WHERE room_id = ?').bind(dm[1]).run(); await env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(dm[1]).run(); return json({ ok: true }) }
     fail(404, 'not found')
   }
 
@@ -154,6 +154,16 @@ async function route(req, env) {
       return role === 'dm' ? { id: r.id, rev: r.rev, updatedAt: r.updated_at, data } : { id: r.id, rev: r.rev, name: data.name, classId: data.classId, level: data.level, speciesId: data.speciesId, portrait: data.portrait?.kind === 'icon' ? data.portrait : null }
     })
     return json({ room: publicRoom(room), role, characters })
+  }
+  if (rm && m === 'DELETE') {
+    // the DM deletes the group for everyone: characters stay saved (in no group), the fight goes
+    const { room, role } = await roleIn(env, req, rm[1])
+    if (role !== 'dm') fail(403, 'DM only')
+    await env.DB.prepare('UPDATE characters SET room_id = NULL, rev = rev + 1, updated_at = ? WHERE room_id = ?').bind(Date.now(), room.id).run()
+    await env.DB.prepare('DELETE FROM encounters WHERE room_id = ?').bind(room.id).run()
+    await env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(room.id).run()
+    await count(env, 'room_deleted')
+    return json({ ok: true })
   }
   if (rm && m === 'PATCH') {
     const { room, role } = await roleIn(env, req, rm[1])
@@ -273,7 +283,7 @@ async function route(req, env) {
     await env.DB.prepare('UPDATE rooms SET init_hash = ?, updated_at = ? WHERE id = ?').bind(await sha256(initKey), Date.now(), room.id).run()
     return json({ initKey }, 201)
   }
-  const em = /^\/rooms\/([A-Za-z0-9_-]+)\/encounter(\/initiative)?$/.exec(p)
+  const em = /^\/rooms\/([A-Za-z0-9_-]+)\/encounter(\/initiative|\/claim)?$/.exec(p)
   if (em) {
     const { room, role } = await roleIn(env, req, em[1])
     const runs = role === 'dm' || role === 'init'
@@ -292,7 +302,29 @@ async function route(req, env) {
       if (!row) await count(env, 'fight_started')
       return json({ rev, data })
     }
-    if (em[2] && m === 'POST') {
+    if (em[2] === '/claim' && m === 'POST') {
+      // a player says how much damage they did to whom: applied at once if the runner allows it, else waits for them
+      await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
+      if (!cur || !cur.active) fail(404, 'no fight')
+      const body = await readJson(req, 512)
+      const id = String(body?.characterId || '')
+      const amount = Number(body?.amount)
+      const target = cur.combatants.find((c) => c.id === body?.target)
+      if (!ID.test(id) || !Number.isInteger(amount) || amount < 0 || amount > 999) fail(400, 'bad damage')
+      if (!target) fail(404, 'no such target')
+      const ch = await env.DB.prepare('SELECT owner_hash, room_id FROM characters WHERE id = ?').bind(id).first()
+      if (!ch || ch.room_id !== room.id) fail(404, 'no such character')
+      if (!runs && !same(await ownerHash(req), ch.owner_hash)) fail(403, 'not yours')
+      const by = cur.combatants.find((c) => c.charId === id)
+      const claim = { id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, by: by?.id || null, byName: String(by?.name || 'A player').slice(0, 40), target: target.id, amount, label: String(body?.label || '').slice(0, 40), at: Date.now() }
+      const applied = !!cur.auto && target.kind === 'npc'
+      if (applied) target.dmg = (target.dmg || 0) + amount
+      else cur.claims = [...(cur.claims || []), claim].slice(-30)
+      const rev = await saveEncounter(env, room.id, cur, row)
+      await count(env, applied ? 'damage_applied' : 'damage_claimed')
+      return json({ rev, applied, data: runs ? cur : hideEnemies(cur) })
+    }
+    if (em[2] === '/initiative' && m === 'POST') {
       // a player sends their own initiative (rolled in the app or by hand); the runner may send anyone's
       await limit(env, req, 'writes', LIMITS.writesPerClientPerMinute, 60e3)
       if (!cur || !cur.active) fail(404, 'no fight')
@@ -400,7 +432,7 @@ function privateless(data) {
 /** Players see enemies without their AC; the damage count is the table's (everyone counts it anyway). */
 function hideEnemies(enc) {
   if (!enc) return enc
-  return { ...enc, combatants: enc.combatants.map((c) => (c.kind !== 'npc' ? c : { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [] })) }
+  return { ...enc, combatants: enc.combatants.map((c) => (c.kind !== 'npc' ? c : { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [] })), claims: undefined }
 }
 const int = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null)
 /** Only the known fields, in range: the encounter is shown to every player of the group. */
@@ -416,7 +448,8 @@ function cleanEncounter(e) {
       conditions: Array.isArray(c.conditions) ? c.conditions.filter((x) => typeof x === 'string').slice(0, 20).map((x) => x.slice(0, 20)) : [] }
   })
   const ids = new Set(combatants.map((c) => c.id))
-  return { active: e.active !== false, round: int(e.round, 1, 9999) ?? 1, turn: ids.has(e.turn) ? e.turn : null, seq: int(e.seq, 0, 1e6) ?? 0, combatants }
+  const claims = (Array.isArray(e.claims) ? e.claims : []).slice(-30).filter((c) => c && ids.has(c.target)).map((c) => ({ id: str(c.id, 24), by: c.by && ids.has(c.by) ? c.by : null, byName: str(c.byName, 40), target: c.target, amount: int(c.amount, 0, 999) ?? 0, label: str(c.label, 40), at: int(c.at, 0, 9e15) ?? 0 }))
+  return { active: e.active !== false, round: int(e.round, 1, 9999) ?? 1, turn: ids.has(e.turn) ? e.turn : null, seq: int(e.seq, 0, 1e6) ?? 0, auto: !!e.auto, claims, combatants }
 }
 async function saveEncounter(env, roomId, data, row) {
   const text = JSON.stringify(data)
