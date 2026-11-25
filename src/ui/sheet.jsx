@@ -1,5 +1,5 @@
 // The character sheet at the table: stats with sources, My Turn, checks, features, gear, notes; rests and level up.
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { derive, rest, spendHitDie } from '../engine/engine.js'
 import { CONDITIONS, EXHAUSTION, INSPIRATION } from '../content/conditions.js'
 import { ABILITIES, ABILITY_NAMES, ARMOR, WEAPONS, armorById, weaponById, MASTERY } from '../content/basics.js'
@@ -35,6 +35,15 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   const setState = (patch) => setCh({ ...ch, state: { ...ch.state, ...patch } })
   // a fight in the group: the initiative rolled here goes to the Initiative screen by itself
   const fight = useFight(ch)
+  // the tabs stick right under the app bar, whatever its height (a "Save now" makes it taller)
+  const barRef = useRef(null)
+  useEffect(() => {
+    const el = barRef.current
+    if (!el || !window.ResizeObserver) return
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--bar-h', `${Math.round(el.getBoundingClientRect().height)}px`))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const rollInit = () => roll({ kind: 'd20', label: 'Initiative', bonus: d.initiative.value, mode, parts: d.initiative.sources, rule: 'initiative' }).then((e) => { if (e && fight.enc) fight.send(e.total) })
   const used = (id) => ch.state.used?.[id] || 0
   const spend = (id, n = 1) => setState({ used: { ...ch.state.used, [id]: Math.max(0, used(id) + n) } })
@@ -45,7 +54,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
   return (
     <main className={`sheet-page theme-${theme}`}>
-      <header className="char-top">
+      <header className="char-top" ref={barRef}>
         <button className="icon-btn" onClick={onBack} aria-label="All characters">‹</button>
         <Portrait ch={ch} size={44} />
         <div className="grow"><h1>{ch.name}</h1><p className="muted small">{d.species?.name} {d.cls?.name} {ch.level}{d.subclass ? ` · ${d.subclass.name}` : ''}{recent && <> · <button className="linkish" onClick={() => setPeek({ diff: lastLevelDiff(ch), preview: false })}>What's new</button></>}</p><SyncBadge id={ch.id} roomName={group?.name} onSaveNow={onSaveNow} /></div>
@@ -172,6 +181,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 }
 
 function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, setTerm, onSpells }) {
+  const [openAtk, setOpenAtk] = useState(null) // phones: an attack's math and properties fold away behind ⓘ
   const [guide, setGuide] = useState(false)
   const atk = d.attacks
   const pinned = new Set(ch.pinned || [])
@@ -190,18 +200,21 @@ function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, 
       <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>
       <p className="muted small tap-hint">🎲 Tap a number to roll it: first <b>to hit</b> (d20), then <b>damage</b> if it hits.</p>
       {atk.map((a) => (
-        <div key={a.id} className="attack">
+        <div key={a.id} className={`attack ${openAtk === a.id ? 'open' : ''}`}>
           <GameIcon id={`w.${a.id}`} size={34} className="atk-icon" />
           <div className="grow">
-            <b>{a.name}</b>
+            <span className="atk-head"><b>{a.name}</b><span className="atk-short muted small">{a.type}{a.range ? ` · ${a.range} ft` : ''}{a.mastery ? ` · ${a.mastery.name}` : ''}</span>
+              <button className="icon-btn info-btn" aria-expanded={openAtk === a.id} aria-label={`${a.name}: how it's made`} onClick={() => setOpenAtk(openAtk === a.id ? null : a.id)}>ⓘ</button></span>
             <span className="atk-math"><span className="am-line"><span className="am-lbl">To hit</span><span className="num k-dice">d20</span><Breakdown parts={a.toHitSources} label="To hit" /></span>
               <span className="am-line"><span className="am-lbl">Damage</span><span className="num k-dice">{a.damageDie || a.damage.split(/[+-]/)[0]}</span><Breakdown parts={a.damageParts} label="Damage" /></span></span>
-            <span className="muted small">{a.type}{a.range ? `, ${a.range} ft` : ''}{(a.props || []).map((p) => { const id = p.split(' ')[0]; return <React.Fragment key={p}>, {termById(id) ? <button className="linkish term-word" onClick={() => setTerm(id)}>{p}</button> : p}</React.Fragment> })}{a.note ? `. ${a.note}` : ''}</span>
-            {a.mastery && <details className="mastery"><summary>Mastery: {a.mastery.name}</summary>{a.mastery.text} {termById(a.mastery.name.toLowerCase()) && <button className="linkish" onClick={() => setTerm(a.mastery.name.toLowerCase())}>More</button>}</details>}
+            <span className="muted small atk-props">{a.type}{a.range ? `, ${a.range} ft` : ''}{(a.props || []).map((p) => { const id = p.split(' ')[0]; return <React.Fragment key={p}>, {termById(id) ? <button className="linkish term-word" onClick={() => setTerm(id)}>{p}</button> : p}</React.Fragment> })}{a.note ? `. ${a.note}` : ''}</span>
+            {a.mastery && <details className="mastery atk-mastery"><summary>Mastery: {a.mastery.name}</summary>{a.mastery.text} {termById(a.mastery.name.toLowerCase()) && <button className="linkish" onClick={() => setTerm(a.mastery.name.toLowerCase())}>More</button>}</details>}
           </div>
+          <div className="roll-row">
           <button className="roll-btn" aria-label={`${a.name}: roll to hit, ${signed(a.toHit)}`} onClick={() => roll({ kind: 'd20', label: `${a.name} to hit`, bonus: a.toHit, mode, attack: true, critOn: d.crit, parts: a.toHitSources, rule: 'attack' })}>{signed(a.toHit)}<small>to hit</small></button>
           <button className="roll-btn" aria-label={`${a.name}: roll damage, ${a.damage}`} onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, parts: a.damageParts, dieWhy: a.dieWhy, rule: 'damage' })}>{a.damage}<small>damage</small></button>
           <button className="roll-btn ghost" onClick={() => roll({ kind: 'expr', label: `${a.name} damage`, expr: a.damage, crit: true, parts: a.damageParts, dieWhy: a.dieWhy, rule: 'damage' })} aria-label={`${a.name} critical damage`}>×2<small>crit</small></button>
+          </div>
         </div>
       ))}
       {groups.map((g) => {
