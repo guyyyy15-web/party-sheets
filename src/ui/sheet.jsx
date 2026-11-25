@@ -10,6 +10,7 @@ import { SpellsTab, FeatSpells } from './spells.jsx'
 import { TurnGuide } from './turn.jsx'
 import { useFight, FightBanner } from './initiative.jsx'
 import { ItemsSection, GiftBanner } from './items.jsx'
+import { newTurn, used as usedTurn, allowed, timeKind } from './turnstate.js'
 import { LevelSummary, NextLevelLine, lastLevelDiff } from './levelup.jsx'
 import { levelDiff } from '../engine/levelup.js'
 import { pathsFor } from '../engine/advice.js'
@@ -46,7 +47,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
     const first = lastTurn.current === undefined
     if (lastTurn.current === turnKey) return
     lastTurn.current = turnKey
-    if (turnKey && !first) { setTab('turn'); setGuideReq((n) => n + 1) }
+    if (turnKey && !first) { setState({ turn: newTurn() }); setTab('turn'); setGuideReq((n) => n + 1) }
   }, [turnKey, fight.loaded])
   // the tabs stick right under the app bar, whatever its height (a "Save now" makes it taller)
   const barRef = useRef(null)
@@ -145,9 +146,9 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
 
       <EdgeTracker edge={ch.state.edge || 0} onSet={(edge) => setState({ edge })} />
 
-      {tab === 'turn' && <TurnTab d={d} ch={ch} roll={roll} mode={mode} setMode={setMode} used={used} spend={spend} setState={setState} hp={hp} show={show} setTerm={setTerm} onSpells={() => setTab('spells')} fight={fight} guideReq={guideReq} />}
-      {tab === 'spells' && d.spellcasting && <SpellsTab key={spellPick ? 'pick' : 'tab'} openPicker={spellPick} onPickerClosed={() => setSpellPick(false)} d={d} ch={ch} setCh={setCh} setState={setState} roll={roll} mode={mode} show={show} />}
-      {tab === 'spells' && d.featSpells.length > 0 && <FeatSpells d={d} ch={ch} setState={setState} roll={roll} mode={mode} />}
+      {tab === 'turn' && <TurnTab d={d} ch={ch} setCh={setCh} roll={roll} mode={mode} setMode={setMode} used={used} spend={spend} setState={setState} hp={hp} show={show} setTerm={setTerm} onSpells={() => setTab('spells')} fight={fight} guideReq={guideReq} />}
+      {tab === 'spells' && d.spellcasting && <SpellsTab key={spellPick ? 'pick' : 'tab'} openPicker={spellPick} onPickerClosed={() => setSpellPick(false)} d={d} ch={ch} setCh={setCh} setState={setState} roll={roll} mode={mode} show={show} fight={fight} hp={hp} />}
+      {tab === 'spells' && d.featSpells.length > 0 && <FeatSpells d={d} ch={ch} setState={setState} roll={roll} mode={mode} fight={fight} hp={hp} />}
       {tab === 'checks' && <ChecksTab d={d} roll={roll} mode={mode} show={show} />}
       {tab === 'features' && <FeaturesTab d={d} />}
       {tab === 'gear' && <GearTab d={d} ch={ch} setCh={setCh} onTerm={setTerm} roll={roll} hp={hp} />}
@@ -194,7 +195,7 @@ export function CharacterSheet({ ch, setCh, roll, mode, setMode, onBack, onDelet
   )
 }
 
-function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, setTerm, onSpells, fight, guideReq }) {
+function TurnTab({ d, ch, setCh, roll, mode, setMode, used, spend, setState, hp, show, setTerm, onSpells, fight, guideReq }) {
   const [openAtk, setOpenAtk] = useState(null) // phones: an attack's math and properties fold away behind ⓘ
   const [guide, setGuide] = useState(false)
   useEffect(() => { if (guideReq) setGuide(true) }, [guideReq])
@@ -202,16 +203,24 @@ function TurnTab({ d, ch, roll, mode, setMode, used, spend, setState, hp, show, 
   const pinned = new Set(ch.pinned || [])
   const groups = ['action', 'bonus', 'reaction', 'free', 'info']
   const canPay = (a) => !a.cost || d.resources.find((r) => r.id === a.cost.resource)?.max - used(a.cost.resource) >= a.cost.amount
+  const turn = ch.state.turn
   const doAction = (a) => {
-    if (a.cost) spend(a.cost.resource, a.cost.amount)
-    if (a.setHp != null) setState({ hp: a.setHp, used: { ...ch.state.used, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}) } })
-    if (a.refill) setState({ used: { ...ch.state.used, [a.refill]: 0, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}) } })
-    if (a.roll) roll({ kind: 'expr', label: `${a.name}: ${a.roll.label}`, expr: a.roll.expr, parts: a.roll.parts, rule: a.roll.why }).then((e) => { if (a.heal && e) setState({ hp: Math.min(d.hp.value, hp + Math.max(a.min || 0, e.total)), ...(a.cost || a.refill ? {} : {}) }) })
+    const kind = ['action', 'bonus', 'reaction'].includes(a.kind) ? a.kind : null
+    if (!allowed(turn, { kind })) return
+    // one update for everything (separate updates would overwrite each other)
+    let t = usedTurn(turn, { kind, spend: a.cost ? { [a.cost.resource]: a.cost.amount } : null })
+    if (a.id === 'action-surge') t = { ...t, action: false } // one more action this turn
+    const u = { ...ch.state.used, ...(a.cost ? { [a.cost.resource]: used(a.cost.resource) + a.cost.amount } : {}), ...(a.refill ? { [a.refill]: 0 } : {}) }
+    const patch = { turn: t, used: u, ...(a.setHp != null ? { hp: a.setHp } : {}) }
+    setState(patch)
+    if (a.roll) roll({ kind: 'expr', label: `${a.name}: ${a.roll.label}`, expr: a.roll.expr, parts: a.roll.parts, rule: a.roll.why }).then((e) => { if (a.heal && e) setCh({ ...ch, state: { ...ch.state, ...patch, hp: Math.min(d.hp.value, hp + Math.max(a.min || 0, e.total)) } }) })
   }
   return (
     <section className="turn">
-      <button className="btn primary wide big-btn start-turn" onClick={() => setGuide(true)}>▶ Start my turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
-      {guide && <TurnGuide d={d} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} fight={fight} />}
+      <TurnBar d={d} ch={ch} setState={setState} />
+      <button className="btn primary wide big-btn start-turn" onClick={() => { setState({ turn: newTurn() }); setGuide(true) }}>▶ Start my turn<small>step by step: move, attack, roll to hit, roll damage</small></button>
+      {guide && <TurnGuide d={d} roll={roll} mode={mode} setMode={setMode} bonus={d.actions.filter((a) => a.kind === 'bonus')} canPay={canPay} onUse={doAction} onSpells={() => { setGuide(false); onSpells() }} onClose={() => setGuide(false)} fight={fight}
+        takeAction={() => { if (!allowed(ch.state.turn, { kind: 'action' })) return false; setState({ turn: usedTurn(ch.state.turn, { kind: 'action' }) }); return true }} />}
       <h2 className="sec">Attacks <span className="muted small">{d.attacksPerAction} per Attack action{d.crit < 20 ? `, crit on ${d.crit}+` : ''}</span></h2>
       <p className="muted small tap-hint">🎲 Tap a number to roll it: first <b>to hit</b> (d20), then <b>damage</b> if it hits.</p>
       {atk.map((a) => (
@@ -512,6 +521,29 @@ function EdgeTracker({ edge, onSet }) {
         <small>{edge ? 'Your d20 rolls will ask whether it applies.' : 'Something gives you advantage? Tap +. Disadvantage? Tap −.'}</small></span>
       {edge !== 0 && <button className="btn ghost small" onClick={() => onSet(0)}>Clear</button>}
       <button className="icon-btn boxed" onClick={() => onSet(edge + 1)} aria-label="Advantage: one more (or one less disadvantage)">+</button>
+    </div>
+  )
+}
+
+/** This turn at a glance: Action, Bonus action, Reaction, the spell slot (one a turn), movement, and what was spent. */
+export function TurnBar({ d, ch, setState }) {
+  const t = { ...newTurn(), ...ch.state.turn }
+  const set = (patch) => setState({ turn: { ...t, ...patch } })
+  const left = Math.max(0, d.speed.value * (t.dash ? 2 : 1) - (t.moved || 0))
+  const spent = Object.entries(t.spent || {}).map(([id, n]) => `${n} ${d.resources.find((r) => r.id === id)?.name || id}`)
+  const chip = (k, label) => <button key={k} className={`tchip ${t[k] ? 'used' : ''}`} aria-pressed={!!t[k]} onClick={() => set({ [k]: !t[k] })} title={t[k] ? 'Used this turn (tap to undo)' : 'Still free this turn'}>{t[k] ? '✓ ' : ''}{label}</button>
+  return (
+    <div className="turn-bar" role="group" aria-label="This turn">
+      <div className="tchips">
+        {chip('action', 'Action')}{chip('bonus', 'Bonus')}{chip('reaction', 'Reaction')}
+        {(d.spellcasting || d.featSpells?.length > 0) && chip('slot', 'Spell slot')}
+      </div>
+      <div className="row tmove">
+        <span className="grow small"><b>{left} ft</b> of {d.speed.value * (t.dash ? 2 : 1)} to move{t.dash ? ' (Dash)' : ''}{spent.length ? <span className="muted"> · spent: {spent.join(', ')}</span> : null}</span>
+        <button className="icon-btn boxed" aria-label="Moved 5 ft" onClick={() => set({ moved: Math.min(d.speed.value * (t.dash ? 2 : 1), (t.moved || 0) + 5) })} disabled={!left}>−5</button>
+        {!t.dash && <button className="btn ghost small" onClick={() => { if (allowed(t, { kind: 'action' })) set({ action: true, dash: true }) }} title="Dash: your action, as much movement again">Dash</button>}
+        <button className="btn ghost small" onClick={() => setState({ turn: newTurn() })}>New turn</button>
+      </div>
     </div>
   )
 }

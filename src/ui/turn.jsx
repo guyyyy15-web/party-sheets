@@ -30,7 +30,7 @@ export function turnOptions(d) {
   return out
 }
 
-export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpells, onClose, fight }) {
+export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpells, onClose, fight, takeAction }) {
   const options = turnOptions(d)
   const [t, setT] = useState(null) // what the action is
   const [n, setN] = useState(1) // which attack of the action
@@ -47,7 +47,7 @@ export function TurnGuide({ d, roll, mode, setMode, bonus, canPay, onUse, onSpel
   const go = async (fn) => { if (busy) return; setBusy(true); try { await fn() } finally { setBusy(false) } }
 
   const attackPhase = (o) => (o.kind === 'save' ? 'save' : 'hit')
-  const choose = (o) => { setT(o); setHit(null); setDmg(null); setCrit(false); setSent(null); setPhase(inFight && fight.targets.length && !target ? 'target' : attackPhase(o)) }
+  const choose = (o) => { if (n === 1 && takeAction && !takeAction()) return; setT(o); setHit(null); setDmg(null); setCrit(false); setSent(null); setPhase(inFight && fight.targets.length && !target ? 'target' : attackPhase(o)) }
   const rollHit = () => go(async () => {
     const e = await roll({ kind: 'd20', label: `${t.name} to hit`, bonus: t.toHit, mode, attack: true, critOn: t.critOn, parts: t.toHitParts, rule: t.spell ? 'Spell attack: d20 + your spellcasting modifier + proficiency bonus.' : 'attack' })
     if (e) { setHit(e); setCrit(!!e.crit) }

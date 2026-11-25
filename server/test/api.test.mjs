@@ -219,8 +219,15 @@ test('initiative: the DM makes the Initiative link; it runs the fight; players s
   const pa = await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: g2.body.rev, data: auto } })
   const c2 = await call(`/rooms/${room.id}/encounter/claim`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', target: 'npc-1', amount: 5 } })
   assert.equal(c2.body.applied, true); assert.equal(c2.body.data.combatants.find((c) => c.id === 'npc-1').dmg, 44)
+  // healing and a condition always wait for the runner, even with auto on
+  const c3 = await call(`/rooms/${room.id}/encounter/claim`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', target: 'npc-1', amount: 0, label: 'Beguiling Magic', condition: 'charmed' } })
+  assert.equal(c3.body.applied, false)
+  const c4 = await call(`/rooms/${room.id}/encounter/claim`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'brakka01', target: 'pc-brakka01', amount: 7, label: 'Cure Wounds', heal: true } })
+  assert.equal(c4.body.applied, false)
+  const g3 = await call(`/rooms/${room.id}/encounter`, { auth: initKey })
+  assert.deepEqual(g3.body.data.claims.map((c) => [c.condition || null, !!c.heal]), [['charmed', false], [null, true]])
   // end the fight
-  assert.equal((await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: c2.body.rev, data: null } })).body.data, null)
+  assert.equal((await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: initKey, body: { rev: c4.body.rev, data: null } })).body.data, null)
 })
 
 test('the DM deletes a group: links stop working, characters stay saved in no group, players can\'t delete it', async () => {

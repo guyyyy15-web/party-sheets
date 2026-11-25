@@ -4,6 +4,20 @@ import React, { useState, useMemo } from 'react'
 import { spellRoll } from '../engine/spells.js'
 import { recommendSpells } from '../engine/advice.js'
 import { Sheet, Num, Breakdown, signed, GameIcon } from './common.jsx'
+import { allowed, used as usedTurn, timeKind } from './turnstate.js'
+import { TurnBar } from './sheet.jsx'
+import { CONDITIONS } from '../content/conditions.js'
+
+const isSlot = (id) => !!id && (/^slot-\d$/.test(id) || id === 'pact-slots')
+/** Cast: takes its part of the turn (and the turn's one slot); false when the player stops it. */
+export function castPatch(ch, used, s, slotId, { ritual = false } = {}) {
+  const kind = ritual ? null : timeKind(s.time), slot = isSlot(slotId)
+  if (!allowed(ch.state.turn, { kind, slot })) return null
+  const patch = { turn: usedTurn(ch.state.turn, { kind, slot, spend: slotId ? { [slotId]: 1 } : null }) }
+  if (slotId) patch.used = { ...ch.state.used, [slotId]: used(slotId) + 1 }
+  if (s.concentration) patch.concentration = s.id
+  return patch
+}
 
 const LEVEL = (n) => (n === 0 ? 'Cantrip' : `Level ${n}`)
 const ORD = ['', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th']
@@ -17,7 +31,7 @@ export const SPELL_RULES = {
   ritual: 'Ritual: cast it in 10 minutes longer without using a slot (it must be prepared).',
 }
 
-export function SpellsTab({ d, ch, setCh, setState, roll, mode, show, openPicker, onPickerClosed }) {
+export function SpellsTab({ d, ch, setCh, setState, roll, mode, show, openPicker, onPickerClosed, fight, hp }) {
   const sc = d.spellcasting
   const [picker, setPicker] = useState(!!openPicker)
   const [casting, setCasting] = useState(null)
@@ -37,15 +51,11 @@ export function SpellsTab({ d, ch, setCh, setState, roll, mode, show, openPicker
     if (!r) return null
     return roll({ kind: 'expr', label: `${s.name}: ${r.heal ? 'healing' : `${r.type} damage`}`, expr: r.expr, parts: r.parts, rule: r.why || (r.heal ? 'Healing: roll the dice and add any bonus.' : 'Damage: roll the spell\'s dice and add any bonus.') })
   }
-  const cast = (s, slotLevel, slotId) => {
-    const patch = {}
-    if (slotId) patch.used = { ...ch.state.used, [slotId]: used(slotId) + 1 }
-    if (s.concentration) patch.concentration = s.id
-    if (Object.keys(patch).length) setState(patch)
-  }
+  const cast = (s, slotLevel, slotId, opts) => { const p = castPatch(ch, used, s, slotId, opts); if (p) setState(p); return !!p }
 
   return (
     <section className="spells">
+      <TurnBar d={d} ch={ch} setState={setState} />
       <div className="sc-head">
         <button className="stat-card" onClick={() => show('Spell save DC', { value: sc.dc.value, sources: sc.dc.parts })} aria-label={`Spell save DC ${sc.dc.value}: how it's made`}>
           <span className="lbl">Spell save DC</span><b className="mono">{sc.dc.value}</b><Breakdown parts={sc.dc.parts} />
@@ -81,7 +91,7 @@ export function SpellsTab({ d, ch, setCh, setState, roll, mode, show, openPicker
         </React.Fragment>
       ))}
       <button className="btn ghost wide" onClick={() => setPicker(true)}>✎ Choose spells</button>
-      {casting && <CastSheet s={casting} sc={sc} used={used} onClose={() => setCasting(null)} cast={cast} attack={attack} effect={effect} />}
+      {casting && <CastSheet s={casting} sc={sc} used={used} onClose={() => setCasting(null)} cast={cast} attack={attack} effect={effect} d={d} ch={ch} setState={setState} fight={fight} hp={hp} />}
       {picker && <SpellPicker sc={sc} d={d} ch={ch} setCh={setCh} onClose={() => { setPicker(false); onPickerClosed?.() }} />}
     </section>
   )
@@ -137,8 +147,10 @@ function SpellRow({ s, sc, level, open, onToggle, attack, effect, onCast }) {
 }
 
 /** Pick a slot (or a ritual), then roll what the spell needs. */
-function CastSheet({ s, sc, used, onClose, cast, attack, effect, free }) {
+function CastSheet({ s, sc, used, onClose, cast, attack, effect, free, d, ch, setState, fight, hp }) {
   const [done, setDone] = useState(null) // the slot level it was cast with
+  const [withSlot, setWithSlot] = useState(false)
+  const [rolled, setRolled] = useState(null) // the one damage/healing roll of this casting
   const options = [
     ...(free ? [{ key: 'free', level: s.level, id: free.id, left: free.left, label: `Free cast (${free.from}, once per long rest)` }] : []),
     ...(sc.slots || []).filter((x) => x.level >= s.level).map((x) => ({ key: x.id, level: x.level, id: x.id, left: x.max - Math.min(x.max, used(x.id)), label: `${ORD[x.level]}-level slot` })),
@@ -151,11 +163,11 @@ function CastSheet({ s, sc, used, onClose, cast, attack, effect, free }) {
         <>
           <div className="cast-options">
             {options.map((o) => (
-              <button key={o.key} className="btn wide ghost" disabled={o.left <= 0} onClick={() => { cast(s, o.level, o.id); setDone(o.level) }}>
+              <button key={o.key} className="btn wide ghost" disabled={o.left <= 0} onClick={() => { if (cast(s, o.level, o.id)) { setDone(o.level); setWithSlot(isSlot(o.id)) } }}>
                 {o.label} <span className="muted">· {o.left} left{o.level > s.level && (s.damage?.higher || s.heal?.higher || s.higher) ? ' · stronger' : ''}</span>
               </button>
             ))}
-            {s.ritual && sc.ritual && <button className="btn wide ghost" onClick={() => { cast(s, s.level, null); setDone(s.level) }}>As a ritual (10 minutes longer, no slot)</button>}
+            {s.ritual && sc.ritual && <button className="btn wide ghost" onClick={() => { if (cast(s, s.level, null, { ritual: true })) setDone(s.level) }}>As a ritual (10 minutes longer, no slot)</button>}
           </div>
           {!options.some((o) => o.left > 0) && !(s.ritual && sc.ritual) && <p className="warn-line">{options.length ? `Nothing left to cast it with. It comes back on a ${sc.pact ? 'short or ' : ''}long rest.` : 'You need a spell slot for this one.'}</p>}
         </>
@@ -166,8 +178,10 @@ function CastSheet({ s, sc, used, onClose, cast, attack, effect, free }) {
           {s.save && <p className="panel small">Targets make a <b>{s.save} save</b> against your <b>DC {sc.dc.value}</b>. {SPELL_RULES.spellSave}</p>}
           <div className="row">
             {s.attack && <button className="btn primary grow" onClick={() => attack(s)}>Spell attack {signed(sc.attack.value)}</button>}
-            {r && <button className="btn primary grow" onClick={() => effect(s, done)}>{r.heal ? 'Heal' : 'Damage'} {r.expr}</button>}
+            {r && !rolled && <button className="btn primary grow" onClick={async () => { const e = await effect(s, done); if (e) setRolled({ total: e.total, heal: r.heal }) }}>{r.heal ? 'Heal' : 'Damage'} {r.expr}</button>}
           </div>
+          {rolled && d && <Deliver s={s} rolled={rolled} d={d} ch={ch} setState={setState} fight={fight} hp={hp} />}
+          {d && withSlot && <AfterCast s={s} d={d} ch={ch} setState={setState} used={used} fight={fight} />}
           <button className="btn ghost wide" onClick={onClose}>Done</button>
         </>
       )}
@@ -225,7 +239,7 @@ function SpellPicker({ sc, d, ch, setCh, onClose }) {
  * cast once per long rest. Shown on the Spells tab under the class's spells, or alone for a character without
  * Spellcasting.
  */
-export function FeatSpells({ d, ch, setState, roll, mode }) {
+export function FeatSpells({ d, ch, setState, roll, mode, fight, hp }) {
   const [open, setOpen] = useState(null)
   const [casting, setCasting] = useState(null)
   const used = (id) => ch.state.used?.[id] || 0
@@ -237,12 +251,8 @@ export function FeatSpells({ d, ch, setState, roll, mode }) {
     const r = spellRoll(s, { level: ch.level, castLevel, mod: fs.mod, ability: fs.ability })
     return r && roll({ kind: 'expr', label: `${s.name}: ${r.heal ? 'healing' : `${r.type} damage`}`, expr: r.expr, parts: r.parts, rule: r.why || (r.heal ? 'Healing: roll the dice and add any bonus.' : 'Damage: roll the spell\'s dice and add any bonus.') })
   }
-  const cast = (s, _lvl, slotId) => {
-    const patch = {}
-    if (slotId) patch.used = { ...ch.state.used, [slotId]: used(slotId) + 1 }
-    if (s.concentration) patch.concentration = s.id
-    if (Object.keys(patch).length) setState(patch)
-  }
+  const cast = (s, _lvl, slotId, opts) => { const p = castPatch(ch, used, s, slotId, opts); if (p) setState(p); return !!p }
+
   return (
     <section className="spells feat-spells">
       <h2 className="sp-level">From feats <span className="muted small">their own ability and DC</span></h2>
@@ -257,8 +267,62 @@ export function FeatSpells({ d, ch, setState, roll, mode }) {
           )
         })}
       </ul>
-      {casting && <CastSheet s={casting.spell} sc={scOf(casting)} used={used} onClose={() => setCasting(null)} cast={cast} attack={attack(casting)} effect={effect(casting)}
+      {casting && <CastSheet s={casting.spell} sc={scOf(casting)} used={used} onClose={() => setCasting(null)} cast={cast} attack={attack(casting)} effect={effect(casting)} d={d} ch={ch} setState={setState} fight={fight} hp={hp}
         free={casting.free && res(casting.free) ? { id: casting.free, from: casting.from, left: res(casting.free).max - Math.min(res(casting.free).max, used(casting.free)) } : null} />}
     </section>
   )
+}
+
+/** After the one damage/healing roll of a casting: who gets it. Healing yourself applies at once; anyone else in the
+ *  fight goes to the initiative runner to confirm. */
+function Deliver({ s, rolled, d, ch, setState, fight, hp }) {
+  const [sent, setSent] = useState({})
+  const targets = (fight?.targets || []).filter((c) => (rolled.heal ? c.kind === 'pc' : c.kind === 'npc'))
+  const send = async (c) => { const r = await fight.claim(c.id, rolled.total, s.name, rolled.heal ? { heal: true } : null); setSent({ ...sent, [c.id]: r ? (r.applied ? 'applied' : 'sent') : 'failed' }) }
+  return (
+    <div className="deliver">
+      <p className="guide-result" role="status"><span className="mono big">{rolled.total}</span> {rolled.heal ? 'healing' : 'damage'}. {rolled.heal ? 'Who is healed?' : targets.length ? 'Who takes it? (an area spell: tap each one hit)' : 'Tell the DM.'}</p>
+      <div className="guide-options">
+        {rolled.heal && <button className="guide-opt" disabled={!!sent.me} onClick={() => { setState({ hp: Math.min(d.hp.value, hp + rolled.total) }); setSent({ ...sent, me: 'applied' }) }}><span><b>Me</b><small>{sent.me ? `✓ healed to ${Math.min(d.hp.value, hp + rolled.total)}` : `${hp} / ${d.hp.value} HP`}</small></span></button>}
+        {targets.map((c) => (
+          <button key={c.id} className="guide-opt" disabled={!!sent[c.id]} onClick={() => send(c)}>
+            <span><b>{c.name}</b><small>{sent[c.id] === 'applied' ? '✓ applied' : sent[c.id] === 'sent' ? '✓ sent: the DM confirms it' : sent[c.id] === 'failed' ? "Couldn't send: tell the DM" : c.kind === 'npc' ? `${c.dmg || 0} damage taken` : 'in your party'}</small></span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Features that fire right after a casting (Glamour's Beguiling Magic after an Enchantment or Illusion slot spell). */
+function AfterCast({ s, d, ch, setState, used, fight }) {
+  const [done, setDone] = useState(null)
+  const list = d.actions.filter((a) => a.onCast && (!a.onCast.schools || a.onCast.schools.includes(s.school)))
+  if (!list.length) return null
+  const left = (id) => { const r = d.resources.find((x) => x.id === id); return r ? r.max - Math.min(r.max, used(id)) : 0 }
+  return list.map((a) => {
+    const pay = left(a.cost?.resource) > 0 ? a.cost : a.alt && left(a.alt.resource) > 0 ? a.alt : null
+    const payName = pay && d.resources.find((x) => x.id === pay.resource)?.name
+    const use = (target, condition) => {
+      setState({ used: { ...ch.state.used, [pay.resource]: used(pay.resource) + pay.amount } })
+      if (target) fight.claim(target, 0, a.name, { condition })
+      setDone(target ? `${condition} sent for the DM to confirm` : 'used')
+    }
+    return (
+      <div key={a.id} className="after-cast panel">
+        <b>✨ {a.name}</b><p className="muted small">{a.summary}{a.save ? ` ${a.save.ability} save DC ${a.save.dc}.` : ''}</p>
+        {done ? <p className="ok-line">✓ {done}.</p> : !pay ? <p className="warn-line">Nothing left to pay for it.</p> : (
+          <>
+            <p className="small">Costs 1 {payName} ({left(pay.resource)} left).</p>
+            {fight?.targets?.some((c) => c.kind === 'npc') && a.onCast.conditions ? (
+              <div className="guide-options">{fight.targets.filter((c) => c.kind === 'npc').map((c) => (
+                <div key={c.id} className="row"><span className="grow"><b>{c.name}</b></span>
+                  {a.onCast.conditions.map((k) => <button key={k} className="btn small ghost" onClick={() => use(c.id, k)}>{CONDITIONS.find((x) => x.id === k)?.name || k}</button>)}
+                </div>))}</div>
+            ) : <button className="btn primary wide" onClick={() => use(null)}>Use {a.name}</button>}
+          </>
+        )}
+      </div>
+    )
+  })
 }

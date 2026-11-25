@@ -314,7 +314,7 @@ export function derive(input) {
   // actions for "My Turn"
   const actions = [{ id: 'attack', name: 'Attack', kind: 'action', summary: `${attacksPerAction} attack${attacksPerAction > 1 ? 's' : ''} with a weapon or Unarmed Strike.` }]
   for (const e of active) if (e.type === 'action' && !actions.some((a) => a.id === e.id)) {
-    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), cost: e.cost, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx), parts: e.roll.parts ? e.roll.parts(ctx) : null, why: e.roll.why || null }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: e.setHp, attack: e.attack, count: e.count && e.count(ctx), from: e.from })
+    actions.push({ id: e.id, name: e.name, kind: e.kind, summary: call(e.summary, ctx), cost: e.cost, onCast: e.onCast || null, alt: e.alt || null, roll: e.roll && { label: e.roll.label, expr: e.roll.expr(ctx), parts: e.roll.parts ? e.roll.parts(ctx) : null, why: e.roll.why || null }, save: e.save && { ability: e.save.ability, dc: e.save.dc(ctx) }, heal: !!e.heal, min: e.min, refill: e.refill, setHp: e.setHp, attack: e.attack, count: e.count && e.count(ctx), from: e.from })
   }
   for (const e of active) if (e.type === 'note' && e.save) actions.push({ id: `note-${e.from}`, name: e.from, kind: 'info', summary: e.save.label, save: { dc: e.save.dc(ctx) } })
 

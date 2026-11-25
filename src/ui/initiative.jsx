@@ -100,7 +100,13 @@ export function InitiativeView({ room, onBack }) {
           {(data.claims || []).length > 0 && (
             <div className="claims" role="region" aria-label="Damage to confirm">
               <h3 className="sec">Damage to confirm</h3>
-              {data.claims.map((cl) => <Claim key={cl.id} cl={cl} target={data.combatants.find((c) => c.id === cl.target)} change={change} />)}
+              {data.claims.map((cl) => <Claim key={cl.id} cl={cl} target={data.combatants.find((c) => c.id === cl.target)} change={change} onPc={(t, v) => {
+                const p = pcs.get(t.charId)
+                if (p && cl.heal) pcAct(t.charId, { hp: Math.min(p.max, p.hp + v) })
+                else if (p && cl.condition) pcAct(t.charId, { conditions: [...new Set([...p.ch.state.conditions || [], cl.condition])] })
+                else if (p) pcAct(t.charId, { hp: Math.max(0, p.hp - v) })
+                change((e) => dropClaim(e, cl.id))
+              }} />)}
             </div>
           )}
           <label className="row toggle small"><input type="checkbox" checked={!!data.auto} onChange={(e) => change((x) => setAuto(x, e.target.checked))} /><span>Apply players' damage to enemies without asking</span></label>
@@ -154,14 +160,14 @@ export function InitiativeView({ room, onBack }) {
 }
 
 /** One player's damage waiting for the runner: apply it, change the amount first, or drop it. */
-function Claim({ cl, target, change }) {
+function Claim({ cl, target, change, onPc }) {
   const [n, setN] = useState(String(cl.amount))
   const v = parseInt(n, 10)
   return (
     <div className="claim">
-      <span className="grow"><b>{cl.byName}</b> → <b>{target?.name || '?'}</b>{cl.label ? <span className="muted small"> · {cl.label}</span> : null}</span>
-      <input className="input claim-n" inputMode="numeric" value={n} onChange={(e) => setN(e.target.value.replace(/\D/g, '').slice(0, 3))} aria-label={`Damage from ${cl.byName} to ${target?.name}`} />
-      <button className="btn small primary" disabled={!Number.isInteger(v)} onClick={() => change((e) => applyClaim(e, cl.id, v))} aria-label={`Apply ${v} damage to ${target?.name}`}>✓</button>
+ <span className="grow"><b>{cl.byName}</b> → <b>{target?.name || '?'}</b>{cl.label ? <span className="muted small"> · {cl.label}</span> : null}<span className="muted small" style={{ display: 'block' }}>{cl.condition ? `${CONDITIONS.find((x) => x.id === cl.condition)?.name || cl.condition} (if the save fails)` : cl.heal ? 'healing' : 'damage'}</span></span>
+      {!cl.condition && <input className="input claim-n" inputMode="numeric" value={n} onChange={(e) => setN(e.target.value.replace(/\D/g, '').slice(0, 3))} aria-label={`Damage from ${cl.byName} to ${target?.name}`} />}
+      <button className="btn small primary" disabled={!cl.condition && !Number.isInteger(v)} onClick={() => (target?.kind === 'pc' ? onPc(target, v) : change((e) => applyClaim(e, cl.id, v)))} aria-label={`Apply ${v} damage to ${target?.name}`}>✓</button>
       <button className="btn small ghost" onClick={() => change((e) => dropClaim(e, cl.id))} aria-label={`Drop the damage from ${cl.byName}`}>✕</button>
     </div>
   )
@@ -244,9 +250,9 @@ export function useFight(ch) {
     try { const j = await sendInitiative(room.playerKey ? { ...room, initKey: null, dmKey: null } : room, ch.id, total); setEnc(j.data); return true } catch { return false }
   }
   /** Report damage done to someone in the fight: { applied } or null when it couldn't be sent. */
-  const claim = async (target, amount, label) => {
+  const claim = async (target, amount, label, extra) => {
     if (!room || !enc?.active) return null
-    try { const j = await sendClaim(room, ch.id, target, amount, label); setEnc(j.data); return { applied: j.applied } } catch { return null }
+    try { const j = await sendClaim(room, ch.id, target, amount, label, extra); setEnc(j.data); return { applied: j.applied } } catch { return null }
   }
   const targets = enc?.active && me ? targetsFor(enc, me.id) : []
   return { enc: enc?.active ? enc : null, me, send, claim, targets, loaded }

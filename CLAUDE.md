@@ -47,6 +47,15 @@ answer in Hebrew. GitHub Pages serves `main` (repo root, no CI build). The PRD i
 - "Start my turn" (`src/ui/turn.jsx`): move → pick an attack or cantrip → roll to hit → Hit/Miss (crit/NAT 1 handled)
   → damage → next attack (Extra Attack) → bonus action → done. Same roll() as the sheet. 3D dice are on by default
   wherever WebGL works (Reduce motion doesn't turn them off; the tray can).
+- **The turn** (`src/ui/turnstate.js`, pure + tests/turn.test.mjs; `TurnBar` on My Turn and Spells): `state.turn` =
+  { action, bonus, reaction, slot, moved, dash, spent }. New turn when the fight reaches you, on "Start my turn", or
+  "New turn". Casting takes its part of the turn by casting time (`timeKind`) and, with a slot, the turn's one slot
+  (2024: one spell slot a turn; cantrips and feat free casts don't count); features take theirs by `kind`; the turn
+  guide's attack takes the action (Extra Attack inside it); Action Surge gives the action back. Using something already
+  used asks first (`allowed`, confirm: the DM may allow it). One damage/healing roll per casting, then "who gets it"
+  (`Deliver`: heal yourself at once, others/enemies as claims). After a slot spell, features with `onCast` are offered
+  (`AfterCast`: Glamour's Beguiling Magic after Enchantment/Illusion, paid with its use or `alt` Bardic Inspiration,
+  the condition sent as a claim). Claims carry `heal` / `condition`; those never apply automatically.
 - Phones (≤ 599 px): the sheet's top is a sticky app bar (`.char-top`; the tabs stick under it at `--bar-h`, measured
   by a ResizeObserver), tighter spacing, and each attack folds its math/properties/mastery behind ⓘ (`.attack.open`).
   Design for the iPhone 13 Pro (390 px, Guy); live.cjs also checks the SE so nothing breaks there.
