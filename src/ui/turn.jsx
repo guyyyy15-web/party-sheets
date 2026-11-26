@@ -6,6 +6,7 @@ import { Sheet, GameIcon, signed } from './common.jsx'
 import { spellRoll, cantripDice } from '../engine/spells.js'
 import { hitRiders, smiteExpr, spellDamageParts } from '../engine/riders.js'
 import { allowed, used as usedTurn } from './turnstate.js'
+import { EnemyPic } from './initiative.jsx'
 
 const OTHER = 'Dash (move again), Dodge, Disengage, Help, Hide, Ready, Search or use an object'
 
@@ -76,7 +77,7 @@ export function TurnGuide({ d, ch, setState, roll, mode, setMode, bonus, canPay,
     }
     if (e) {
       setDmg(e); setPhase('next'); setSent(null)
-      if (inFight && target) { const r = await fight.claim(target, e.total, t.name); setSent(r || 'failed') }
+      if (inFight && target) { const r = await fight.claim(target, e.total, t.name, crit ? { crit: true } : null); setSent(r || 'failed') }
     }
   })
   const nextAttack = () => { setN(n + 1); setHit(null); setDmg(null); setCrit(false); setSent(null); setPhase(attackPhase(t)) }
@@ -112,7 +113,7 @@ export function TurnGuide({ d, ch, setState, roll, mode, setMode, bonus, canPay,
           <div className="guide-options">
             {fight.targets.map((c) => (
               <button key={c.id} className={`guide-opt ${c.kind} ${c.color ? `ec-${c.color}` : ''}`} onClick={() => { setTarget(c.id); setPhase(attackPhase(t)) }}>
-                {c.icon && <span className="e-icon big" aria-hidden>{c.icon}</span>}
+                <EnemyPic c={c} size={30} />{!c.monster && c.icon && <span className="e-icon big" aria-hidden>{c.icon}</span>}
                 <span><b>{c.name}</b>{c.note ? <small className="e-note">{c.note}</small> : null}<small>{c.kind === 'npc' ? (c.dmg ? `${c.dmg} damage taken` : 'no damage yet') : 'in your party'}{c.conditions?.length ? ` · ${c.conditions.join(', ')}` : ''}</small></span>
               </button>
             ))}
@@ -219,7 +220,7 @@ function HitRiders({ d, ch, setState, t, crit, roll, fight, target }) {
     const e = await roll({ kind: 'expr', label: `${r.name}${r.type ? `: ${r.type}` : ''}`, expr, crit, parts: r.parts, rule: r.why || (r.spell ? `${r.name}: ${r.spell.damage?.higher || ''}`.trim() : undefined) })
     if (!e) return
     setDone({ ...done, [r.id]: e.total })
-    if (fight && target) fight.claim(target.id, e.total, r.name)
+    if (fight && target) fight.claim(target.id, e.total, r.name, crit ? { crit: true } : null)
   }
   return (
     <div className="riders" aria-label="On this hit">

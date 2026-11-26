@@ -85,3 +85,27 @@ test('an enemy\'s look: set when added, edited later, alone or for its whole kin
   assert.deepEqual([e.combatants[0].icon, e.combatants[0].color, e.combatants[0].note.length], [null, null, 40])
   assert.ok(ENEMY_ICONS.length >= 12)
 })
+
+import { endFight, recap, logHitPc, applyClaim as apply2 } from '../src/encounter-core.js'
+test('SRD creatures: HP for the runner only; the log, the end of the fight and its recap', () => {
+  const e = newEncounter([{ charId: 'a', name: 'Aria', init: 15 }, { charId: 'b', name: 'Brom', init: 10 }])
+  addGroup(e, { name: 'Goblin Warrior', count: 2, bonus: 2, monster: 'goblin-warrior', hp: 10, roll: seq(8) })
+  addGroup(e, { name: 'Ogre', monster: 'ogre', hpEach: () => 70, roll: seq(5) })
+  assert.deepEqual(e.combatants.filter((c) => c.kind === 'npc').map((c) => [c.name, c.monster, c.hp]), [['Goblin Warrior 1', 'goblin-warrior', 10], ['Goblin Warrior 2', 'goblin-warrior', 10], ['Ogre', 'ogre', 70]])
+  const p = forPlayers(e).combatants.find((c) => c.monster === 'ogre')
+  assert.equal(p.hp, undefined, 'players never get the HP'); assert.equal(p.monster, 'ogre', 'but they see which creature (its picture)')
+  // Aria's critical claim, approved; Brom finishes goblin 1; the ogre hits Aria; Brom heals her
+  e.claims = [{ id: 'k1', by: 'pc-a', target: 'npc-1', amount: 12, crit: true, label: 'Greataxe' }, { id: 'k2', by: 'pc-b', target: 'npc-1', amount: 3 }]
+  apply2(e, 'k1'); apply2(e, 'k2')
+  setDead(e, 'npc-1', true)
+  logHitPc(e, 'npc-3', 'pc-a', 13)
+  e.claims = [{ id: 'k3', by: 'pc-b', target: 'pc-a', amount: 6, heal: true }]
+  apply2(e, 'k3')
+  endFight(e)
+  assert.equal(e.active, false); assert.ok(e.endedAt)
+  const r = recap(e)
+  assert.deepEqual([r.fallen, r.enemies, r.totalDealt, r.crits], [1, 3, 15, 1])
+  assert.equal(r.mvp.name, 'Aria'); assert.equal(r.biggest.biggest, 12); assert.equal(r.biggest.biggestOn, 'Goblin Warrior 1')
+  assert.equal(r.heroes.find((h) => h.name === 'Brom').felled, 1, 'the last hit fells it')
+  assert.equal(r.healer.name, 'Brom'); assert.equal(r.tank.name, 'Aria'); assert.equal(r.tank.taken, 13)
+})

@@ -12,7 +12,11 @@ import { buffLabel } from '../engine/buffs.js'
 import { Portrait } from './wizard.jsx'
 import { LiveAvatar } from './live-avatar.jsx'
 import { fetchRoom, fetchEncounter, putEncounter, runnerPatch, sendInitiative, sendClaim, roomById as roomOf } from './sync.js'
-import { setLook, ENEMY_ICONS, ENEMY_COLORS } from '../encounter-core.js'
+import { setLook, ENEMY_ICONS, ENEMY_COLORS, endFight, logHitPc, log as logFight } from '../encounter-core.js'
+import { MONSTERS, monsterById } from '../content/monsters.js'
+import { GameIcon } from './common.jsx'
+import { rollD20With, rollDice } from '../dice.js'
+import { RecapCard } from './recap.jsx'
 import { newEncounter, addPc, addGroup, order, setInit, rollMissing, next, prev, hurt, setDead, toggleCondition, remove, clone, d20, placeOf, applyClaim, dropClaim, setAuto, targetsFor } from '../encounter-core.js'
 
 const POLL_MS = 3000
@@ -89,17 +93,23 @@ export function InitiativeView({ room, onBack }) {
       <header className="char-top">
         <button className="icon-btn" onClick={onBack} aria-label="Back">‹</button>
         <div className="grow"><h1>The Fight</h1><p className="muted small">{room.name} · updates every few seconds</p></div>
-        {data && <button className="btn ghost small" onClick={() => { if (confirm('End this fight? The order and the enemies are cleared.')) change(() => null) }}>End fight</button>}
+        {data?.active && <button className="btn ghost small" onClick={() => { if (confirm('End this fight? You get the recap; the next fight starts fresh.')) change((e) => endFight(e)) }}>End fight</button>}
       </header>
       {err && <p className="warn-line" role="status">{err}</p>}
-      {!enc ? <p className="muted">Loading…</p> : !data ? (
+      {enc && data && !data.active && (
+        <div className="recap-wrap">
+          <RecapCard enc={data} party={party} />
+          <button className="btn primary wide big-btn" onClick={start} disabled={!party}>⚔ Start a new fight</button>
+        </div>
+      )}
+      {!enc ? <p className="muted">Loading…</p> : !data?.active ? (data ? null : (
         <div className="empty">
           <div className="empty-art" aria-hidden>⚔️</div>
           <h2>No fight right now</h2>
           <p className="muted">{party?.length ? `Start one: the party (${party.map((c) => c.data.name).join(', ')}) joins, each player rolls initiative on their own sheet and it shows up here.` : 'No characters in this table yet. Send the players the invite link first.'}</p>
           <button className="btn primary big-btn" onClick={start} disabled={!party}>⚔ Start a fight</button>
         </div>
-      ) : (
+      )) : (
         <>
           <div className="init-bar">
             <span className="grow"><b>Round {data.round}</b>{current ? <> · <span className="muted">turn:</span> <b>{current.name}</b></> : <span className="muted"> · not started</span>}</span>
@@ -110,7 +120,7 @@ export function InitiativeView({ room, onBack }) {
               <h3 className="sec">Damage to confirm</h3>
               {data.claims.map((cl) => <Claim key={cl.id} cl={cl} target={data.combatants.find((c) => c.id === cl.target)} change={change} onPc={(t, v) => {
                 const p = pcs.get(t.charId)
-                if (p && cl.heal) pcAct(t.charId, { hp: Math.min(p.max, p.hp + v) })
+                if (p && cl.heal) { pcAct(t.charId, { hp: Math.min(p.max, p.hp + v) }); change((e) => logFight(e, { t: 'heal', by: cl.by, target: t.id, amount: v, label: cl.label })) }
                 else if (p && cl.condition) pcAct(t.charId, { conditions: [...new Set([...p.ch.state.conditions || [], cl.condition])] })
                 else if (p) pcAct(t.charId, { hp: Math.max(0, p.hp - v) })
                 change((e) => dropClaim(e, cl.id))
@@ -137,11 +147,11 @@ export function InitiativeView({ room, onBack }) {
                   <button className={`init-num ${c.init == null ? 'empty' : ''}`} onClick={() => setEditInit(c.id)} aria-label={`${c.name}: initiative ${c.init ?? 'not rolled'}. Change it`}>{c.init ?? '?'}</button>
                   {p && <LiveAvatar ch={p.ch} d={p.d} size={44} myTurn={data.turn === c.id} />}
                   <button className="init-main" onClick={() => (p ? setPcHp(c.charId) : setOpen(c.id))}>
-                    <span className="init-name">{c.icon && <span className="e-icon" aria-hidden>{c.icon}</span>}<b>{c.name}</b>{c.kind === 'pc' ? <span className="tag-pc">player</span> : null}{down && <span className="tag-down">{p ? 'down' : 'fell'}</span>}</span>
+                    <span className="init-name"><EnemyPic c={c} />{!c.monster && c.icon && <span className="e-icon" aria-hidden>{c.icon}</span>}<b>{c.name}</b>{c.kind === 'pc' ? <span className="tag-pc">player</span> : null}{down && <span className="tag-down">{p ? 'down' : 'fell'}</span>}{!down && c.hp && (c.dmg || 0) >= c.hp ? <span className="tag-looks down">0 HP: fell?</span> : null}</span>
                     {c.note && <span className="e-note small">{c.note}</span>}
                     <span className="init-sub muted small">
                       {p && <>AC {p.ac} · </>}
-                      {p ? <>HP {p.hp}/{p.max}{p.temp ? ` +${p.temp}` : ''}</> : <>Damage taken <b className="mono">{c.dmg || 0}</b></>}
+                      {p ? <>HP {p.hp}/{p.max}{p.temp ? ` +${p.temp}` : ''}</> : c.hp ? <>HP <b className="mono">{Math.max(0, c.hp - (c.dmg || 0))}</b>/{c.hp} <span className="muted">(you only)</span></> : <>Damage taken <b className="mono">{c.dmg || 0}</b></>}
                       {p && p.hp === 0 && <> · saves {p.deathSaves.ok || 0}✓ {p.deathSaves.fail || 0}✗</>}
                       {conds.length > 0 && <> · {conds.join(', ')}</>}
                     </span>
@@ -162,7 +172,8 @@ export function InitiativeView({ room, onBack }) {
       {adding && <AddEnemies onClose={() => setAdding(false)} onAdd={(g) => { change((e) => addGroup(e, g)); setAdding(false) }} />}
       {editInit && data && <InitNumber c={data.combatants.find((x) => x.id === editInit)} onClose={() => setEditInit(null)} onRemove={() => { change((e) => remove(e, editInit)); setEditInit(null) }}
         onSet={(v) => { const c = data.combatants.find((x) => x.id === editInit); if (c?.kind === 'pc') sendInitiative(room, c.charId, v).then((j) => setEnc({ rev: j.rev, data: j.data })).catch(() => change((e) => setInit(e, editInit, v))); else change((e) => setInit(e, editInit, v)); setEditInit(null) }} />}
-      {sel && <EnemySheet key={sel.id} c={sel} kin={data.combatants.filter((x) => x.kind === 'npc' && x.group === sel.group).length} onClose={() => setOpen(null)} change={(fn) => change((e) => fn(e))} />}
+      {sel && <EnemySheet key={sel.id} c={sel} kin={data.combatants.filter((x) => x.kind === 'npc' && x.group === sel.group).length} onClose={() => setOpen(null)} change={(fn) => change((e) => fn(e))}
+        heroes={data.combatants.filter((x) => x.kind === 'pc').map((x) => ({ ...x, view: pcs.get(x.charId) })).filter((x) => x.view)} hitHero={(h, amount, crit) => { pcAct(h.charId, { hp: Math.max(0, h.view.hp - amount) }); change((e) => logHitPc(e, sel.id, h.id, amount, crit)) }} />}
       {pcHp && pcSel(pcHp) && <HpSheet d={pcSel(pcHp).d} ch={pcSel(pcHp).ch} hp={pcSel(pcHp).hp} setState={(s) => pcAct(pcHp, s)} onClose={() => setPcHp(null)} />}
       {pcCond && pcSel(pcCond) && <ConditionsSheet d={pcSel(pcCond).d} ch={pcSel(pcCond).ch} setState={(s) => pcAct(pcCond, s)} onClose={() => setPcCond(null)} />}
     </main>
@@ -222,23 +233,37 @@ function LookPicker({ look, set }) {
 
 /** Enemies of one kind: a name, how many, their initiative bonus, and their look. */
 function AddEnemies({ onAdd, onClose }) {
-  const [g, setG] = useState({ name: '', count: 1, bonus: 0, each: false, icon: null, color: null, note: '' })
+  const [g, setG] = useState({ name: '', count: 1, bonus: 0, each: false, icon: null, color: null, note: '', monster: null, hpMode: 'avg' })
+  const [q, setQ] = useState('')
   const set = (patch) => setG({ ...g, ...patch })
+  const m = g.monster && monsterById(g.monster)
+  const found = q.trim().length >= 1 ? findMonsters(q).slice(0, 8) : []
+  const pick = (x) => { setG({ ...g, monster: x.id, name: x.name, bonus: x.init, icon: null }); setQ('') }
   return (
     <Sheet title="Add enemies" onClose={onClose}>
-      <label className="field"><span>Kind</span><input className="input" value={g.name} maxLength={30} placeholder="Soldier, Goblin, Officer…" onChange={(e) => set({ name: e.target.value })} autoFocus /></label>
+      <label className="field"><span>Find a creature <span className="muted small">(331 from the SRD, with pictures)</span></span>
+        <input className="input" type="search" value={q} placeholder="Goblin, wolf, dragon…" onChange={(e) => setQ(e.target.value)} autoFocus aria-label="Find a creature" autoComplete="off" /></label>
+      {found.length > 0 && (
+        <ul className="mon-results" aria-label="Creatures">
+          {found.map((x) => <li key={x.id}><button className="mon-pick" onClick={() => pick(x)}><GameIcon id={x.icon} size={36} /><span className="grow"><b>{x.name}</b><small>{x.size} {x.type} · CR {x.cr} · HP {x.hp}</small></span></button></li>)}
+        </ul>
+      )}
+      {q.trim() && !found.length && <p className="muted small">No creature by that name: type your own kind below.</p>}
+      {m && <div className="mon-picked"><GameIcon id={m.icon} size={44} /><span className="grow"><b>{m.name}</b><small>CR {m.cr} · HP {m.hp} ({m.hpDice}) · initiative {signed(m.init)}{m.attacks[0] ? ` · ${m.attacks[0].name} ${signed(m.attacks[0].toHit)}` : ''}</small></span><button className="btn small ghost" onClick={() => set({ monster: null })}>✕</button></div>}
+      {m && <div className="seg" role="group" aria-label="Hit points">{[['avg', `HP ${m.hp} each`], ['roll', `Roll ${m.hpDice} each`]].map(([k, l]) => <button key={k} aria-pressed={g.hpMode === k} className={g.hpMode === k ? 'on' : ''} onClick={() => set({ hpMode: k })}>{l}</button>)}</div>}
+      <label className="field"><span>{m ? 'Name on the order' : 'Or your own kind'}</span><input className="input" value={g.name} maxLength={30} placeholder="Soldier, Goblin, Officer…" onChange={(e) => set({ name: e.target.value })} autoFocus /></label>
       <div className="row"><span className="grow">How many</span><Stepper value={g.count} min={1} max={20} label="How many" onChange={(count) => set({ count })} /></div>
       <div className="row"><span className="grow">Initiative bonus</span><Stepper value={g.bonus} min={-5} max={15} label="Initiative bonus" onChange={(bonus) => set({ bonus })} /></div>
       {g.count > 1 && <label className="row toggle"><input type="checkbox" checked={g.each} onChange={(e) => set({ each: e.target.checked })} /><span>Roll initiative for each one (otherwise one roll for the group)</span></label>}
       <LookPicker look={g} set={set} />
-      <button className="btn primary wide" disabled={!g.name.trim()} onClick={() => onAdd({ ...g, name: g.name.trim() })}>Add {g.count > 1 ? `${g.count} × ` : ''}{g.name.trim() || 'enemies'}</button>
+      <button className="btn primary wide" disabled={!g.name.trim()} onClick={() => onAdd({ ...g, name: g.name.trim(), ...(m ? { monster: m.id, hp: m.hp, hpEach: g.hpMode === 'roll' && m.hpDice ? () => Math.max(1, rollDice(m.hpDice).total) : null } : {}) })}>Add {g.count > 1 ? `${g.count} × ` : ''}{g.name.trim() || 'enemies'}</button>
       <p className="muted small">They join the order at once, mid-fight too. Tap their number to change it. Each one counts the damage it takes, from 0; the DM says when it falls.</p>
     </Sheet>
   )
 }
 
 /** One enemy: the damage it took (up with damage, down with healing), conditions, dead (the DM says), remove. */
-function EnemySheet({ c, change, onClose, kin = 1 }) {
+function EnemySheet({ c, change, onClose, kin = 1, heroes = [], hitHero }) {
   const [n, setN] = useState('')
   const [look, setL] = useState({ icon: c.icon || null, color: c.color || null, note: c.note || '' })
   const changed = (look.icon || null) !== (c.icon || null) || (look.color || null) !== (c.color || null) || (look.note || '').trim() !== (c.note || '')
@@ -256,6 +281,7 @@ function EnemySheet({ c, change, onClose, kin = 1 }) {
       <h3 className="sec">Conditions</h3>
       <div className="chips">{CONDITIONS.filter((x) => x.id !== 'exhaustion').map((x) => <button key={x.id} className={`chip ${(c.conditions || []).includes(x.id) ? 'on' : ''}`} aria-pressed={(c.conditions || []).includes(x.id)} onClick={() => change((e) => toggleCondition(e, c.id, x.id))}>{x.name}</button>)}
         {(c.conditions || []).filter((id) => !CONDITIONS.some((x) => x.id === id)).map((id) => <button key={id} className="chip on" aria-pressed="true" onClick={() => change((e) => toggleCondition(e, c.id, id))}>{condName(id)} ✕</button>)}</div>
+      {c.monster && monsterById(c.monster) && <StatBlock m={monsterById(c.monster)} c={c} heroes={heroes} hitHero={hitHero} />}
       <h3 className="sec">Look</h3>
       <LookPicker look={look} set={(p) => setL({ ...look, ...p })} />
       <div className="row">
@@ -293,14 +319,23 @@ export function useFight(ch) {
     try { const j = await sendClaim(room, ch.id, target, amount, label, extra); setEnc(j.data); return { applied: j.applied } } catch { return null }
   }
   const targets = enc?.active && me ? targetsFor(enc, me.id) : []
-  return { enc: enc?.active ? enc : null, me, send, claim, targets, loaded, room }
+  // a fight just over (kept with its log until the next one): its recap, for 6 hours
+  const ended = enc && !enc.active && enc.endedAt && Date.now() - enc.endedAt < 6 * 3600e3 ? enc : null
+  return { enc: enc?.active ? enc : null, ended, me, send, claim, targets, loaded, room }
 }
 
 export function FightBanner({ fight, onRoll, bonus }) {
   const [typing, setTyping] = useState(false)
   const [v, setV] = useState('')
   const [show, setShow] = useState(false)
-  const { enc, me } = fight
+  const { enc, me, ended } = fight
+  const [recapOpen, setRecapOpen] = useState(false)
+  if (!enc && ended) return (
+    <>
+      <button className="fight-banner over" onClick={() => setRecapOpen(true)}><span className="grow"><b>🏆 The fight is over</b> · see the recap</span><span aria-hidden>›</span></button>
+      {recapOpen && <Sheet title="The fight's recap" onClose={() => setRecapOpen(false)}><RecapCard enc={ended} party={null} /></Sheet>}
+    </>
+  )
   if (!enc) return null
   const list = order(enc)
   const now = list.find((c) => c.id === enc.turn)
@@ -378,7 +413,7 @@ function PartyOrder({ enc, me, room, onClose }) {
           const i = c.kind === 'pc' && party[c.charId] ? partyInfo(party[c.charId], names) : null
           const head = (
             <>
-              <span className="init-name">{c.icon && <span className="e-icon" aria-hidden>{c.icon}</span>}<b>{c.name}</b>{c.id === me.id && <span className="tag-pc">you</span>}{c.dead && <span className="tag-down">fell</span>}
+              <span className="init-name"><EnemyPic c={c} />{!c.monster && c.icon && <span className="e-icon" aria-hidden>{c.icon}</span>}<b>{c.name}</b>{c.id === me.id && <span className="tag-pc">you</span>}{c.dead && <span className="tag-down">fell</span>}
                 {c.kind === 'npc' && !c.dead && <span className={`tag-pc ${c.dmg ? 'hurt' : ''}`}>{c.dmg ? `${c.dmg} damage` : 'unhurt'}</span>}
                 {i && <span className={`tag-pc hp ${tone(i)}`}>{i.hp === 0 ? 'Down' : `HP ${i.hp}/${i.max}`}{i.temp ? ` +${i.temp}` : ''}</span>}</span>
               {c.note && <span className="e-note small">{c.note}</span>}
@@ -434,5 +469,51 @@ function PartySheet({ info, onBack, onClose }) {
       <ul className="peek-list">{d.attacks.map((a) => <li key={a.id}><b>{a.name}</b> {signed(a.toHit)} to hit · {a.damage} {a.type}</li>)}</ul>
       {d.spellcasting && <p className="muted small">Spell save DC {d.spellcasting.dc.value} · spell attack {signed(d.spellcasting.attack.value)}</p>}
     </Sheet>
+  )
+}
+
+/** An enemy's picture: its SRD creature's icon (game-icons.net), in its color. */
+export function EnemyPic({ c, size = 24 }) {
+  const m = c.monster && monsterById(c.monster)
+  return m ? <span className="e-pic" aria-hidden><GameIcon id={m.icon} size={size} /></span> : null
+}
+
+/** Creatures by name: starts-with first, then contains (case and accents ignored). */
+export function findMonsters(q) {
+  const t = q.trim().toLowerCase()
+  if (!t) return []
+  return [...MONSTERS.filter((m) => m.name.toLowerCase().startsWith(t)), ...MONSTERS.filter((m) => !m.name.toLowerCase().startsWith(t) && m.name.toLowerCase().includes(t))]
+}
+
+/** The runner's card for an SRD creature: its numbers, and its attacks with dice (to hit, damage), sent to a hero. */
+function StatBlock({ m, c, heroes, hitHero }) {
+  const [res, setRes] = useState(null) // { name, d20, toHit, total, crit, dmg, type, extra }
+  const [sent, setSent] = useState(null)
+  const attack = (a) => {
+    const r = rollD20With(a.toHit, 'normal', [])
+    const crit = r.kept === 20
+    const dm = rollDice(a.dice, { crit }), ex = a.extra ? rollDice(a.extra.split(' ')[0], { crit }) : null
+    setRes({ name: a.name, d20: r.kept, total: r.total, crit, miss1: r.kept === 1, dmg: dm.total + (ex?.total || 0), type: a.type, extra: a.extra && `${ex.total} ${a.extra.split(' ')[1] || ''}` }); setSent(null)
+  }
+  const save = (s) => { const dm = s.dice ? rollDice(s.dice) : null; setRes({ name: s.name, save: `${s.ability} save DC ${s.dc}`, dmg: dm?.total ?? null, type: s.type || '' }); setSent(null) }
+  return (
+    <div className="stat-block">
+      <div className="row"><GameIcon id={m.icon} size={48} /><span className="grow"><b>{m.name}</b><small className="muted">{m.size} {m.type} · CR {m.cr} · {m.xp} XP</small></span></div>
+      <p className="small sb-line">AC <b>{m.ac}</b> · HP <b>{Math.max(0, (c.hp || m.hp) - (c.dmg || 0))}</b>/{c.hp || m.hp} · Speed {m.speed} · Initiative {signed(m.init)}</p>
+      {m.multi && <p className="small muted">Multiattack: {m.multi} attacks a turn.</p>}
+      <div className="sb-attacks">
+        {m.attacks.map((a, i) => <button key={`${a.name}${i}`} className="btn small ghost" onClick={() => attack(a)}>🎲 {a.name} {signed(a.toHit)} · {a.dice} {a.type}{a.extra ? ` + ${a.extra}` : ''}</button>)}
+        {(m.saves || []).map((s) => <button key={s.name} className="btn small ghost" onClick={() => save(s)}>{s.name}: {s.ability} DC {s.dc}{s.dice ? ` · ${s.dice} ${s.type}` : ''}{s.recharge ? ` (recharge ${s.recharge}–6)` : ''}</button>)}
+      </div>
+      {res && (
+        <div className="sb-result" role="status">
+          {res.save ? <p><b>{res.name}</b>: {res.save}{res.dmg != null ? <> · <b className="mono">{res.dmg}</b> {res.type} (half on a success)</> : null}</p>
+            : <p><b>{res.name}</b>: d20 {res.d20} → <b className="mono">{res.total}</b> to hit{res.crit ? ' · CRITICAL' : res.miss1 ? ' · a natural 1 misses' : ''} · <b className="mono">{res.dmg}</b> {res.type}{res.extra ? ` (incl. ${res.extra})` : ''}</p>}
+          {res.dmg != null && !res.miss1 && heroes.length > 0 && (
+            <div className="row sb-heroes">{heroes.map((h) => <button key={h.id} className="btn small" disabled={sent === h.id} onClick={() => { hitHero(h, res.dmg, res.crit); setSent(h.id) }}>{sent === h.id ? `✓ ${h.name}` : `Hits ${h.name}`}</button>)}</div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

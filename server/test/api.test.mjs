@@ -296,3 +296,31 @@ test('players see each other\'s sheets in a fight (?sheets=1): numbers and spell
   assert.equal(d.state.gifts, undefined); assert.equal(d.portrait, null)
   assert.equal((await call(`/rooms/${room.id}?sheets=1`, { auth: key() })).status, 403)
 })
+
+test('the fight with SRD creatures: HP stays with the runner; the log and the end are kept for the recap', async () => {
+  const { room, playerKey, dmKey } = (await call('/rooms', { method: 'POST', body: { name: 'Monsters' } })).body
+  const own = key()
+  assert.equal((await call(`/rooms/${room.id}/characters/char_vexx1`, { method: 'PUT', auth: playerKey, owner: own, body: { patch: hero('Vex') } })).status, 201)
+  const fight = { active: true, round: 1, turn: null, seq: 1, auto: true, combatants: [
+    { id: 'pc-char_vexx1', kind: 'pc', charId: 'char_vexx1', name: 'Vex', init: 12, bonus: 3 },
+    { id: 'npc-1', kind: 'npc', group: 'Ogre', name: 'Ogre', init: 8, bonus: -1, dmg: 0, monster: 'ogre', hp: 68, conditions: [] },
+    { id: 'npc-2', kind: 'npc', group: 'X', name: 'X', init: 1, bonus: 0, dmg: 0, monster: '../etc', hp: 1e9, conditions: [] },
+  ], log: [{ t: 'dmg', by: 'pc-char_vexx1', target: 'npc-1', amount: 5, round: 1, at: 1 }, { t: 'evil', by: 'x' }] }
+  const put = await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: dmKey, body: { rev: 0, data: fight } })
+  assert.equal(put.status, 200)
+  const ogre = put.body.data.combatants.find((c) => c.id === 'npc-1'), x = put.body.data.combatants.find((c) => c.id === 'npc-2')
+  assert.deepEqual([ogre.monster, ogre.hp, x.monster, x.hp], ['ogre', 68, null, null])
+  assert.equal(put.body.data.log.length, 1, 'unknown log entries dropped')
+  // a player's critical, applied at once (auto): logged with the crit
+  const cl = await call(`/rooms/${room.id}/encounter/claim`, { method: 'POST', auth: playerKey, owner: own, body: { characterId: 'char_vexx1', target: 'npc-1', amount: 14, label: 'Rapier', crit: true } })
+  assert.equal(cl.status, 200); assert.equal(cl.body.applied, true)
+  const seen = cl.body.data.combatants.find((c) => c.id === 'npc-1')
+  assert.equal(seen.hp, undefined, 'players never get the HP'); assert.equal(seen.monster, 'ogre')
+  assert.deepEqual(cl.body.data.log.at(-1), { ...cl.body.data.log.at(-1), t: 'dmg', amount: 14, crit: true, by: 'pc-char_vexx1' })
+  // the end: kept, inactive, for the recap
+  const g = await call(`/rooms/${room.id}/encounter`, { auth: dmKey })
+  const end = await call(`/rooms/${room.id}/encounter`, { method: 'PUT', auth: dmKey, body: { rev: g.body.rev, data: { ...g.body.data, active: false, endedAt: Date.now() } } })
+  assert.equal(end.status, 200); assert.equal(end.body.data.active, false); assert.ok(end.body.data.endedAt)
+  const pv = await call(`/rooms/${room.id}/encounter`, { auth: playerKey })
+  assert.equal(pv.body.data.log.length, 2); assert.equal(pv.body.data.active, false)
+})

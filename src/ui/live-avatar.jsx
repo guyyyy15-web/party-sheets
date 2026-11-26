@@ -50,7 +50,7 @@ export function LiveAvatar({ ch, d, size = 84, myTurn = false, live = false }) {
       {s.buffs.length > 0 && <span className="la-badge la-buffs" aria-hidden>✦{s.buffs.length > 1 ? s.buffs.length : ''}</span>}
       {s.conditions.length > 0 && <span className="la-badge la-cond" aria-hidden>!</span>}
       {s.deathSaves && size >= 60 && <span className="la-saves" aria-hidden>{[0, 1, 2].map((i) => <i key={`o${i}`} className={i < s.deathSaves.ok ? 'ok' : ''} />)}{[0, 1, 2].map((i) => <i key={`f${i}`} className={`f ${i < s.deathSaves.fail ? 'bad' : ''}`} />)}</span>}
-      {fx.map((f) => <span key={f.id} className={`la-float ${f.kind}`} aria-hidden>{f.text}</span>)}
+      {live && fx.map((f) => <span key={f.id} className={`la-float ${f.kind}`} aria-hidden>{f.text}</span>)}
     </span>
   )
 }

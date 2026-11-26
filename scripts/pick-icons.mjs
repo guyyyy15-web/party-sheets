@@ -41,6 +41,9 @@ const WANT = {
   // general
   'ui.d20': ['dice-twenty-faces-twenty'], 'ui.feat': ['laurel-crown', 'laurels'], 'ui.subclass': ['crown', 'tied-scroll'], 'ui.spell': ['magic-swirl'], 'ui.pack': ['knapsack', 'backpack'], 'ui.gold': ['two-coins', 'coins'], 'ui.dm': ['dungeon-gate', 'scroll-quill'], 'ui.group': ['three-friends', 'team-idea'],
 }
+// the SRD creatures' pictures (src/content/monsters.js): every icon they use, under g.<name>
+const { MONSTERS } = await import('../src/content/monsters.js')
+for (const m of MONSTERS) WANT[m.icon] = [m.icon.slice(2)]
 const out = {}, miss = []
 for (const [k, cands] of Object.entries(WANT)) {
   const hit = cands.find((n) => icons[n])

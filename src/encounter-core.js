@@ -49,7 +49,11 @@ export function setLook(enc, id, look, { group = false } = {}) {
   return enc
 }
 
-export function addGroup(enc, { name, count = 1, bonus = 0, each = false, roll = d20, icon = null, color = null, note = null }) {
+/**
+ * monster: an SRD creature id (src/content/monsters.js): its picture, attacks and HP for the runner. hp: each one's
+ * hit points (the runner sees them, players never do); hpEach: a function giving one creature's HP (rolled) instead.
+ */
+export function addGroup(enc, { name, count = 1, bonus = 0, each = false, roll = d20, icon = null, color = null, note = null, monster = null, hp = null, hpEach = null }) {
   const base = String(name || 'Enemy').trim().slice(0, 30) || 'Enemy'
   const n = Math.max(1, Math.min(20, num(count, 1)))
   const already = enc.combatants.filter((c) => c.group === base).length
@@ -57,7 +61,7 @@ export function addGroup(enc, { name, count = 1, bonus = 0, each = false, roll =
   for (let i = 0; i < n && enc.combatants.length < MAX_COMBATANTS; i++) {
     enc.seq = (enc.seq || 0) + 1
     const label = n === 1 && already === 0 ? base : `${base} ${already + i + 1}`
-    enc.combatants.push({ id: `npc-${enc.seq}`, kind: 'npc', group: base, name: label, bonus: num(bonus), init: each ? roll() + num(bonus) : groupInit, dmg: 0, conditions: [], ...cleanLook({ icon, color, note }) })
+    enc.combatants.push({ id: `npc-${enc.seq}`, kind: 'npc', group: base, name: label, bonus: num(bonus), init: each ? roll() + num(bonus) : groupInit, dmg: 0, conditions: [], ...cleanLook({ icon, color, note }), ...(monster ? { monster } : {}), ...(hpEach || hp ? { hp: num(hpEach ? hpEach() : hp) } : {}) })
   }
   return enc
 }
@@ -99,13 +103,54 @@ export function prev(enc) {
 }
 
 /** Damage (positive) or healing (negative) on an enemy: the damage it took goes up or down (never below 0). */
-export function hurt(enc, id, amount) {
+export function hurt(enc, id, amount, by = null) {
   const c = enc.combatants.find((x) => x.id === id)
   if (!c || c.kind !== 'npc') return enc
   c.dmg = Math.max(0, (c.dmg || 0) + num(amount))
+  if (by !== false) log(enc, { t: num(amount) >= 0 ? 'dmg' : 'heal', by, target: id, amount: Math.abs(num(amount)) })
   return enc
 }
-export function setDead(enc, id, dead) { const c = enc.combatants.find((x) => x.id === id); if (c) c.dead = !!dead; return enc }
+export function setDead(enc, id, dead) {
+  const c = enc.combatants.find((x) => x.id === id)
+  if (c) { c.dead = !!dead; if (dead) log(enc, { t: 'fell', by: lastHitter(enc, id), target: id }) }
+  return enc
+}
+
+// ── what happened, for the recap: [{ t: 'dmg'|'heal'|'fell'|'hit-pc', by (combatant id or null), target, amount, crit, label, round, at }]
+export const LOG_MAX = 300
+export function log(enc, e) {
+  enc.log = [...(enc.log || []), { ...e, round: enc.round || 1, at: Date.now() }].slice(-LOG_MAX)
+  return enc
+}
+const lastHitter = (enc, id) => [...(enc.log || [])].reverse().find((e) => e.t === 'dmg' && e.target === id && e.by)?.by || null
+/** A monster hits a player (the runner applies it on the player's sheet; the log keeps who took what). */
+export const logHitPc = (enc, by, target, amount, crit = false) => log(enc, { t: 'hit-pc', by, target, amount: num(amount), crit: !!crit })
+/** The fight is over: it stays (inactive) with its log until the next one, so everyone can see the recap. */
+export function endFight(enc) { enc.active = false; enc.endedAt = Date.now(); enc.turn = null; enc.claims = []; return enc }
+
+/**
+ * The recap of a fight (pure): rounds, and per hero the damage dealt, biggest hit, crits, enemies felled, healing given
+ * and damage taken; plus the highlights. names: { combatant id → name } comes from the combatants.
+ */
+export function recap(enc) {
+  const by = new Map(enc.combatants.map((c) => [c.id, c]))
+  const heroes = new Map(enc.combatants.filter((c) => c.kind === 'pc').map((c) => [c.id, { id: c.id, charId: c.charId, name: c.name, dealt: 0, biggest: 0, biggestOn: null, crits: 0, felled: 0, healed: 0, taken: 0 }]))
+  for (const e of enc.log || []) {
+    const h = heroes.get(e.by)
+    if (e.t === 'dmg' && h) { h.dealt += e.amount; if (e.amount > h.biggest) { h.biggest = e.amount; h.biggestOn = by.get(e.target)?.name || null } if (e.crit) h.crits++ }
+    if (e.t === 'heal' && h) h.healed += e.amount
+    if (e.t === 'fell' && h) h.felled++
+    if (e.t === 'hit-pc' && heroes.get(e.target)) heroes.get(e.target).taken += e.amount
+  }
+  const list = [...heroes.values()]
+  const top = (k) => list.filter((h) => h[k] > 0).sort((a, b) => b[k] - a[k])[0] || null
+  const enemies = enc.combatants.filter((c) => c.kind === 'npc')
+  return {
+    rounds: enc.round || 1, heroes: list.sort((a, b) => b.dealt - a.dealt),
+    enemies: enemies.length, fallen: enemies.filter((c) => c.dead).length, totalDealt: list.reduce((t, h) => t + h.dealt, 0),
+    mvp: top('dealt'), biggest: top('biggest'), healer: top('healed'), tank: top('taken'), crits: list.reduce((t, h) => t + h.crits, 0),
+  }
+}
 export function toggleCondition(enc, id, cond) {
   const c = enc.combatants.find((x) => x.id === id)
   if (!c || c.kind !== 'npc') return enc
@@ -131,6 +176,7 @@ export function applyClaim(enc, claimId, amount) {
     if (cl.condition) t.conditions = [...new Set([...(t.conditions || []), cl.condition])].slice(0, 20)
     else t.dmg = Math.max(0, (t.dmg || 0) + (cl.heal ? -1 : 1) * num(amount ?? cl.amount))
   }
+  if (!cl.condition) log(enc, { t: cl.heal ? 'heal' : 'dmg', by: cl.by, target: cl.target, amount: num(amount ?? cl.amount), crit: !!cl.crit, label: cl.label })
   enc.claims = enc.claims.filter((c) => c.id !== claimId)
   return enc
 }
@@ -145,7 +191,7 @@ export function targetsFor(enc, meId) {
 /** What the players' screens get: enemies with their damage count and look; nothing the runner keeps to itself. */
 export function forPlayers(enc) {
   if (!enc) return enc
-  return { ...enc, claims: undefined, combatants: enc.combatants.map((c) => (c.kind === 'npc' ? { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [], icon: c.icon || null, color: c.color || null, note: c.note || null } : c)) }
+  return { ...enc, claims: undefined, combatants: enc.combatants.map((c) => (c.kind === 'npc' ? { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [], icon: c.icon || null, color: c.color || null, note: c.note || null, monster: c.monster || null } : c)) }
 }
 /** Where a combatant is in the order (1-based), and how many turns until theirs. */
 export function placeOf(enc, id) {
