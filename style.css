@@ -771,3 +771,20 @@ button.fight-banner { flex-direction: row; align-items: center; min-height: 48px
 .show { display: grid; gap: 10px; } .show h2 { font-size: 20px; } .show p { margin: 4px 0 0; }
 .show-shot { width: 100%; max-width: 390px; height: auto; border-radius: 22px; border: 6px solid #2c221c; box-shadow: 0 10px 30px rgba(0,0,0,.45); justify-self: center; }
 @media (min-width: 760px) { .show { grid-template-columns: 1fr 340px; align-items: center; gap: 28px; } .show:nth-child(even) .show-text { order: 2; } }
+/* SRD creatures: search, picture, the runner's stat block; the fight's recap */
+.mon-results { list-style: none; padding: 0; margin: 4px 0 10px; display: grid; gap: 4px; max-height: 50vh; max-height: 50dvh; overflow-y: auto; }
+.mon-pick, .mon-picked { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); text-align: start; }
+.mon-pick small, .mon-picked small { display: block; color: var(--muted); } .mon-picked { border-color: var(--accent); margin-bottom: 8px; }
+.mon-pick .gi, .mon-picked .gi, .stat-block .gi { color: var(--ec, #e8a08f); flex: none; }
+.e-pic { display: inline-grid; color: var(--ec, #e8a08f); } .e-pic .gi { display: block; }
+.stat-block { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; background: var(--panel-2); }
+.stat-block b { display: block; } .sb-line { margin: 6px 0; } .sb-line b { display: inline; }
+.sb-attacks { display: grid; gap: 6px; margin-top: 6px; } .sb-attacks .btn { min-height: 44px; text-align: start; justify-content: flex-start; }
+.sb-result { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--panel); } .sb-result p { margin: 0 0 6px; } .sb-result b { display: inline; }
+.sb-heroes { flex-wrap: wrap; gap: 6px; } .sb-heroes .btn { min-height: 44px; }
+.recap { border: 1px solid var(--accent); border-radius: 16px; padding: 14px; margin: 12px 0; background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+.recap h2 { font-size: 22px; } .recap-high { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 4px; }
+.recap-heroes { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; } .recap-heroes li { display: flex; align-items: center; gap: 10px; }
+.recap-heroes img { border-radius: 50%; width: 40px; height: 40px; flex: none; } .recap-heroes small { display: block; color: var(--muted); }
+.fight-banner.over { border-color: var(--accent); }
+.recap-wrap { margin: 8px 0 20px; }

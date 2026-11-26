@@ -4,6 +4,7 @@
 // exhaustion). Characters are stored as plain JSON (the owner chose no encryption). Request bodies are never logged.
 
 import { cleanBuff, applyBuff, removeBuffs, BUFF_LIMITS } from '../../src/engine/buffs.js'
+import { log as logFight, LOG_MAX } from '../../src/encounter-core.js'
 
 export const LIMITS = {
   roomName: 60,
@@ -323,10 +324,10 @@ async function route(req, env) {
       const by = cur.combatants.find((c) => c.charId === id)
       const heal = !!body?.heal
       const condition = typeof body?.condition === 'string' && /^[a-z-]{1,20}$/.test(body.condition) ? body.condition : null
-      const claim = { id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, by: by?.id || null, byName: String(by?.name || 'A player').slice(0, 40), target: target.id, amount, label: String(body?.label || '').slice(0, 40), at: Date.now(), ...(heal ? { heal } : {}), ...(condition ? { condition } : {}) }
+      const claim = { id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, by: by?.id || null, byName: String(by?.name || 'A player').slice(0, 40), target: target.id, amount, label: String(body?.label || '').slice(0, 40), at: Date.now(), ...(heal ? { heal } : {}), ...(condition ? { condition } : {}), ...(body?.crit ? { crit: true } : {}) }
       // auto: only damage to an enemy (healing a player or a condition always waits for the runner)
       const applied = !!cur.auto && target.kind === 'npc' && !heal && !condition
-      if (applied) target.dmg = (target.dmg || 0) + amount
+      if (applied) { target.dmg = (target.dmg || 0) + amount; logFight(cur, { t: 'dmg', by: claim.by, target: target.id, amount, crit: !!claim.crit, label: claim.label }) }
       else cur.claims = [...(cur.claims || []), claim].slice(-30)
       const rev = await saveEncounter(env, room.id, cur, row)
       await count(env, applied ? 'damage_applied' : 'damage_claimed')
@@ -484,7 +485,7 @@ function partySheet(data) {
 /** Players see enemies with their damage count and look (the table's), never the claims. */
 function hideEnemies(enc) {
   if (!enc) return enc
-  return { ...enc, combatants: enc.combatants.map((c) => (c.kind !== 'npc' ? c : { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [], icon: c.icon || null, color: c.color || null, note: c.note || null })), claims: undefined }
+  return { ...enc, combatants: enc.combatants.map((c) => (c.kind !== 'npc' ? c : { id: c.id, kind: 'npc', name: c.name, group: c.group, init: c.init, bonus: c.bonus, dmg: c.dmg || 0, dead: !!c.dead, conditions: c.conditions || [], icon: c.icon || null, color: c.color || null, note: c.note || null, monster: c.monster || null })), claims: undefined }
 }
 const int = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null)
 /** Only the known fields, in range: the encounter is shown to every player of the group. */
@@ -501,11 +502,16 @@ function cleanEncounter(e) {
       icon: typeof c.icon === 'string' && c.icon && c.icon.length <= 8 && !/[<>&"'\\]/.test(c.icon) ? c.icon : null,
       color: ['red', 'orange', 'gold', 'green', 'teal', 'blue', 'violet', 'gray'].includes(c.color) ? c.color : null,
       note: typeof c.note === 'string' && c.note.trim() ? c.note.trim().slice(0, 40) : null,
+      // an SRD creature: its id (the picture and attacks), its HP (the runner's only: players never get it)
+      monster: typeof c.monster === 'string' && /^[a-z0-9-]{1,60}$/.test(c.monster) ? c.monster : null, hp: int(c.hp, 0, 9999),
       conditions: Array.isArray(c.conditions) ? c.conditions.filter((x) => typeof x === 'string').slice(0, 20).map((x) => x.slice(0, 20)) : [] }
   })
   const ids = new Set(combatants.map((c) => c.id))
-  const claims = (Array.isArray(e.claims) ? e.claims : []).slice(-30).filter((c) => c && ids.has(c.target)).map((c) => ({ id: str(c.id, 24), by: c.by && ids.has(c.by) ? c.by : null, byName: str(c.byName, 40), target: c.target, amount: int(c.amount, 0, 999) ?? 0, label: str(c.label, 40), at: int(c.at, 0, 9e15) ?? 0, ...(c.heal ? { heal: true } : {}), ...(typeof c.condition === 'string' && /^[a-z-]{1,20}$/.test(c.condition) ? { condition: c.condition } : {}) }))
-  return { active: e.active !== false, round: int(e.round, 1, 9999) ?? 1, turn: ids.has(e.turn) ? e.turn : null, seq: int(e.seq, 0, 1e6) ?? 0, auto: !!e.auto, claims, combatants }
+  const claims = (Array.isArray(e.claims) ? e.claims : []).slice(-30).filter((c) => c && ids.has(c.target)).map((c) => ({ id: str(c.id, 24), by: c.by && ids.has(c.by) ? c.by : null, byName: str(c.byName, 40), target: c.target, amount: int(c.amount, 0, 999) ?? 0, label: str(c.label, 40), at: int(c.at, 0, 9e15) ?? 0, ...(c.heal ? { heal: true } : {}), ...(c.crit ? { crit: true } : {}), ...(typeof c.condition === 'string' && /^[a-z-]{1,20}$/.test(c.condition) ? { condition: c.condition } : {}) }))
+  // what happened, for the recap (kept until the next fight)
+  const T = ['dmg', 'heal', 'fell', 'hit-pc']
+  const log = (Array.isArray(e.log) ? e.log : []).slice(-LOG_MAX).filter((x) => x && T.includes(x.t)).map((x) => ({ t: x.t, by: ids.has(x.by) ? x.by : null, target: ids.has(x.target) ? x.target : null, amount: int(x.amount, 0, 9999) ?? 0, ...(x.crit ? { crit: true } : {}), ...(x.label ? { label: str(x.label, 40) } : {}), round: int(x.round, 1, 9999) ?? 1, at: int(x.at, 0, 9e15) ?? 0 }))
+  return { active: e.active !== false, round: int(e.round, 1, 9999) ?? 1, turn: ids.has(e.turn) ? e.turn : null, seq: int(e.seq, 0, 1e6) ?? 0, auto: !!e.auto, claims, combatants, log, ...(int(e.endedAt, 0, 9e15) ? { endedAt: e.endedAt } : {}) }
 }
 async function saveEncounter(env, roomId, data, row) {
   const text = JSON.stringify(data)

@@ -167,6 +167,17 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await T.p.click('.sheet button:has-text("Save for Soldier 3")')
     await T.p.click('button[aria-label="Close"]')
     ok(await until(async () => /👑[\s\S]*the sergeant/.test(await T.p.textContent('.init-row:has-text("Soldier 3")')) && (await T.p.locator('.init-row.ec-gold').count()) === 1), 'runner: Soldier 3 edited to the gold sergeant 👑')
+    // an SRD creature by name: its picture, its HP (the runner's only), its attack rolled from the stat block
+    await T.p.click('button:has-text("+ Enemies")')
+    await T.p.fill('input[aria-label="Find a creature"]', 'goblin w')
+    await T.p.click('.mon-pick:has-text("Goblin Warrior")')
+    await T.p.click('.sheet button:has-text("Add Goblin Warrior")')
+    ok(await until(async () => /HP 10\/10/.test(await T.p.textContent('.init-row:has-text("Goblin Warrior")'))) && await T.p.locator('.init-row:has-text("Goblin Warrior") .e-pic svg').count() === 1, 'runner: a Goblin Warrior from the SRD, with its picture and HP 10/10')
+    await T.p.click('.init-row:has-text("Goblin Warrior") .init-main')
+    await T.p.click('.stat-block button:has-text("Scimitar")')
+    ok(/to hit · \d+ slashing/.test(await T.p.textContent('.sb-result')), 'runner: the Scimitar rolls to hit and damage')
+    await T.p.screenshot({ path: `${shots}/rooms-5b-stat-block.png` })
+    await T.p.click('button[aria-label="Close"]')
     await T.p.click('.init-row:has-text("Aria") .init-num')
     await T.p.fill('input[aria-label="Initiative total"]', '25')
     await T.p.click('.sheet button:has-text("Set 25")')
@@ -385,6 +396,23 @@ const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now(
     await other.goto(URL + '#/admin'); await other.fill('input[type=password]', 'not-the-password-1'); await other.click('button:text-is("Open")')
     ok(await until(() => other.isVisible('text=Wrong admin password')), 'admin: a wrong password is refused')
 
+    // the DM ends the fight: everyone gets the recap
+    await D.click('button:has-text("⚔ The Fight")')
+    D.once('dialog', (dg) => dg.accept().catch(() => {}))
+    await D.click('button:has-text("End fight")')
+    ok(await until(() => D.isVisible('.recap:has-text("The fight is over")')), 'DM: the recap after the fight')
+    ok(/Most damage:/.test(await D.textContent('.recap')), `DM: the recap names who did the most (${(await D.textContent('.recap-high')).replace(/\s+/g, ' ').slice(0, 120)})`)
+    {
+      const [dl] = await Promise.all([D.waitForEvent('download', { timeout: 15000 }), D.click('text=Share the recap')])
+      const png = path.join(__dirname, '..', 'screenshots', 'rooms-9b-recap-image.png')
+      await dl.saveAs(png)
+      ok(fs.statSync(png).size > 20000, 'DM: Share the recap makes an image (saved where sharing files is not offered)')
+    }
+    await D.screenshot({ path: `${shots}/rooms-9-recap.png` })
+    ok(await until(() => B.p.isVisible('.fight-banner.over'), 15000), 'phone B: "The fight is over · see the recap"')
+    await B.p.click('.fight-banner.over'); ok(await B.p.isVisible('.sheet .recap'), 'phone B: the recap opens')
+    await B.p.click('button[aria-label="Close"]')
+    await D.goto(dmUrl); await D.waitForSelector('.dm-card')
     // leaving the group
     await A.p.click('button[aria-label="Character settings"]')
     await A.p.click('button:has-text("Leave the table")')
